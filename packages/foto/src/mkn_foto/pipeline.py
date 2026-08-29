@@ -29,6 +29,7 @@ from mkn_foto import (
     anreichern,
     bericht,
     entscheidung,
+    geotag,
     gpx,
     inventar,
     mediathek,
@@ -87,6 +88,12 @@ class Lauf:
 
     aufnahmen: list[Aufnahme] = field(default_factory=list)
     serien: list[Serie] = field(default_factory=list)
+    """NUR belegte Serien -- die benennen Dateien und faerben sie."""
+
+    kandidaten: list[Serie] = field(default_factory=list)
+    """Vermutungen der Heuristik. Sie benennen NICHTS (Regel A), sondern warten
+    auf das Urteil am Bild. Im Protokoll stehen sie, damit sie nicht verloren
+    gehen -- und damit sichtbar ist, wie viel noch auf Stufe 3 wartet."""
     spots: list[Spot] = field(default_factory=list)
     orte: dict[int, Ort] = field(default_factory=dict)
     anker: list[Anker] = field(default_factory=list)
@@ -183,7 +190,14 @@ def fahre(
         return lauf
 
     sicher = serien.aus_kamera(lauf.aufnahmen)
-    lauf.serien = [*sicher, *serien.kandidaten(lauf.aufnahmen, sicher)]
+    lauf.kandidaten = serien.kandidaten(lauf.aufnahmen, sicher)
+    # REGEL A: nur was BELEGT ist, bekommt einen Namen. `kandidaten` liefert
+    # Vermutungen aus Zeit und gleichen Einstellungen -- die Spec misst dafuer
+    # ein Drittel Trefferquote (§ 4). Wer sie benennt, gibt zwei von drei Dateien
+    # einen falschen Namen, und der Name ist das, wonach spaeter gesucht wird.
+    # Sie sind nicht verloren: sie stehen als Kandidat im Protokoll und warten
+    # auf das Urteil am Bild (Stufe 3).
+    lauf.serien = list(sicher)
 
     roh = spots.schneide(lauf.aufnahmen)
     lauf.spots = ort.fasse_gleichen_ort_zusammen(roh, lauf.anker)
@@ -325,11 +339,11 @@ def _fuer_anreicherung(
     if lauf.geschrieben is None:
         return [], []
 
-    ort_je_aufnahme: dict[int, Ort | None] = {}
-    for s in lauf.spots:
-        gefunden = lauf.orte.get(id(s))
-        for a in s.aufnahmen:
-            ort_je_aufnahme[id(a)] = gefunden
+    # Je BILD, nicht je Session: `ort_fuer_bild` interpoliert aus der Spur und
+    # faellt nur zurueck, wo sie nichts hergibt. Die erste Fassung schrieb hier
+    # die Sammelkoordinate des Spots an jedes Mitglied -- 141 Bilder auf einem
+    # Punkt, und `geotag` wurde nie aufgerufen.
+    ort_je_aufnahme = {id(a): ort_fuer_bild(a, lauf) for a in lauf.aufnahmen}
 
     je_id = dict(lauf.geschrieben.kopien)
     kopie_je_original: dict[int, Aufnahme] = {}
@@ -351,3 +365,32 @@ def _fuer_anreicherung(
             serien_auf_kopien.append(dataclasses.replace(s, aufnahmen=mitglieder))
 
     return paare, serien_auf_kopien
+
+
+def ort_fuer_bild(aufnahme: Aufnahme, lauf: Lauf) -> Ort | None:
+    """Die Position DIESES Bildes — interpoliert, sonst der Ort seiner Session.
+
+    Die Reihenfolge ist der Kern von KT-1s Geotagging-Klage (2026-08-30): die
+    Spur gibt bei 63 s Median-Abstand fuer jedes Bild eine eigene Position her.
+    Der Session-Ort ist nur der RUECKFALL fuer die Faelle, in denen sie das nicht
+    tut — am 25.08. gibt es null Spurpunkte, dort traegt er alles.
+
+    `geotag` liefert von sich aus nichts, wenn die Unsicherheit zu gross waere;
+    genau dann greift der Rueckfall, und nur dann.
+    """
+    genau = geotag.fuer_aufnahme(aufnahme, lauf.anker)
+    if genau is not None:
+        # Der NAME kommt weiterhin vom Spot: die Interpolation kennt Koordinaten,
+        # aber keine Ortsnamen. Beides zusammen ist mehr als jedes fuer sich.
+        vom_spot = _session_ort(aufnahme, lauf)
+        if vom_spot is not None and vom_spot.name and not genau.name:
+            return dataclasses.replace(genau, name=vom_spot.name)
+        return genau
+    return _session_ort(aufnahme, lauf)
+
+
+def _session_ort(aufnahme: Aufnahme, lauf: Lauf) -> Ort | None:
+    for s in lauf.spots:
+        if any(a is aufnahme for a in s.aufnahmen):
+            return lauf.orte.get(id(s))
+    return None

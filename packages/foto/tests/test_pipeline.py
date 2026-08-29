@@ -355,3 +355,164 @@ def test_die_serie_kommt_im_sidecar_der_kopie_an(tmp_path, monkeypatch):
     assert "Einzelbild" not in inhalt, (
         "die Aufnahme gilt als Einzelbild, obwohl sie zu einer Serie gehoert"
     )
+
+
+def test_heuristik_kandidaten_bekommen_keinen_serien_namen(tmp_path, monkeypatch):
+    """Regel A, und der teuerste Einzeldefekt des bisherigen Stands.
+
+    `serien.kandidaten` liefert Vermutungen (`sicher=False`, `quelle="heuristik"`).
+    Die Pipeline reichte sie ungefiltert an `schreiben.kopiere` — Dateien hiessen
+    `pan01…`, obwohl kein Blick aufs Bild stattgefunden hatte. Die Spec misst fuer
+    genau diese Kandidaten **ein Drittel** Trefferquote (§ 4): zwei von drei so
+    benannten Dateien tragen einen falschen Namen, und der Name ist das, wonach
+    KT-1 spaeter sucht.
+
+    Bis Stufe 3 urteilt, heissen sie `std`. Sie sind damit nicht verloren — sie
+    stehen als Kandidat im Protokoll.
+    """
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    felder = []
+    # Gleiche Brennweite und Blende, dicht hintereinander -- die Heuristik haelt
+    # das fuer ein Panorama. Kein AutoBracketing: Stufe 1 sagt also nichts.
+    # VIER Bilder, nicht drei: `_KANDIDAT_MIN_LAENGE` ist 4, und mit dreien
+    # entstand gar kein Kandidat -- der Test war gruen, ohne seinen Gegenstand
+    # zu enthalten (LP-34).
+    for i, sek in enumerate((0, 3, 6, 9)):
+        (quelle / f"F{i:04d}.RAF").write_bytes(b"roh")
+        felder.append(
+            {
+                "EXIF:DateTimeOriginal": f"2026:08:24 06:19:{sek:02d}",
+                "EXIF:Model": "X-E5",
+                "EXIF:FocalLength": "16.0 mm",
+                "EXIF:FNumber": 8.0,
+            }
+        )
+    monkeypatch.setattr(inventar.exif, "lies", lambda pfade: felder[: len(pfade)])
+
+    pipeline.fahre(quelle, tmp_path / "ziel", schreiben_aktiv=True)
+
+    namen = sorted(p.name for p in (tmp_path / "ziel" / "2026-08-24").glob("*.RAF"))
+    assert namen, "nichts geschrieben"
+    unbelegt = [n for n in namen if "_pan" in n or "_hdr" in n or "_foc" in n]
+    assert not unbelegt, (
+        "Heuristik-Kandidaten tragen einen Serien-Namen, ohne dass jemand das Bild "
+        f"gesehen hat — die Spec misst dafuer 1/3 Trefferquote: {unbelegt}"
+    )
+    assert all("_std_" in n for n in namen), f"unerwartete Namen: {namen}"
+
+
+def test_kamerasichere_serien_werden_weiterhin_benannt(tmp_path, monkeypatch):
+    """Untergrenze zur Regel darueber: was die KAMERA belegt, bleibt benannt.
+
+    Ohne diesen Fall waere ein Filter, der jede Serie verwirft, genauso gruen —
+    und die kamerasicheren Belichtungsreihen (77 im Bestand) verloeren ihren
+    Namen, obwohl sie unfehlbar erkannt sind.
+    """
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    felder = []
+    for nr, sek in enumerate((0, 1, 2), start=1):
+        (quelle / f"G{nr:04d}.RAF").write_bytes(b"roh")
+        felder.append(
+            {
+                "EXIF:DateTimeOriginal": f"2026:08:24 06:19:{sek:02d}",
+                "EXIF:Model": "X-E5",
+                "MakerNotes:AutoBracketing": 1,
+                "MakerNotes:SequenceNumber": nr,
+            }
+        )
+    monkeypatch.setattr(inventar.exif, "lies", lambda pfade: felder[: len(pfade)])
+
+    pipeline.fahre(quelle, tmp_path / "ziel", schreiben_aktiv=True)
+
+    namen = sorted(p.name for p in (tmp_path / "ziel" / "2026-08-24").glob("*.RAF"))
+    assert all("_hdr" in n for n in namen), (
+        f"die kamerabelegte Belichtungsreihe verlor ihren Namen: {namen}"
+    )
+
+
+def test_bilder_einer_session_bekommen_verschiedene_koordinaten(tmp_path, monkeypatch):
+    """Der Kern von KT-1s Geotagging-Klage — und es war ein fehlender Aufruf.
+
+    `geotag.fuer_aufnahme` existierte samt Tests, aber die Pipeline rief es nie.
+    Alle Bilder einer Session trugen die Sammelkoordinate ihres Spots: 141 Bilder
+    auf demselben Punkt. KT-1: *"sinnvolle gpx (gps) informationen, die man auf
+    einer karte sieht"* — auf einer Karte ist das ein Punkt, keine Route.
+    """
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    felder = []
+    for i, minute in enumerate((0, 4, 8)):
+        (quelle / f"H{i:04d}.RAF").write_bytes(b"roh")
+        felder.append(
+            {
+                "EXIF:DateTimeOriginal": f"2026:08:26 06:{minute:02d}:00",
+                "EXIF:Model": "X-E5",
+            }
+        )
+    monkeypatch.setattr(inventar.exif, "lies", lambda pfade: felder[: len(pfade)])
+
+    # Dichte Spur, wie am 26.08. real vorhanden (Median 63 s).
+    anker = [
+        Anker(
+            zeit=datetime(2026, 8, 26, 6, m),
+            lat=47.5000 + m * 0.001,
+            lon=11.4000 + m * 0.001,
+            name=None,
+        )
+        for m in range(0, 10)
+    ]
+
+    lauf = pipeline.fahre(quelle, tmp_path / "ziel", anker=anker, schreiben_aktiv=False)
+
+    orte = [pipeline.ort_fuer_bild(a, lauf) for a in lauf.aufnahmen]
+    assert all(o is not None for o in orte), f"nicht jedes Bild verortet: {orte}"
+    breiten = [round(o.lat, 6) for o in orte]
+    assert len(set(breiten)) == 3, (
+        f"alle Bilder derselben Session auf demselben Punkt: {breiten} — "
+        "geotag wird nicht aufgerufen"
+    )
+    assert breiten == sorted(breiten), "die Positionen laufen nicht mit der Zeit"
+
+
+def test_ohne_spur_bleibt_der_session_ort_der_rueckfall(tmp_path, monkeypatch):
+    """Untergrenze: an den zwei Tagen ohne Spur (25.08. hat NULL Punkte) darf das
+    Bild nicht ortlos werden, nur weil die Interpolation nichts hergibt.
+
+    Ohne diese Zusicherung waere ein Geotagger, der den Session-Ort ersatzlos
+    verwirft, genauso gruen — und die Verortung fiele von 91 % auf die Abdeckung
+    der Spur zurueck.
+    """
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    felder = []
+    for i, minute in enumerate((0, 2)):
+        (quelle / f"J{i:04d}.RAF").write_bytes(b"roh")
+        felder.append(
+            {
+                "EXIF:DateTimeOriginal": f"2026:08:25 12:{minute:02d}:00",
+                "EXIF:Model": "X-E5",
+            }
+        )
+    monkeypatch.setattr(inventar.exif, "lies", lambda pfade: felder[: len(pfade)])
+
+    # Anker NUR VOR der Session. geotag extrapoliert nicht (die Position waere
+    # unbekannt, nicht "wie der letzte Punkt"), der Session-Ort greift ueber sein
+    # eigenes Randfenster noch.
+    #
+    # Die erste Fassung setzte einen Anker davor und einen danach -- damit
+    # interpolierte geotag sauber, der Rueckfall wurde nie erreicht, und die
+    # Mutation "Rueckfall entfernt" ueberlebte den Test.
+    anker = [
+        Anker(zeit=datetime(2026, 8, 25, 11, 58), lat=47.65, lon=11.37, name="Kochel am See"),
+        Anker(zeit=datetime(2026, 8, 25, 11, 59), lat=47.6501, lon=11.3701, name=None),
+    ]
+
+    lauf = pipeline.fahre(quelle, tmp_path / "ziel", anker=anker, schreiben_aktiv=False)
+
+    orte = [pipeline.ort_fuer_bild(a, lauf) for a in lauf.aufnahmen]
+    assert all(o is not None for o in orte), (
+        "ohne Interpolation ist das Bild ortlos — der Session-Ort muss der "
+        f"Rueckfall bleiben: {orte}"
+    )
