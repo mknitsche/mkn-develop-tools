@@ -28,6 +28,14 @@ from mkn_foto.modell import Aufnahme, Ort, Spot
 ANZAHL = 5
 """Wie viele Bilder je Session gezeigt werden."""
 
+_LISTE = "liste.md"
+"""Die Liste ist zugleich die Signatur: liegt sie im Ziel, stammt der Ordner
+von einem frueheren Lauf und darf geraeumt werden."""
+
+
+class ZielNichtLeer(RuntimeError):
+    """Im Zielordner liegt etwas, das nicht von einem frueheren Lauf stammt."""
+
 
 def waehle(spot: Spot, anzahl: int = ANZAHL) -> tuple[Aufnahme, ...]:
     """Waehlt Bilder, die ueber die Session VERTEILT liegen.
@@ -59,7 +67,16 @@ def bereite_vor(
     beantworten laesst, eine leere Zeile ist Arbeit.
     """
     ziel = Path(ziel)
+    _raeume_frueheren_lauf(ziel)
     ziel.mkdir(parents=True, exist_ok=True)
+
+    # Die schwerste Entscheidung zuerst. Wer chronologisch abarbeitet, faengt
+    # bei den Streubildern an — im gemessenen Bestand sind das elf von zwanzig
+    # Sessions mit zusammen 26 Aufnahmen, waehrend die neun echten Spots 410
+    # tragen. Der Ordnername traegt das Datum weiterhin, die Reihenfolge also
+    # die Wichtigkeit und nicht die Zeit.
+    eintraege = sorted(eintraege, key=lambda e: len(e[0].aufnahmen), reverse=True)
+
     zeilen = [
         "# Offene Orte",
         "",
@@ -99,3 +116,33 @@ def bereite_vor(
 
     (ziel / "liste.md").write_text("\n".join(zeilen), encoding="utf-8")
     return ziel
+
+
+def _raeume_frueheren_lauf(ziel: Path) -> None:
+    """Loescht die Spuren eines frueheren Laufs — und nur die.
+
+    Ohne das Raeumen legt der zweite Lauf seine Ordner NEBEN die alten:
+    firsthand vierzig Eintraege fuer zwanzig Sessions, und einem alten Ordner
+    ist nicht anzusehen, dass er von gestern ist. Besonders tueckisch, weil
+    sich die Nummerierung zwischen zwei Laeufen aendern darf — dann kollidieren
+    die Namen nicht einmal.
+
+    Geraeumt wird nur, wenn die Liste dort liegt: sie ist die Signatur dieses
+    Werkzeugs. Zeigt jemand versehentlich auf einen Ordner mit eigenen Dateien,
+    knallt es, statt dass geraeumt wird.
+    """
+    if not ziel.exists():
+        return
+    inhalt = list(ziel.iterdir())
+    if not inhalt:
+        return
+    if not (ziel / _LISTE).exists():
+        raise ZielNichtLeer(
+            f"{ziel} ist nicht leer und stammt nicht aus einem frueheren Lauf "
+            f"(kein {_LISTE}). Bitte einen anderen Zielordner waehlen."
+        )
+    for eintrag in inhalt:
+        if eintrag.is_dir():
+            shutil.rmtree(eintrag)
+        else:
+            eintrag.unlink()

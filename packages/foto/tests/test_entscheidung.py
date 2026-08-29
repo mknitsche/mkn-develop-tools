@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from itertools import pairwise
 
+import pytest
 from mkn_foto import entscheidung
 from mkn_foto.modell import Aufnahme, Ort, Spot
 
@@ -146,6 +147,66 @@ def test_die_liste_nennt_die_bildzahl_der_ganzen_session(tmp_path):
     entscheidung.bereite_vor([(spot, None)], tmp_path / "vorlage", anzahl=3)
 
     assert "12 Aufnahmen" in (tmp_path / "vorlage" / "liste.md").read_text()
+
+
+def test_die_liste_beginnt_mit_der_schwersten_entscheidung(tmp_path):
+    """An einer Session mit 141 Aufnahmen haengt anderes Gewicht als an einer
+    mit zwei. Wer die Liste chronologisch abarbeitet, faengt bei den
+    Streubildern an und gibt vielleicht auf, bevor die Spots kommen.
+
+    Gemessen am echten Bestand: von 20 offenen Sessions sind elf Streubilder
+    mit zusammen 26 Aufnahmen — die neun echten Spots tragen die restlichen
+    410."""
+    quelle = tmp_path / "quelle"
+    quelle.mkdir()
+    klein = Spot(aufnahmen=(_bild(0, quelle),))
+    gross = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(10, 20)))
+    mittel = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(30, 34)))
+
+    entscheidung.bereite_vor([(klein, None), (gross, None), (mittel, None)], tmp_path / "v")
+
+    ordner = sorted(p.name for p in (tmp_path / "v").iterdir() if p.is_dir())
+    # Erwartung aus den Daten abgeleitet, nicht getippt: eine von Hand
+    # geschriebene Zeitangabe prueft die Kopfrechnung des Autors mit.
+    assert f"{gross.von:%H%M}" in ordner[0], ordner
+    assert f"{mittel.von:%H%M}" in ordner[1], ordner
+    assert f"{klein.von:%H%M}" in ordner[2], ordner
+
+
+def test_ein_zweiter_lauf_laesst_keine_alten_ordner_stehen(tmp_path):
+    """Firsthand aufgefallen: der zweite Lauf legte neben die zwanzig neuen
+    Ordner die zwanzig alten — vierzig Eintraege fuer zwanzig Sessions, und
+    einem alten Ordner ist nicht anzusehen, dass er von gestern ist.
+
+    Besonders tueckisch, weil die Nummerierung sich zwischen den Laeufen
+    aendern darf: dann kollidieren die Namen nicht einmal."""
+    quelle = tmp_path / "quelle"
+    quelle.mkdir()
+    ziel = tmp_path / "vorlage"
+    zwei = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(2)))
+    drei = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(10, 13)))
+
+    entscheidung.bereite_vor([(zwei, None), (drei, None)], ziel)
+    entscheidung.bereite_vor([(drei, None)], ziel)
+
+    assert len([p for p in ziel.iterdir() if p.is_dir()]) == 1
+
+
+def test_ein_fremder_ordner_wird_nicht_ueberschrieben(tmp_path):
+    """Untergrenze zur Zeile darueber: das Aufraeumen darf nur die eigenen
+    Spuren betreffen. Zeigt jemand versehentlich auf einen Ordner mit eigenen
+    Dateien, muss es KNALLEN statt aufzuraeumen."""
+    quelle = tmp_path / "quelle"
+    quelle.mkdir()
+    fremd = tmp_path / "fremd"
+    fremd.mkdir()
+    (fremd / "wichtig.txt").write_text("nicht anfassen")
+    spot = Spot(aufnahmen=(_bild(0, quelle),))
+
+    with pytest.raises(entscheidung.ZielNichtLeer):
+        entscheidung.bereite_vor([(spot, None)], fremd)
+
+    assert (fremd / "wichtig.txt").exists()
 
 
 def test_die_ordner_tragen_zeit_und_nummer(tmp_path):
