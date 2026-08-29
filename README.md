@@ -60,7 +60,9 @@ What that means in practice:
 - **Names and logos are not licensed.** See [NOTICE](NOTICE).
 
 The copyright remains with the author. Contributions are accepted under the
-Developer Certificate of Origin — see [CONTRIBUTING.md](CONTRIBUTING.md).
+Developer Certificate of Origin — you keep the copyright in your contribution
+and license it to the project. **Integration and releases are the maintainer's
+decision alone**; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Contributing
 

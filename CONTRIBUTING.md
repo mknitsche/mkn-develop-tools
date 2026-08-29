@@ -66,6 +66,17 @@ commit messages) are in **English**, so that anyone can read them. The author's
 own design notes may be in German; that never applies to anything a contributor
 needs in order to take part.
 
+## Who decides what goes in
+
+This project is owned and maintained by Matthias Nitsche. **Contributions are
+welcome; integration and releases are not delegated.** Every merge into `main`
+and every release is the maintainer's decision — there is no path by which a
+change enters this project without that decision.
+
+That is a statement of governance, not of distrust: a single owner means a
+single place where responsibility sits, and you always know who answered you and
+why. It also means review may take a while — see below.
+
 ## What you can expect
 
 A response, and a reason. If a pull request is declined, you get the argument
