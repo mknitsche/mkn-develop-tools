@@ -20,7 +20,7 @@ from itertools import pairwise
 
 import pytest
 from mkn_foto import entscheidung
-from mkn_foto.modell import Aufnahme, Ort, Spot
+from mkn_foto.modell import Aufnahme, Spot
 
 _START = datetime(2026, 8, 26, 17, 0, 0)
 
@@ -160,76 +160,35 @@ def test_der_ordnername_traegt_nur_datum_und_zeit(tmp_path):
     assert ordner == ["2026-08-26_1700-1702"]
 
 
-def test_in_jedem_ordner_liegt_eine_notiz_zum_hineinschreiben(tmp_path):
-    """Geschrieben wird dort, wo die Bilder liegen — nicht in einer zentralen
-    Liste, die veraltet, sobald jemand Ordner zusammenfasst."""
+def test_in_jedem_ordner_liegen_nur_noch_die_bilder(tmp_path):
+    """Seit macb-S314 steht die Eingabe zentral in EINER Datei.
+
+    Zwoelf Ordner mit je einem Formular waren genau die Form, bei der KT-1 nicht
+    mehr wusste, was er tun soll — und zwei Wege fuer dieselbe Eingabe waeren
+    ausserdem zwei Zustaende ueber eine Sache. Hier liegen deshalb nur noch die
+    Bilder zum Ansehen; die Zusicherungen ueber das Eingabeformular leben in
+    `test_bericht.py`.
+    """
     quelle = tmp_path / "quelle"
     quelle.mkdir()
     spot = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(3)))
 
-    entscheidung.bereite_vor([(spot, None)], tmp_path / "v")
+    ziel = entscheidung.bereite_vor([(spot, None)], tmp_path / "v")
 
-    notiz = (tmp_path / "v" / "2026-08-26_1700-1702" / "ort.md").read_text()
-    assert "## Ort" in notiz
-
-
-def test_die_notiz_nennt_die_bildzahl_der_ganzen_session(tmp_path):
-    """Nicht die Zahl der gezeigten Bilder: an einer Entscheidung fuer eine
-    Session mit 141 Aufnahmen haengt anderes Gewicht als an einer mit zwei."""
-    quelle = tmp_path / "quelle"
-    quelle.mkdir()
-    spot = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(12)))
-
-    entscheidung.bereite_vor([(spot, None)], tmp_path / "v", anzahl=3)
-
-    notiz = (tmp_path / "v" / "2026-08-26_1700-1711" / "ort.md").read_text()
-    assert "12 Aufnahmen" in notiz
-
-
-def test_die_notiz_nennt_was_bekannt_ist(tmp_path):
-    """Ein Vorschlag mit Namen und Radius ist eine Frage, die sich mit Ja
-    beantworten laesst — eine leere Zeile ist Arbeit."""
-    quelle = tmp_path / "quelle"
-    quelle.mkdir()
-    spot = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(3)))
-    vorschlag = Ort(lat=47.5, lon=11.3, radius_m=25, name="Kunstort", quelle="vorschlag")
-
-    entscheidung.bereite_vor([(spot, vorschlag)], tmp_path / "v")
-
-    notiz = (tmp_path / "v" / "2026-08-26_1700-1702" / "ort.md").read_text()
-    assert "Kunstort" in notiz
-    assert "25" in notiz
-    assert "47.5" in notiz
-
-
-def test_die_notiz_bietet_platz_fuers_zusammenfassen(tmp_path):
-    """KT-1 will zwei Ordner zu einem Spot erklaeren koennen. Dafuer braucht
-    es keine Mechanik, nur eine Zeile, in die er den anderen Ordner
-    schreibt."""
-    quelle = tmp_path / "quelle"
-    quelle.mkdir()
-    spot = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(3)))
-
-    entscheidung.bereite_vor([(spot, None)], tmp_path / "v")
-
-    notiz = (tmp_path / "v" / "2026-08-26_1700-1702" / "ort.md").read_text()
-    assert "zusammen mit" in notiz.lower()
-
-
-def test_eine_session_ohne_jpeg_wird_in_der_notiz_gemeldet(tmp_path):
-    """Sonst steht dort ein leerer Ordner und niemand weiss warum."""
-    quelle = tmp_path / "quelle"
-    quelle.mkdir()
-    spot = Spot(aufnahmen=(_bild(0, quelle, endungen=(".RAF",)),))
-
-    entscheidung.bereite_vor([(spot, None)], tmp_path / "v")
-
-    notiz = (tmp_path / "v" / "2026-08-26_1700-1700" / "ort.md").read_text()
-    assert "kein JPEG" in notiz
+    ordner = ziel / "2026-08-26_1700-1702"
+    assert not (ordner / "ort.md").exists(), (
+        "es entsteht wieder ein Formular je Ordner — die Eingabe gehoert an EINE Stelle"
+    )
+    assert list(ordner.glob("*.JPG")), f"keine Bilder zum Ansehen: {list(ordner.iterdir())}"
 
 
 def test_ein_neuer_lauf_zerstoert_keine_geschriebene_notiz(tmp_path):
     """Der gefaehrlichste Fall des ganzen Moduls.
+
+    Geprueft wird die ZENTRALE Eingabedatei — seit macb-S314 traegt sie die
+    Antworten, nicht mehr eine Notiz je Ordner. Die vier Tests ueber den Inhalt
+    einer Einzelnotiz sind mit ihrem Gegenstand nach `test_bericht.py` gewandert;
+    hier bleibt der Schutz, weil er zum Raeumen gehoert und nicht zum Schreiben.
 
     Wer zwanzig Ordner durchgearbeitet und seine Orte eingetragen hat, verliert
     diese Arbeit unwiederbringlich, wenn der naechste Lauf das Ziel raeumt. Ein
@@ -241,16 +200,24 @@ def test_ein_neuer_lauf_zerstoert_keine_geschriebene_notiz(tmp_path):
     spot = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(3)))
     entscheidung.bereite_vor([(spot, None)], ziel)
 
-    notiz = ziel / "2026-08-26_1700-1702" / "ort.md"
-    notiz.write_text(notiz.read_text().replace("## Ort\n\n", "## Ort\n\nLeutaschklamm\n"))
+    # Seit macb-S314 steht die Eingabe zentral: EINE Datei statt einer Notiz je
+    # Ordner. Die Zusicherung ist dieselbe geblieben, nur ihr Gegenstand ist neu.
+    zentral = ziel / entscheidung.SAMMELDATEI
+    zentral.write_text(
+        "# Offene Orte\n\n## 2026-08-26 · 17:00-17:02 · 3 Aufnahmen\n\n"
+        "**Antwort:** Leutaschklamm\n",
+        encoding="utf-8",
+    )
 
     with pytest.raises(entscheidung.NotizenVorhanden) as fehler:
         entscheidung.bereite_vor([(spot, None)], ziel)
 
     # Die Meldung muss den betroffenen Ordner NENNEN — sonst weiss niemand,
     # welche Arbeit gerade auf dem Spiel steht.
-    assert "2026-08-26_1700-1702" in str(fehler.value)
-    assert "Leutaschklamm" in notiz.read_text()
+    assert "2026-08-26" in str(fehler.value), (
+        f"die Meldung nennt nicht, welche Arbeit auf dem Spiel steht: {fehler.value}"
+    )
+    assert "Leutaschklamm" in zentral.read_text(encoding="utf-8")
 
 
 def test_ein_unberuehrter_lauf_darf_geraeumt_werden(tmp_path):
@@ -266,3 +233,26 @@ def test_ein_unberuehrter_lauf_darf_geraeumt_werden(tmp_path):
     entscheidung.bereite_vor([(spot, None)], ziel)
 
     assert len([p for p in ziel.iterdir() if p.is_dir()]) == 1
+
+
+def test_eine_unausgefuellte_sammeldatei_blockiert_nicht(tmp_path):
+    """Untergrenze zum Schutz darueber: der zweite Lauf muss moeglich bleiben.
+
+    Nach dem ERSTEN Lauf liegt die zentrale Datei bereits da, mit lauter leeren
+    Feldern. Wer nur auf ihre Existenz prueft statt auf ihren Inhalt, sperrt
+    damit jeden weiteren Lauf aus — und die Zusicherung darueber waere trotzdem
+    gruen, weil sie nur den beschriebenen Fall kennt.
+    """
+    quelle = tmp_path / "quelle"
+    quelle.mkdir()
+    ziel = tmp_path / "v"
+    spot = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(3)))
+    entscheidung.bereite_vor([(spot, None)], ziel)
+
+    (ziel / entscheidung.SAMMELDATEI).write_text(
+        "# Offene Orte\n\n## 2026-08-26 · 17:00-17:02 · 3 Aufnahmen\n\n**Antwort:**\n",
+        encoding="utf-8",
+    )
+
+    # Darf NICHT werfen.
+    entscheidung.bereite_vor([(spot, None)], ziel)

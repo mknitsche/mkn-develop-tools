@@ -28,6 +28,11 @@ from mkn_foto.modell import Aufnahme, Ort, Spot
 ANZAHL = 5
 """Wie viele Bilder je Session gezeigt werden."""
 
+SAMMELDATEI = "_offene-orte.md"
+"""Die zentrale Eingabedatei seit macb-S314 (erzeugt von `bericht`). Sie wird
+hier nur GELESEN -- geschrieben wird sie dort, und der Riegel darf nicht von
+ihrem Erzeuger abhaengen."""
+
 NOTIZ = "ort.md"
 """Je Ordner eine Notiz zum Hineinschreiben. Geschrieben wird dort, wo die
 Bilder liegen — nicht in einer zentralen Liste, die veraltet, sobald jemand
@@ -88,7 +93,7 @@ def bereite_vor(
     _raeume_frueheren_lauf(ziel)
     ziel.mkdir(parents=True, exist_ok=True)
 
-    for spot, ort in eintraege:
+    for spot, _ort in eintraege:
         ordner = ziel / f"{spot.von:%Y-%m-%d_%H%M}-{spot.bis:%H%M}"
         ordner.mkdir(exist_ok=True)
 
@@ -99,7 +104,12 @@ def bereite_vor(
                     shutil.copy2(pfad, ordner / pfad.name)
                     kopiert += 1
 
-        (ordner / NOTIZ).write_text(_notiz(spot, ort, kopiert), encoding="utf-8")
+        # KEINE Notiz je Ordner mehr: die Eingabe steht seit macb-S314 zentral in
+        # EINER Datei (`bericht.entscheidungsdatei`). Zwoelf Ordner mit je einem
+        # Formular waren genau die Form, bei der KT-1 nicht mehr wusste, was er
+        # tun soll -- und zwei Wege fuer dieselbe Eingabe waeren ausserdem zwei
+        # Zustaende ueber eine Sache. Hier liegen nur noch die Bilder zum Ansehen.
+        _ = kopiert
 
     (ziel / _SIGNATUR).write_text(_verfahren(len(eintraege)), encoding="utf-8")
     return ziel
@@ -169,10 +179,18 @@ def _raeume_frueheren_lauf(ziel: Path) -> None:
     inhalt = list(ziel.iterdir())
     if not inhalt:
         return
+    # Zwei Formen, weil zwei Zeitalter: die Einzelnotizen aus der ersten Fassung
+    # (KT-1 hat zwanzig davon ausgefuellt) und die zentrale Datei seit macb-S314.
+    # Beide muessen den Lauf anhalten -- wer seine Orte eingetragen hat, verliert
+    # die Arbeit unwiederbringlich, wenn das Ziel geraeumt wird. Ein Warnsatz in
+    # einer Datei ist kein Schutz: er wird gelesen, nachdem es passiert ist.
     beschrieben = sorted(n.parent.name for n in ziel.glob(f"*/{NOTIZ}") if _ist_beschrieben(n))
+    zentral = ziel / SAMMELDATEI
+    if zentral.exists():
+        beschrieben.extend(_beantwortete_ueberschriften(zentral))
     if beschrieben:
         raise NotizenVorhanden(
-            f"In {ziel} sind {len(beschrieben)} Notizen ausgefuellt "
+            f"In {ziel} sind {len(beschrieben)} Antworten eingetragen "
             f"({', '.join(beschrieben[:3])}{' …' if len(beschrieben) > 3 else ''}). "
             "Ein neuer Lauf wuerde sie loeschen. Bitte den Ordner erst sichern "
             "oder umbenennen."
@@ -200,3 +218,25 @@ def _ist_beschrieben(notiz: Path) -> bool:
         return False
     dahinter = text.split(_UEBERSCHRIFT, 1)[1]
     return any(zeile.strip() and not zeile.startswith("#") for zeile in dahinter.splitlines())
+
+
+def _beantwortete_ueberschriften(pfad: Path) -> list[str]:
+    """Welche Sessions in der zentralen Datei bereits beantwortet sind.
+
+    Gibt die Ueberschriften zurueck, nicht bloss ein Ja/Nein: die Fehlermeldung
+    muss NENNEN, welche Arbeit auf dem Spiel steht -- sonst weiss niemand, was
+    er da gerade sichern soll.
+
+    Bewusst OHNE Import von `bericht`: der Riegel darf nicht von dem Modul
+    abhaengen, gegen dessen Ausgabe er schuetzt -- sonst schuetzte er nur so
+    lange, wie beide dieselbe Vorstellung vom Format haben.
+    """
+    marker = "**Antwort:**"
+    gefunden: list[str] = []
+    ueberschrift = SAMMELDATEI
+    for zeile in pfad.read_text(encoding="utf-8").splitlines():
+        if zeile.startswith("## "):
+            ueberschrift = zeile[3:].strip()
+        elif zeile.startswith(marker) and zeile[len(marker) :].strip():
+            gefunden.append(ueberschrift)
+    return gefunden

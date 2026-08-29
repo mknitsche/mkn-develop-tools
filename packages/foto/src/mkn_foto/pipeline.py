@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 
 from mkn_foto import (
     anreichern,
+    bericht,
     entscheidung,
     gpx,
     inventar,
@@ -102,6 +103,8 @@ class Lauf:
     OFFEN hiess damals NICHT VERORTET — und das ist nicht dasselbe."""
     geschrieben: schreiben.Ergebnis | None = None
     angereichert: anreichern.Ergebnis | None = None
+    protokoll: Path | None = None
+    entscheidungsdatei: Path | None = None
 
     @property
     def belegt(self) -> int:
@@ -230,6 +233,17 @@ def fahre(
 
     if entscheidungen is not None and lauf.offen:
         entscheidung.bereite_vor(lauf.offen, Path(entscheidungen))
+        # Die Eingabe zentral, die Bilder verteilt -- so herum, weil KT-1 EINE
+        # Stelle zum Schreiben braucht und die Bilder nun einmal je Fall liegen.
+        lauf.entscheidungsdatei = bericht.entscheidungsdatei(Path(entscheidungen), lauf.offen)
+
+    if schreiben_aktiv:
+        lauf.protokoll = bericht.protokoll(
+            Path(ziel),
+            verortet=[(s, lauf.orte[id(s)]) for s in lauf.spots if id(s) in lauf.orte],
+            beantwortet=lauf.beantwortet,
+            offen=lauf.offen,
+        )
 
     return lauf
 
