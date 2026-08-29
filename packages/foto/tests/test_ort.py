@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from mkn_foto import ort
+from mkn_foto import ort, spots
 from mkn_foto.modell import Anker, Aufnahme, Spot
 
 _START = datetime(2026, 8, 27, 12, 0, 0)
@@ -84,7 +84,34 @@ def test_ohne_anker_in_der_session_kommt_nichts_zurueck():
     assert ort.fuer_spot(_spot(0, 60), []) is None
 
 
-def test_anker_ausserhalb_der_session_zaehlen_nicht():
+def test_ein_anker_knapp_neben_der_session_zaehlt_mit():
+    """Die Sessiongrenze ist der letzte Ausloeser, nicht der Moment des
+    Aufbruchs. Ein Anker fuenf Minuten spaeter sagt sehr wohl, wo jemand
+    waehrend der Session war — gemessen an der echten Woche liegen solche
+    Randanker 18 bis 200 m vom Sessionmittelpunkt entfernt.
+
+    Ohne den Randstreifen fielen sechs Sessions mit 472 Bildern auf die
+    Entscheidungsliste, obwohl ihre Anker auf 25 m uebereinstimmen."""
+    spot = _spot(0, 30)
+    anker = [_anker(-3), _anker(15, nord_m=20), _anker(33, nord_m=10)]
+
+    ergebnis = ort.fuer_spot(spot, anker)
+
+    assert ergebnis is not None
+    assert ergebnis.quelle == "anker"
+
+
+def test_der_randstreifen_ist_schmaler_als_die_halbe_sessionpause():
+    """Keine gedrehte Schraube, sondern eine Bedingung: waere der Rand breiter
+    als die halbe Pause, koennten sich zwei benachbarte Sessions denselben
+    Anker teilen — und der Ort der einen zoege den der anderen zu sich.
+
+    Firsthand bestaetigt: bei 15 Minuten Rand faellt die Zahl belegter Bilder
+    von 840 auf 669, weil Anker der Nachbarsession den Radius aufblaehen."""
+    assert ort.RAND_S * 2 < spots.PAUSE_S
+
+
+def test_anker_weit_ausserhalb_der_session_zaehlen_nicht():
     """Sonst zoege der Anker der naechsten Station den Ort dieser Session zu
     sich herueber."""
     spot = _spot(0, 60)

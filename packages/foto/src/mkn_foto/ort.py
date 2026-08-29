@@ -23,6 +23,7 @@ Anwender ist die Pipeline.
 
 from __future__ import annotations
 
+import datetime as dt
 import math
 from collections.abc import Sequence
 
@@ -43,6 +44,20 @@ _RADIUS_MAX_M = 500
 # heraus, die durchgehend begleiteten Sessions bleiben.
 _ABDECKUNG_MIN = 0.5
 
+# Wie weit ueber die Sessiongrenze hinaus Anker noch zaehlen. Die Grenze ist
+# der letzte Ausloeser, nicht der Moment des Aufbruchs: ein Anker wenige
+# Minuten davor oder danach sagt sehr wohl, wo jemand waehrend der Session war.
+# An der echten Woche gemessen liegen solche Randanker 18 bis 200 m vom
+# Sessionmittelpunkt entfernt, und sie holen sechs Sessions mit 472 Bildern von
+# der Entscheidungsliste zurueck.
+#
+# Der Wert ist KEINE gedrehte Schraube, sondern eine Bedingung: er muss
+# schmaler sein als die halbe Session-Pause (`spots.PAUSE_S`), sonst koennen
+# sich zwei benachbarte Sessions denselben Anker teilen. Firsthand: bei 15
+# Minuten Rand faellt die Zahl belegter Bilder von 840 auf 669, weil Anker der
+# Nachbarsession den Radius aufblaehen.
+RAND_S = 300.0
+
 # Ein Anker gilt als widerlegt, wenn der Umweg ueber ihn um dieses Vielfache
 # laenger ist als der direkte Weg zwischen seinen Nachbarn. An der echten
 # Woche gemessen: Faktor 10 verwirft 6 von 732 Ankern, alle offensichtlich
@@ -53,10 +68,15 @@ _WIDERSPRUCH_FAKTOR = 10.0
 _ERDRADIUS_M = 6_371_000.0
 
 
-def fuer_spot(spot: Spot, anker: Sequence[Anker]) -> Ort | None:
-    """Ort einer Session, oder None wenn kein Anker in ihr liegt."""
+def fuer_spot(spot: Spot, anker: Sequence[Anker], *, rand_s: float = RAND_S) -> Ort | None:
+    """Ort einer Session, oder None wenn kein Anker in ihrer Naehe liegt.
+
+    Beruecksichtigt werden Anker der Session UND eines schmalen Randstreifens
+    davor und danach — siehe `RAND_S`.
+    """
+    rand = dt.timedelta(seconds=rand_s)
     drin = sorted(
-        (a for a in anker if spot.von <= gpx.in_kamerazeit(a) <= spot.bis),
+        (a for a in anker if spot.von - rand <= gpx.in_kamerazeit(a) <= spot.bis + rand),
         key=lambda a: a.zeit,
     )
     if not drin:
