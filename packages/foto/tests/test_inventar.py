@@ -140,3 +140,35 @@ def test_fremde_dateien_werden_exiftool_gar_nicht_erst_vorgelegt(tmp_path, monke
     monkeypatch.setattr(inventar.exif, "lies", _darf_nicht_gerufen_werden)
 
     assert inventar.lies_baum(tmp_path) == []
+
+
+def test_aussortierte_bilder_bleiben_draussen(tmp_path, monkeypatch):
+    """`_Rejected` ist der Culling-Ordner von FastRawViewer.
+
+    Was dort liegt, hat ein Mensch bewusst verworfen — es gehoert nicht in den
+    angereicherten Baum. Der Ausschluss wirkte, war aber unbelegt: der Lauf ueber
+    die echte Reise kopierte 415 von 421 NEF, und die sechs fehlenden fielen erst
+    beim Nachzaehlen auf. Ohne diese Zusicherung waere aus dem Nachzaehlen ein
+    Fehlalarm geworden — oder, beim naechsten Umbau, die verworfenen Bilder
+    waeren mitgewandert.
+    """
+    (tmp_path / "D850").mkdir()
+    (tmp_path / "D850" / "_Rejected").mkdir()
+    (tmp_path / "D850" / "GUT_0001.NEF").write_bytes(b"x")
+    (tmp_path / "D850" / "_Rejected" / "WEG_0002.NEF").write_bytes(b"x")
+
+    gesehen: list[Path] = []
+
+    def _merke(pfade):
+        gesehen.extend(pfade)
+        return [
+            {"EXIF:DateTimeOriginal": "2026:08:24 06:15:40", "EXIF:Model": "NIKON D850"}
+            for _ in pfade
+        ]
+
+    monkeypatch.setattr(inventar.exif, "lies", _merke)
+    aufnahmen = inventar.lies_baum(tmp_path)
+
+    namen = sorted(p.name for p in gesehen)
+    assert namen == ["GUT_0001.NEF"], f"exiftool bekam auch Aussortiertes vorgelegt: {namen}"
+    assert [a.stamm for a in aufnahmen] == ["GUT_0001"]

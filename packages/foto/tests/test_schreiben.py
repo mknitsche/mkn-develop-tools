@@ -138,3 +138,25 @@ def test_zu_wenig_platz_bricht_laut_ab(tmp_path, monkeypatch):
         schreiben.kopiere([a], tmp_path / "ziel")
     assert not (tmp_path / "ziel" / "2026-08-27").exists(), "trotz Abbruch wurde geschrieben"
     assert "Byte" in str(fehler.value) or "byte" in str(fehler.value).lower()
+
+
+def test_sidecar_wird_je_aufnahme_nur_einmal_kopiert(tmp_path):
+    """Ein RAW+JPEG-Paar hat EINEN Sidecar, nicht zwei.
+
+    Die erste Fassung kopierte ihn je Endung — beide Male auf denselben
+    Zielnamen. Kein Datenverlust, aber doppelte Arbeit und ein Zaehler, der
+    luegt: der Lauf ueber die echte Reise meldete 272 Sidecars, im Ziel lagen
+    139. Eine Zahl, die etwas anderes zaehlt als sie behauptet, ist schlimmer
+    als keine.
+    """
+    a = _aufnahme(tmp_path, "DSCF3541", endungen=(".RAF", ".JPG"))
+    a.dateien[".RAF"].with_suffix(".xmp").write_text("<x:xmpmeta/>", encoding="utf-8")
+
+    ergebnis = schreiben.kopiere([a], tmp_path / "ziel")
+
+    tag = tmp_path / "ziel" / "2026-08-27"
+    sidecars = list(tag.glob("*.xmp"))
+    assert len(sidecars) == 1, f"mehrere Sidecar-Dateien: {[p.name for p in sidecars]}"
+    assert ergebnis.sidecars == 1, (
+        f"der Zaehler meldet {ergebnis.sidecars}, im Ziel liegt {len(sidecars)}"
+    )

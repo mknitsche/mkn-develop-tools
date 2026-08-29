@@ -19,7 +19,15 @@ _LOG = logging.getLogger(__name__)
 
 BILD_ENDUNGEN = frozenset({".NEF", ".RAF", ".JPG", ".JPEG", ".HEIC", ".MOV"})
 
-# Ordner, die im Zielbaum neben den Tagen liegen und keine Aufnahmen enthalten.
+# Ordner, deren Inhalt nicht in den angereicherten Baum gehoert.
+#
+# `_bericht` liegt im ZIELbaum neben den Tagen und enthaelt keine Aufnahmen.
+# `_Rejected` ist etwas anderes und der Kommentar sagte das frueher falsch: der
+# Ordner enthaelt sehr wohl Aufnahmen -- die beim Culling AUSSORTIERTEN. Sie
+# stehen bewusst draussen, und man sieht es dem Ergebnis nicht an: der Lauf ueber
+# die Reise kopierte 415 von 421 NEF, und die sechs fehlenden fielen erst beim
+# Nachzaehlen auf. Ohne diese Zeile hier waere aus dem Nachzaehlen ein Fehlalarm
+# geworden -- oder schlimmer, die verworfenen Bilder waeren mitgewandert.
 UEBERSPRUNGEN = frozenset({"_bericht", "_Rejected"})
 
 # Endungen, deren EXIF die Aufnahme fuehrt: die MakerNotes des RAW tragen die
