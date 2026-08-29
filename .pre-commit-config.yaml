@@ -33,16 +33,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: governance-intact
-        name: governance files intact (licence, NOTICE, DCO, security policy)
-        # language: python, not system - the hook must work on a fresh clone
-        # where no project venv exists yet. The test only reads files.
-        entry: pytest tests/test_governance.py -q
-        language: python
-        additional_dependencies: [pytest]
-        pass_filenames: false
-        files: '^(LICENSE|NOTICE|README\.md|CONTRIBUTING\.md|SECURITY\.md|CODE_OF_CONDUCT\.md|tests/test_governance\.py)$'
-
       - id: conventional-commit
         name: conventional commit message
         entry: scripts/check-commit-message.sh

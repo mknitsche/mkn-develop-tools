@@ -4,6 +4,27 @@ A change is done when every point below is true **and was checked**, not when it
 looks finished. The order matters: this is read *before* the first line of code,
 not after the last.
 
+## 0. There is a problem — otherwise there is nothing to do
+
+The chain is **problem → solution → test**, in that order, and no link may be
+missing:
+
+- A problem exists → it gets solved, properly.
+- A solution exists → it gets a test that covers it fully, correctly, with an
+  unambiguous result.
+- No test? Then ask what a test would be *for*.
+- **No problem? Then there is no solution, and therefore no test.**
+- A test with no problem or no solution behind it **gets deleted**.
+
+Excellence applies to things that solve real problems. A guard against a
+failure nobody has seen, a matrix that proves what one job already proved, a
+branch made more complicated so that a test can observe it — those are not
+excellence, they are gold-plated taps. They cost time to write, time to read
+and time to maintain, and they buy nothing.
+
+The honest question before every guard: *what goes wrong without it, and has it
+ever gone wrong?* If the answer is a hypothetical, the guard does not get built.
+
 ## 1. The problem was stated before the solution
 
 There is a written problem statement, and it survived contact with the code. If

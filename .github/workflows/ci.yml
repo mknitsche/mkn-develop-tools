@@ -13,36 +13,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
       - run: uv tool run ruff@0.14.0 check .
       - run: uv tool run ruff@0.14.0 format --check .
+      - run: uv venv && uv pip install pytest
+      - run: uv run pytest -q
 
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        # The tools must run where the users are, not only where they were
-        # written. macOS is the development machine; that is not a requirement.
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.12", "3.13", "3.14"]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: ${{ matrix.python }}
-      - run: uv venv
-      - run: uv pip install pytest pytest-cov
-      - name: Run tests
-        run: uv run pytest -q
+  # NOTE ON THE MATRIX. An earlier draft ran three operating systems by three
+  # Python versions. With no platform-dependent code in the repository, those
+  # nine jobs proved nothing they did not already prove on one - they were cost
+  # without a question behind them. The matrix comes back when there is code
+  # that can actually differ per platform (the photo tools call an external
+  # programme and touch the filesystem; that is the moment), and it comes back
+  # because a real failure mode demands it.
 
   dco:
-    # Contributions come in under the Developer Certificate of Origin. Checking
-    # it after a merge is worthless, so it is checked on the pull request.
+    # Contributions come in under the Developer Certificate of Origin, and
+    # checking it after a merge is worthless.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -54,24 +47,17 @@ jobs:
           set -euo pipefail
           basis="${{ github.event.pull_request.base.sha }}"
           spitze="${{ github.event.pull_request.head.sha }}"
+          anzahl=$(git rev-list --no-merges --count "$basis".."$spitze")
+          if [ "$anzahl" -eq 0 ]; then
+            echo "::warning::no non-merge commits - nothing was checked"
+            exit 0
+          fi
           fehlend=0
-          # Merge-Commits ausgenommen: die erzeugt GitHub, nicht der Beitragende.
           for c in $(git rev-list --no-merges "$basis".."$spitze"); do
             if ! git log -1 --format=%B "$c" | grep -qi '^Signed-off-by: .\+ <.\+@.\+>'; then
               echo "::error::commit $c has no Signed-off-by trailer"
-              git log -1 --format='  %h %s' "$c"
               fehlend=$((fehlend + 1))
             fi
           done
-          if [ "$fehlend" -gt 0 ]; then
-            echo "$fehlend commit(s) without sign-off. See CONTRIBUTING.md - use 'git commit -s'."
-            exit 1
-          fi
-          # Untergrenze: wenn gar nichts geprueft wurde, ist "alles in Ordnung"
-          # keine Aussage (CONTRIBUTING, Regel 4).
-          anzahl=$(git rev-list --no-merges --count "$basis".."$spitze")
-          if [ "$anzahl" -eq 0 ]; then
-            echo "::warning::no non-merge commits in this pull request - nothing was checked"
-          else
-            echo "$anzahl commit(s) checked, all signed off."
-          fi
+          [ "$fehlend" -eq 0 ] || { echo "See CONTRIBUTING.md - use 'git commit -s'."; exit 1; }
+          echo "$anzahl commit(s) checked, all signed off."

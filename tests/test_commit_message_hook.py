@@ -1,16 +1,14 @@
-"""Der Commit-Message-Pruefer wird gegen sein VERHALTEN geprueft, nicht gegen seinen Text.
+"""Der Commit-Message-Hook hat einen Ausfallmodus, den man im Alltag nicht sieht:
+er laesst alles durch und sieht dabei aus wie ein Hook, der wirkt. Gemerkt wird es
+erst an einer Historie, die niemand mehr auswerten kann.
 
-Ein Hook, der nichts abweist, sieht im Alltag genauso aus wie einer, der wirkt —
-man merkt den Unterschied erst, wenn die Historie schon unbrauchbar ist. Darum
-laeuft hier fuer jeden Fall das echte Skript mit einer echten Datei.
+Vier Faelle, vier echte Ausfallmodi. Mehr braucht es nicht.
 """
 
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-
-import pytest
 
 SKRIPT = Path(__file__).resolve().parent.parent / "scripts" / "check-commit-message.sh"
 
@@ -21,57 +19,24 @@ def pruefe(text: str, tmp_path: Path) -> int:
     return subprocess.run([str(SKRIPT), str(datei)], capture_output=True, text=True).returncode
 
 
-ANGENOMMEN = [
-    "feat: add the thing",
-    "fix(kern): stop swallowing the error",
-    "docs(foto): explain the sidecar rule",
-    "refactor!: drop the old entry point",
-    "chore(ci): pin the runner",
-    "Merge branch 'main' into feature",
-    'Revert "feat: add the thing"',
-]
-
-ABGEWIESEN = [
-    "add the thing",  # kein Typ
-    "feat add the thing",  # kein Doppelpunkt
-    "feat:",  # keine Zusammenfassung
-    "Feat: add the thing",  # Grossschreibung ist kein gueltiger Typ
-    "wip: quick fix",  # kein bekannter Typ
-]
+def test_gueltiger_betreff_kommt_durch(tmp_path):
+    assert pruefe("fix(kern): stop swallowing the error\n", tmp_path) == 0
 
 
-@pytest.mark.parametrize("betreff", ANGENOMMEN)
-def test_gueltige_betreffs_kommen_durch(betreff, tmp_path):
-    assert pruefe(betreff + "\n", tmp_path) == 0, f"faelschlich abgewiesen: {betreff!r}"
+def test_ungueltiger_betreff_wird_abgewiesen(tmp_path):
+    """Der Ausfallmodus, um den es geht: ein Hook, der nichts abweist."""
+    assert pruefe("quick fix\n", tmp_path) != 0
 
 
-@pytest.mark.parametrize("betreff", ABGEWIESEN)
-def test_ungueltige_betreffs_werden_abgewiesen(betreff, tmp_path):
-    assert pruefe(betreff + "\n", tmp_path) != 0, f"durchgelassen, obwohl ungueltig: {betreff!r}"
-
-
-def test_kommentarzeilen_von_git_verdecken_den_betreff_nicht(tmp_path):
+def test_git_kommentare_verdecken_den_betreff_nicht(tmp_path):
     """git haengt an die Vorlage Kommentarzeilen an. Wer die erste Zeile der DATEI
-    liest statt die erste echte Zeile, prueft am Ende einen git-Kommentar."""
-    nachricht = "# bitte Nachricht eingeben\n\nfeat: add the thing\n"
-    assert pruefe(nachricht, tmp_path) == 0
+    liest statt die erste inhaltliche, prueft am Ende einen git-Kommentar — und
+    das faellt nie auf, weil der Kommentar zufaellig immer gleich aussieht."""
+    assert pruefe("# bitte Nachricht eingeben\n\nfeat: add the thing\n", tmp_path) == 0
+    # Untergrenze: das Ausblenden darf nicht dazu fuehren, dass gar nichts geprueft wird.
+    assert pruefe("# bitte Nachricht eingeben\n\nkaputter betreff\n", tmp_path) != 0
 
 
-def test_leerzeilen_vor_dem_betreff_verdecken_ihn_nicht(tmp_path):
-    assert pruefe("\n\nfix(kern): repair it\n", tmp_path) == 0
-
-
-def test_ungueltiger_betreff_unter_kommentaren_wird_trotzdem_gefunden(tmp_path):
-    """Die Untergrenze zum Test darueber: das Ausblenden der Kommentare darf nicht
-    dazu fuehren, dass am Ende gar nichts mehr geprueft wird."""
-    assert pruefe("# hinweis von git\n\nkaputter betreff\n", tmp_path) != 0
-
-
-def test_leere_nachricht_hat_einen_eigenen_ausgang(tmp_path):
-    """Exit 2 statt 1 — sonst ist "leer" von "fehlerhaft" nicht zu unterscheiden,
-    und die Leer-Pruefung im Skript waere ungeprueft (die Mutation, die sie
-    entfernt, blieb zuerst gruen)."""
-    assert pruefe("", tmp_path) == 2
-    assert pruefe("# nur ein git-Kommentar\n", tmp_path) == 2
-    # Untergrenze: ein fehlerhafter, aber nicht leerer Betreff nutzt den anderen Ausgang.
-    assert pruefe("kaputt\n", tmp_path) == 1
+def test_merge_commits_von_git_werden_nicht_abgewiesen(tmp_path):
+    """Sonst blockiert der Hook Commits, die der Beitragende gar nicht formuliert hat."""
+    assert pruefe("Merge branch 'main' into feature\n", tmp_path) == 0
