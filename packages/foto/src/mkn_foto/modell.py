@@ -69,9 +69,14 @@ class Ort:
     lat: float
     lon: float
 
-    radius_m: int
+    radius_m: int | None
     """Geht als `GPSHPositioningError` mit in die Datei. Eine Koordinate ohne
-    Fehlerangabe behauptet Genauigkeit, die sie nicht hat."""
+    Fehlerangabe behauptet Genauigkeit, die sie nicht hat.
+
+    `None` heisst: NICHT BESTIMMBAR — es fehlt der Beleg, wie schnell man sich
+    in diesem Zeitraum bewegt hat. Ein solcher Ort wird nicht geschrieben,
+    sondern kommt auf die Entscheidungsliste. Ein geratener Radius waere
+    schlimmer als gar keiner: er sieht aus wie eine Messung."""
 
     name: str | None
     quelle: str

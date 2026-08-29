@@ -5,11 +5,22 @@ GENAUE. Eine Koordinate mit engem Radius sieht aus wie eine Messung; steht
 sie erst in der Datei, ist ihr nicht mehr anzusehen, dass sie geraten war.
 Deshalb fuehrt jeder Ort seinen eigenen Fehlerradius mit.
 
-Die Grundschranke ist immer die ZEIT: weiter als Gehgeschwindigkeit mal
-verstrichener Zeit kann niemand gekommen sein. Raeumliche Naehe darf diese
-Schranke nur VERENGEN, nie ersetzen — bei einer Rundwanderung stehen Anfang
-und Ende am selben Punkt, und eine rein raeumliche Regel gaebe dem Bild vom
-entferntesten Punkt der Route die Startkoordinate mit einem Radius nahe null.
+Die Grundschranke ist die ZEIT mal dem Tempo — und das Tempo wird aus der SPUR
+GENOMMEN, nicht angenommen. Eine feste Gehgeschwindigkeit stand im Entwurf und
+ist an der Wirklichkeit gescheitert: von 106 kurzen Teilstuecken der echten
+Spur waren 104 schneller als Gehen, das schnellste mit 85 km/h. Es wird Auto
+gefahren und Seilbahn. Eine angenommene Gehgeschwindigkeit haette 56 m
+behauptet, wo in derselben Zeit 600 m moeglich waren.
+
+Raeumliche Naehe darf die Schranke nur VERENGEN, nie ersetzen — bei einer
+Rundwanderung stehen Anfang und Ende am selben Punkt, und eine rein raeumliche
+Regel gaebe dem Bild vom entferntesten Punkt der Route die Startkoordinate mit
+einem Radius nahe null.
+
+Was nicht belegt ist, wird nicht geschrieben: fehlt der Tempo-Beleg oder wird
+der Radius zu weit, kommt der Ort als VORSCHLAG zurueck (`radius_m=None`,
+`quelle="vorschlag"`) und gehoert auf die Entscheidungsliste. Ein geratener
+Radius waere schlimmer als gar keiner, weil er aussieht wie eine Messung.
 
 Anwender ist die Pipeline.
 """
@@ -24,7 +35,11 @@ from mkn_foto import gpx
 from mkn_foto.gpx import Punkt
 from mkn_foto.modell import Aufnahme, Ort
 
-_GEHGESCHWINDIGKEIT_M_S = 1.4  # 5 km/h
+# Nur KURZE Teilstuecke belegen ein Tempo. Ueber ein langes sagt der
+# Durchschnitt nichts: zwei Anker am selben Ort, zwoelf Minuten auseinander,
+# ergaeben rechnerisch null — und daraus einen engen Radius abzuleiten hiesse
+# zu behaupten, dazwischen sei niemand weggegangen.
+_TEMPO_MAX_TEILSTUECK_S = 300
 
 # Ab wann eine Spur "dicht" ist und ihre raeumliche Ausdehnung mitreden darf.
 _DICHT_MIN_PUNKTE = 3
@@ -34,12 +49,12 @@ _DICHT_MAX_LUECKE_S = 300
 # und der Anker beschreibt den Standort des Geraets, nicht den des Motivs.
 _RADIUS_MIN_M = 25
 
-# Die eigentliche Grenze der Aussage. Sie deckelt zugleich den Radius: mehr als
-# _FENSTER_S * _GEHGESCHWINDIGKEIT_M_S kann nicht herauskommen. Eine zusaetzliche
-# Radius-Obergrenze stand im Entwurf und waere toter Code gewesen — 15 Minuten
-# ergeben hoechstens 1260 m, die vorgesehene Schranke lag bei 5000. Ihr Test
-# bestand denn auch aus einem anderen Grund: sein Punkt lag ausserhalb des
-# Fensters und fiel schon hier heraus.
+# Darueber benennt eine Koordinate keinen Ort mehr. Sie sieht trotzdem aus wie
+# eine Messung, also wird sie nicht geschrieben, sondern vorgeschlagen.
+_RADIUS_MAX_M = 500
+
+# Die eigentliche Grenze der Aussage: weiter entfernte Anker sagen ueber den
+# Aufnahmeort nichts mehr.
 _FENSTER_S = 900
 
 _ERDRADIUS_M = 6_371_000.0
@@ -61,22 +76,46 @@ def bestimme(a: Aufnahme, spur: Sequence[Punkt], wege: Sequence[Punkt]) -> Ort |
     gewaehlt = benannt if benannt is not None else _zeitlich_naechster(a, fenster)
 
     radius = _radius_um(a, gewaehlt, fenster)
+    quelle = "vorschlag" if radius is None else ("gpx" if gewaehlt.name else "anker")
     return Ort(
         lat=gewaehlt.lat,
         lon=gewaehlt.lon,
         radius_m=radius,
         name=gewaehlt.name,
-        quelle="gpx" if gewaehlt.name else "anker",
+        quelle=quelle,
     )
 
 
-def _radius_um(a: Aufnahme, gewaehlt: Punkt, fenster: Sequence[Punkt]) -> int:
-    """Wie weit die Aufnahme vom gewaehlten Punkt entfernt sein kann."""
-    zeitschranke = abs(_abstand_s(a, gewaehlt)) * _GEHGESCHWINDIGKEIT_M_S
-    radius = zeitschranke
+def _radius_um(a: Aufnahme, gewaehlt: Punkt, fenster: Sequence[Punkt]) -> int | None:
+    """Wie weit die Aufnahme vom gewaehlten Punkt entfernt sein kann.
+
+    `None` heisst NICHT BESTIMMBAR — entweder fehlt der Tempo-Beleg, oder der
+    Radius ist so weit, dass die Koordinate keinen Ort mehr benennt.
+    """
+    tempo = _belegtes_tempo(fenster)
+    if tempo is None:
+        return None
+    radius = abs(_abstand_s(a, gewaehlt)) * tempo
     if _ist_dicht(fenster):
-        radius = min(zeitschranke, _spannweite_m(fenster))
-    return round(max(radius, _RADIUS_MIN_M))
+        radius = min(radius, _spannweite_m(fenster))
+    radius = max(radius, _RADIUS_MIN_M)
+    return None if radius > _RADIUS_MAX_M else round(radius)
+
+
+def _belegtes_tempo(fenster: Sequence[Punkt]) -> float | None:
+    """Hoechstes Tempo unter den kurzen Teilstuecken des Fensters.
+
+    Das HOECHSTE, nicht das mittlere: der Radius muss die Bewegung
+    ueberschaetzen duerfen, nur nicht unterschaetzen. Ein zu weiter Radius sagt
+    ehrlich „ungenau"; ein zu enger behauptet eine Messung.
+    """
+    punkte = sorted(fenster, key=lambda p: p.zeit)
+    tempi = [
+        _entfernung_m(vorher, nachher) / dauer
+        for vorher, nachher in pairwise(punkte)
+        if 0 < (dauer := (nachher.zeit - vorher.zeit).total_seconds()) <= _TEMPO_MAX_TEILSTUECK_S
+    ]
+    return max(tempi) if tempi else None
 
 
 def _zeitlich_naechster(a: Aufnahme, punkte: Sequence[Punkt]) -> Punkt | None:
