@@ -17,6 +17,7 @@ solange sie in keiner Datei steht.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from datetime import datetime
@@ -34,13 +35,22 @@ ORT = Ort(lat=47.68, lon=11.57, radius_m=250, name="Lenggries", quelle="schild")
 
 
 def _lies(pfad: Path, *felder: str) -> dict[str, str]:
+    """Liest Felder ueber die JSON-Ausgabe, nicht ueber Zeilen.
+
+    Die erste Fassung war `zip(felder, stdout.splitlines())` — exiftool laesst
+    fehlende Felder aber einfach WEG, und dann rutscht die Zuordnung um eins.
+    Firsthand: `Location` bekam den Wert von `LocationShownSublocation`, und die
+    Mutation "Spot wieder nach City" ueberlebte den Test, der sie fangen sollte.
+    Eine Zuordnung ueber die Position ist keine Zuordnung.
+    """
     roh = subprocess.run(
-        ["exiftool", "-s", "-s", "-s", *[f"-{f}" for f in felder], str(pfad)],
+        ["exiftool", "-json", "-s", *[f"-{f}" for f in felder], str(pfad)],
         capture_output=True,
         text=True,
         check=True,
-    ).stdout.splitlines()
-    return dict(zip(felder, roh, strict=False))
+    ).stdout
+    daten = json.loads(roh)[0] if roh.strip() else {}
+    return {f: str(daten[f]) for f in felder if f in daten}
 
 
 def _aufnahme(ordner: Path, stamm: str, endungen=(".RAF",)) -> Aufnahme:
@@ -120,9 +130,11 @@ def test_der_ort_steht_wirklich_drin(tmp_path):
     anreichern.schreibe([(a, ORT)])
 
     f = _lies(
-        tmp_path / "DSCF3541.xmp", "GPSLatitude", "GPSLongitude", "GPSHPositioningError", "City"
+        tmp_path / "DSCF3541.xmp", "GPSLatitude", "GPSLongitude", "GPSHPositioningError", "Location"
     )
-    assert f["City"] == "Lenggries"
+    # Der Spot gehoert nach iptcCore:Location, nicht nach City -- das traegt das
+    # GEBIET (Spec § 6 Traeger-Tabelle, seit macb-S314 richtig gebaut).
+    assert f["Location"] == "Lenggries"
     assert "47" in f["GPSLatitude"] and "40" in f["GPSLatitude"]
     assert f["GPSHPositioningError"].startswith("250")
 
@@ -155,8 +167,8 @@ def test_jpeg_bekommt_die_daten_eingebettet(tmp_path):
     assert not (tmp_path / "DSCF3542.xmp").exists(), (
         "fuer ein JPEG wurde ein Sidecar angelegt statt einzubetten"
     )
-    f = _lies(a.dateien[".JPG"], "City")
-    assert f.get("City") == "Lenggries", f"nichts eingebettet: {f}"
+    f = _lies(a.dateien[".JPG"], "Location")
+    assert f.get("Location") == "Lenggries", f"nichts eingebettet: {f}"
     assert ergebnis.eingebettet == 1
 
 
@@ -167,7 +179,7 @@ def test_paar_bekommt_beides_getrennt(tmp_path):
     ergebnis = anreichern.schreibe([(a, ORT)])
 
     assert (tmp_path / "DSCF3543.xmp").exists(), "der Sidecar zur RAW fehlt"
-    assert _lies(a.dateien[".JPG"], "City").get("City") == "Lenggries"
+    assert _lies(a.dateien[".JPG"], "Location").get("Location") == "Lenggries"
     assert ergebnis.sidecars == 1 and ergebnis.eingebettet == 1
 
 
@@ -181,5 +193,9 @@ def test_serie_wird_zum_stichwort(tmp_path):
     anreichern.schreibe([(a1, ORT), (a2, ORT)], serien=[serie])
 
     f = _lies(tmp_path / "DSCF3544.xmp", "Subject", "HierarchicalSubject")
-    assert "pan01" in f.get("Subject", ""), f"Serienstichwort fehlt: {f}"
-    assert "Serie|pan01" in f.get("HierarchicalSubject", ""), f"nicht hierarchisch: {f}"
+    # Mit Datum: `2026-08-24-pan01` (Spec-Schreibweise). Ohne es kollidieren
+    # gleichnamige Serien verschiedener Tage im Stichwortbaum.
+    assert "2026-08-24-pan01" in f.get("Subject", ""), f"Serienstichwort fehlt: {f}"
+    assert "Serie|2026-08-24-pan01" in f.get("HierarchicalSubject", ""), (
+        f"nicht hierarchisch oder ohne Datum: {f}"
+    )

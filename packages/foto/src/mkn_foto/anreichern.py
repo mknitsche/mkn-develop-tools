@@ -36,6 +36,14 @@ from mkn_foto.modell import Aufnahme, Ort, Serie
 
 SIDECAR = ".xmp"
 
+FARBE = "Blue"
+"""Die einzige Farbe, die das Werkzeug vergibt. Sie heisst "gehoert zu einer
+Serie". Rot, Gelb und Gruen sind KT-1s Bewertungsachse (Spec § 6)."""
+
+URGENCY = 3
+"""Dieselbe Farbe in der aelteren Notation, die Capture One tatsaechlich liest.
+An KT-1s Capture One 16.8.5 abgelesen: 3 ist blau (1 rot, 2 gruen, 7 gelb)."""
+
 EINGEBETTET = frozenset({".JPG", ".JPEG", ".HEIC"})
 """Formate mit eigener Metadaten-Konvention. Alles andere bekommt einen Sidecar."""
 
@@ -59,18 +67,29 @@ def schreibe(
     eintraege: Sequence[tuple[Aufnahme, Ort | None]],
     *,
     serien: Iterable[Serie] = (),
+    beschreibungen: dict[int, str] | None = None,
 ) -> Ergebnis:
-    """Schreibt Ort, Serie und Technik an jede Aufnahme.
+    """Schreibt Ort, Serie, Technik und Beschreibung an jede Aufnahme.
 
     `eintraege` paart jede Aufnahme mit ihrem Ort — `None`, wenn er offen ist.
+    `beschreibungen` bildet die Aufnahme-Identitaet auf einen Satz ab; gefuellt
+    wird sie ab V2 vom Modell, der Pfad steht schon hier.
     """
+    beschreibungen = beschreibungen or {}
     stichworte_je_aufnahme = _stichworte(eintraege, serien)
+    in_serie = {id(a) for s in serien for a in s.aufnahmen}
     ergebnis = Ergebnis()
 
     for aufnahme, ort in eintraege:
         stichworte = stichworte_je_aufnahme.get(id(aufnahme), [])
         for endung, pfad in aufnahme.dateien.items():
-            argumente = _argumente(ort, stichworte)
+            argumente = _argumente(
+                ort,
+                stichworte,
+                beschreibung=beschreibungen.get(id(aufnahme)),
+                serienbild=id(aufnahme) in in_serie,
+                eingebettet=endung.upper() in EINGEBETTET,
+            )
             if not argumente:
                 continue
             if endung.upper() in EINGEBETTET:
@@ -93,9 +112,19 @@ def schreibe(
     return ergebnis
 
 
-def _argumente(ort: Ort | None, stichworte: Sequence[str]) -> list[str]:
-    """Baut die exiftool-Argumente. Ohne Ort keine Koordinate — im Zweifel
-    schreibt das Werkzeug nichts, statt etwas Ungefaehres zu behaupten."""
+def _argumente(
+    ort: Ort | None,
+    stichworte: Sequence[str],
+    *,
+    beschreibung: str | None = None,
+    serienbild: bool = False,
+    eingebettet: bool = False,
+) -> list[str]:
+    """Baut die exiftool-Argumente nach der Traeger-Tabelle der Spec § 6.
+
+    Ohne Ort keine Koordinate — im Zweifel schreibt das Werkzeug nichts, statt
+    etwas Ungefaehres zu behaupten.
+    """
     args: list[str] = []
 
     if ort is not None:
@@ -109,7 +138,33 @@ def _argumente(ort: Ort | None, stichworte: Sequence[str]) -> list[str]:
             f"-GPSHPositioningError={ort.radius_m}",
         ]
         if ort.name:
-            args.append(f"-XMP-photoshop:City={ort.name}")
+            # Der SPOT gehoert nach iptcCore:Location (Capture-One-Anzeige
+            # gemessen, Spec § 13.10) und LocationShownSublocation. Meine erste
+            # Fassung schrieb ihn nach `photoshop:City` -- das ist nach der
+            # Traeger-Tabelle das Feld fuer das GEBIET, nicht fuer den Spot.
+            args += [
+                f"-XMP-iptcCore:Location={ort.name}",
+                f"-XMP-iptcExt:LocationShownSublocation={ort.name}",
+            ]
+            if eingebettet:
+                # IIM traegt nur ein eingebettetes Format. Im XMP-Sidecar meldet
+                # exiftool "Nothing to write" -- firsthand geprueft 2026-08-30.
+                args.append(f"-IPTC:Sub-location={ort.name}")
+
+    if serienbild:
+        # ZWEIMAL, und das ist keine Vorsicht: Capture One liest `xmp:Label`
+        # nicht, sondern die aeltere Notation `photoshop:Urgency`. Dort ist 3
+        # die blaue -- an KT-1s Capture One 16.8.5 abgelesen. Wer nur `Label`
+        # setzt, zeigt in Lightroom Farben und in Capture One nichts.
+        #
+        # Blau gehoert dem Werkzeug und heisst "gehoert zu einer Serie". Rot,
+        # Gelb und Gruen sind KT-1s Bewertungsachse und werden nie angefasst.
+        args += [f"-XMP:Label={FARBE}", f"-XMP-photoshop:Urgency={URGENCY}"]
+        if eingebettet:
+            args.append(f"-IPTC:Urgency={URGENCY}")
+
+    if beschreibung:
+        args.append(f"-XMP-dc:Description={beschreibung}")
 
     for wort in stichworte:
         args += [f"-XMP-dc:Subject+={wort.split('|')[-1]}", f"-XMP-lr:HierarchicalSubject+={wort}"]
@@ -135,7 +190,10 @@ def _stichworte(
     """Ordnet jeder Aufnahme ihre hierarchischen Stichworte zu."""
     zuordnung: dict[int, list[str]] = {}
     for s in serien:
-        marke = f"{s.typ}{s.nummer:02d}"
+        # Mit Datum: `2026-08-26-pan01`. Ohne es kollidiert `pan01` vom 26.08.
+        # mit `pan01` vom 27.08., und der Stichwortbaum wirft beide zusammen.
+        tag = s.aufnahmen[0].zeitpunkt.date() if s.aufnahmen else None
+        marke = f"{tag}-{s.typ}{s.nummer:02d}" if tag else f"{s.typ}{s.nummer:02d}"
         for a in s.aufnahmen:
             zuordnung.setdefault(id(a), []).extend([f"Serie|{marke}", f"Technik|{s.typ}"])
     for aufnahme, _ in eintraege:
