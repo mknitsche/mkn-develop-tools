@@ -22,8 +22,9 @@ jobs:
           python-version: "3.14"
       - run: uv tool run ruff@0.14.0 check .
       - run: uv tool run ruff@0.14.0 format --check .
-      - run: uv venv && uv pip install pytest
-      - run: uv run pytest -q
+      # setup-uv legt bereits eine .venv an; ein eigenes `uv venv` bricht daran.
+      # `--with` laesst uv die Umgebung selbst verwalten.
+      - run: uv run --with pytest pytest -q
 
   # NOTE ON THE MATRIX. An earlier draft ran three operating systems by three
   # Python versions. With no platform-dependent code in the repository, those
