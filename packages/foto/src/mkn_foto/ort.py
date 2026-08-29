@@ -112,17 +112,41 @@ def verwirf_widerlegte(
 
     Unter drei Ankern kann nichts widerlegt werden: ein Widerspruch braucht
     einen Verdaechtigen UND zwei Nachbarn, die sich einig sind.
+
+    **Auch die RAENDER werden geprueft.** Ein Ausreisser ganz vorn oder ganz
+    hinten hat nur einen Nachbarn, aber er ist deshalb nicht unverdaechtig: er
+    wird gegen die beiden folgenden (bzw. vorangehenden) gehalten. Firsthand am
+    28.08. gefunden — der erste Anker einer Session lag 935 m von allen
+    dreizehn anderen entfernt, die untereinander auf 13 m uebereinstimmten. Die
+    erste Fassung behielt ihn ungeprueft, und ein klar bestimmter Spot wurde
+    dadurch zum Vorschlag.
     """
     if len(anker) < 3:
         return list(anker)
-    behalten = [anker[0]]
+    behalten = []
+    if not _rand_widerlegt(anker[0], anker[1], anker[2], faktor):
+        behalten.append(anker[0])
     for vorher, verdaechtig, nachher in zip(anker, anker[1:], anker[2:], strict=False):
         umweg = _entfernung_m(vorher, verdaechtig) + _entfernung_m(verdaechtig, nachher)
         direkt = max(_entfernung_m(vorher, nachher), _RADIUS_MIN_M)
         if umweg <= faktor * direkt:
             behalten.append(verdaechtig)
-    behalten.append(anker[-1])
+    if not _rand_widerlegt(anker[-1], anker[-2], anker[-3], faktor):
+        behalten.append(anker[-1])
     return behalten
+
+
+def _rand_widerlegt(rand: Anker, nachbar: Anker, uebernaechster: Anker, faktor: float) -> bool:
+    """Widerspricht das Paar hinter dem Randanker diesem Randanker?
+
+    Der Randanker ist widerlegt, wenn er von seinem Nachbarn viel weiter weg
+    ist, als dieser Nachbar von SEINEM Nachbarn — dann sind sich die beiden
+    einig und der Rand steht allein. Wer sich wirklich fortbewegt, erzeugt
+    dieses Bild nicht: dort liegen alle drei aehnlich weit auseinander.
+    """
+    schritt = _entfernung_m(rand, nachbar)
+    folge = max(_entfernung_m(nachbar, uebernaechster), _RADIUS_MIN_M)
+    return schritt > faktor * folge
 
 
 def _abdeckung(spot: Spot, anker: Sequence[Anker]) -> float:

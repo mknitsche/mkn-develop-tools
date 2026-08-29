@@ -53,7 +53,7 @@ def _zu_punkt(kind) -> Anker | None:
         # wird er trotzdem: eine Spur, die still schrumpft, faellt erst auf,
         # wenn am Ende Bilder ohne Ort dastehen.
         _LOG.warning(
-            "GPX-Anker ohne Zeit, uebergangen: lat=%s lon=%s", kind.get("lat"), kind.get("lon")
+            "GPX-Punkt ohne Zeit, uebergangen: lat=%s lon=%s", kind.get("lat"), kind.get("lon")
         )
         return None
     return Anker(

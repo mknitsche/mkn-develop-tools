@@ -166,6 +166,43 @@ def test_eine_echte_bewegung_wird_nicht_verworfen():
     assert len(behalten) == 3
 
 
+def test_auch_der_erste_anker_wird_geprueft():
+    """Ein Ausreisser am RAND hat nur einen Nachbarn — geprueft werden muss er
+    trotzdem, sonst kommt er ungehindert durch.
+
+    Firsthand am 28.08. gefunden: der erste Anker einer Session lag 935 m von
+    allen dreizehn anderen entfernt, die untereinander auf 13 m
+    uebereinstimmten. Weil die erste Fassung den ersten Anker ungeprueft
+    behielt, wuchs der Radius auf 868 m und ein klar bestimmter Spot wurde zum
+    Vorschlag."""
+    anker = [_anker(0, nord_m=935), _anker(10), _anker(20, nord_m=5), _anker(30)]
+
+    behalten = ort.verwirf_widerlegte(anker)
+
+    assert len(behalten) == 3
+    assert all(a.lat * _METER_JE_GRAD < 100 for a in behalten)
+
+
+def test_auch_der_letzte_anker_wird_geprueft():
+    """Dieselbe Luecke am anderen Ende — und sie faellt getrennt auf, weil ein
+    Riegel nur fuer den Anfang genauso aussieht wie einer fuer beide."""
+    anker = [_anker(0), _anker(10, nord_m=5), _anker(20), _anker(30, nord_m=935)]
+
+    behalten = ort.verwirf_widerlegte(anker)
+
+    assert len(behalten) == 3
+    assert all(a.lat * _METER_JE_GRAD < 100 for a in behalten)
+
+
+def test_ein_randanker_auf_echter_bewegung_bleibt():
+    """Untergrenze: wer am Anfang einer Wanderung steht, ist weit vom Ende
+    entfernt — und trotzdem kein Ausreisser. Ohne diesen Fall wuerde die
+    Randpruefung schlicht jeden entfernten Randanker wegwerfen."""
+    anker = [_anker(0), _anker(10, nord_m=300), _anker(20, nord_m=600), _anker(30, nord_m=900)]
+
+    assert len(ort.verwirf_widerlegte(anker)) == 4
+
+
 def test_mit_zwei_ankern_kann_nichts_widerlegt_werden():
     """Ein Widerspruch braucht drei Punkte: einen Verdaechtigen und zwei
     Nachbarn, die sich einig sind. Bei zweien gibt es keine zweite Meinung."""
