@@ -1,0 +1,21 @@
+mkn-develop-tools
+Copyright (c) 2026 Matthias Nitsche
+
+This product includes software developed by Matthias Nitsche.
+
+Licensed under the GNU Affero General Public License v3.0 (see LICENSE).
+
+TRADEMARKS AND BRAND
+--------------------
+The names "Matthias Nitsche", "Matthias Nitsche Fotografie", "mkn", "mkn-desk"
+and the associated logos and brand marks are NOT covered by the licence granted
+in LICENSE. No trademark rights are granted. You may state that your work is
+derived from this project; you may not present it as endorsed by, affiliated
+with, or originating from the copyright holder.
+
+THIRD-PARTY COMPONENTS
+----------------------
+Third-party dependencies keep their own licences. Where a package bundles or
+requires external components, they are listed in that package's THIRD-PARTY.md.
+This project relies on, but does not distribute, ExifTool (by Phil Harvey,
+Artistic/GPL) - it is invoked as an external programme.
