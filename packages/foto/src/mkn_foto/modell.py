@@ -42,6 +42,51 @@ class Aufnahme:
 
 
 @dataclass(frozen=True)
+class Anker:
+    """Eine bekannte Position zu einer bekannten Zeit.
+
+    Der gemeinsame Nenner aller Ortsquellen: die GPS-Spur, die benannten
+    Wegpunkte und die Handybilder liefern dasselbe — wo jemand wann war. Der
+    Typ lebt deshalb hier und nicht in einem der Leser; sonst muesste die
+    Mediathek aus dem GPX-Modul importieren und behaupten, ein Handybild sei
+    ein Spurpunkt.
+    """
+
+    zeit: datetime
+    """Immer tz-bewusste UTC."""
+
+    lat: float
+    lon: float
+
+    name: str | None
+    """Nur benannte Wegpunkte tragen einen. Ein benannter Ort schlaegt jede
+    berechnete Koordinate — er benennt den Ort, statt ihn zu vermessen."""
+
+
+@dataclass(frozen=True)
+class Spot:
+    """Eine zusammenhaengende Foto-Session an einem Ort.
+
+    Die Einheit der Ortsbestimmung ist der Spot, NICHT das einzelne Bild. An
+    einem Fleck koennen Stunden vergehen und zwischen zwei Aufnahmen zwoelf
+    Minuten liegen — das ist kein fehlender Beleg, sondern der Beleg fuers
+    Bleiben. Wer jedes Bild einzeln fragt „wo warst du in dieser Sekunde",
+    laesst mitten in einer dreistuendigen Session Bilder unbestimmt, die von
+    hundert anderen mit demselben Ort umgeben sind.
+    """
+
+    aufnahmen: tuple[Aufnahme, ...]
+
+    @property
+    def von(self) -> datetime:
+        return self.aufnahmen[0].zeitpunkt
+
+    @property
+    def bis(self) -> datetime:
+        return self.aufnahmen[-1].zeitpunkt
+
+
+@dataclass(frozen=True)
 class Serie:
     """Mehrere Aufnahmen mit einem gemeinsamen Zweck."""
 
@@ -69,14 +114,15 @@ class Ort:
     lat: float
     lon: float
 
-    radius_m: int | None
+    radius_m: int
     """Geht als `GPSHPositioningError` mit in die Datei. Eine Koordinate ohne
     Fehlerangabe behauptet Genauigkeit, die sie nicht hat.
 
-    `None` heisst: NICHT BESTIMMBAR — es fehlt der Beleg, wie schnell man sich
-    in diesem Zeitraum bewegt hat. Ein solcher Ort wird nicht geschrieben,
-    sondern kommt auf die Entscheidungsliste. Ein geratener Radius waere
-    schlimmer als gar keiner: er sieht aus wie eine Messung."""
+    Der Zweifel steht NICHT hier, sondern in `quelle`: ein Ort, der nicht
+    belegt ist, traegt dort `vorschlag` und wird nicht geschrieben. Zwei
+    Felder fuer dieselbe Aussage waeren zwei Zustaende ueber eine Sache —
+    eine fruehere Fassung liess `radius_m=None` dasselbe bedeuten, was nur
+    noetig war, solange der Radius aus einer Geschwindigkeit folgte."""
 
     name: str | None
     quelle: str

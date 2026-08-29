@@ -12,11 +12,12 @@ jedes Bild eine Koordinate, die plausibel aussieht und falsch ist.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
+
+from mkn_foto.modell import Anker
 
 _LOG = logging.getLogger(__name__)
 
@@ -28,19 +29,7 @@ _NS = {"gpx": "http://www.topografix.com/GPX/1/1"}
 _STANDARDZONE = "Europe/Berlin"
 
 
-@dataclass(frozen=True)
-class Punkt:
-    """Ein Spur- oder Wegpunkt. `zeit` ist immer tz-bewusste UTC."""
-
-    zeit: datetime
-    lat: float
-    lon: float
-    name: str | None
-    """Nur Wegpunkte tragen einen. Ein benannter Ort schlaegt spaeter jede
-    berechnete Koordinate — er benennt den Ort, statt ihn zu vermessen."""
-
-
-def lies(pfad: Path) -> tuple[list[Punkt], list[Punkt]]:
+def lies(pfad: Path) -> tuple[list[Anker], list[Anker]]:
     """Gibt (Spurpunkte, Wegpunkte) zurueck, je chronologisch sortiert."""
     wurzel = ElementTree.parse(pfad).getroot()
     spur = [p for kind in wurzel.findall(".//gpx:trkpt", _NS) if (p := _zu_punkt(kind)) is not None]
@@ -48,7 +37,7 @@ def lies(pfad: Path) -> tuple[list[Punkt], list[Punkt]]:
     return sorted(spur, key=_nach_zeit), sorted(wege, key=_nach_zeit)
 
 
-def in_kamerazeit(p: Punkt, zone: str = _STANDARDZONE) -> datetime:
+def in_kamerazeit(p: Anker, zone: str = _STANDARDZONE) -> datetime:
     """Rechnet die UTC-Zeit eines Punkts in zonenlose lokale Zeit um.
 
     Das Ergebnis ist direkt mit `Aufnahme.zeitpunkt` vergleichbar — der ist
@@ -57,17 +46,17 @@ def in_kamerazeit(p: Punkt, zone: str = _STANDARDZONE) -> datetime:
     return p.zeit.astimezone(ZoneInfo(zone)).replace(tzinfo=None)
 
 
-def _zu_punkt(kind) -> Punkt | None:
+def _zu_punkt(kind) -> Anker | None:
     zeit_text = _text(kind, "time")
     if zeit_text is None:
         # Fuer die Zeitzuordnung wertlos, aber kein Grund zum Abbruch. Gemeldet
         # wird er trotzdem: eine Spur, die still schrumpft, faellt erst auf,
         # wenn am Ende Bilder ohne Ort dastehen.
         _LOG.warning(
-            "GPX-Punkt ohne Zeit, uebergangen: lat=%s lon=%s", kind.get("lat"), kind.get("lon")
+            "GPX-Anker ohne Zeit, uebergangen: lat=%s lon=%s", kind.get("lat"), kind.get("lon")
         )
         return None
-    return Punkt(
+    return Anker(
         zeit=datetime.fromisoformat(zeit_text),
         lat=float(kind.get("lat")),
         lon=float(kind.get("lon")),
@@ -80,5 +69,5 @@ def _text(kind, tag: str) -> str | None:
     return treffer.text if treffer is not None else None
 
 
-def _nach_zeit(p: Punkt) -> datetime:
+def _nach_zeit(p: Anker) -> datetime:
     return p.zeit

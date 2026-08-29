@@ -58,10 +58,10 @@ def test_kamerazeit_wird_ueber_die_zeitzone_aufgeloest_nicht_addiert():
     Deshalb ein Winter- UND ein Sommerdatum: im Winter gilt CET (+1), im
     Sommer CEST (+2). Ein Test mit nur einem der beiden bestuende auch mit
     einer fest eingebauten Stundenzahl."""
-    winter = gpx.Punkt(
+    winter = gpx.Anker(
         zeit=datetime.fromisoformat("2026-01-15T08:00:00+00:00"), lat=1.0, lon=2.0, name=None
     )
-    sommer = gpx.Punkt(
+    sommer = gpx.Anker(
         zeit=datetime.fromisoformat("2026-08-27T08:00:00+00:00"), lat=1.0, lon=2.0, name=None
     )
 
@@ -73,7 +73,7 @@ def test_kamerazeit_ist_zonenlos_und_damit_direkt_vergleichbar():
     """`Aufnahme.zeitpunkt` ist tz-naiv, so wie es im EXIF steht. Ein
     tz-bewusstes Ergebnis liesse sich damit nicht vergleichen — Python
     verweigert den Vergleich von naiv und bewusst."""
-    p = gpx.Punkt(
+    p = gpx.Anker(
         zeit=datetime.fromisoformat("2026-08-27T08:00:00+00:00"), lat=1.0, lon=2.0, name=None
     )
 
@@ -84,7 +84,7 @@ def test_eine_andere_zeitzone_wird_auch_genutzt():
     """Untergrenze zur Zeile darueber: ohne diesen Fall koennte die Zone
     fest verdrahtet sein und beide Tests bestuenden trotzdem. Reisen finden
     nicht nur in Mitteleuropa statt."""
-    p = gpx.Punkt(
+    p = gpx.Anker(
         zeit=datetime.fromisoformat("2026-08-27T08:00:00+00:00"), lat=1.0, lon=2.0, name=None
     )
 
