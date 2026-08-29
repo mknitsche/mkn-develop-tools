@@ -270,3 +270,73 @@ def test_ein_name_macht_aus_einem_vorschlag_keine_tatsache():
     anker = [_anker(0, name="Kunstort"), _anker(1, nord_m=10), _anker(2, nord_m=20)]
 
     assert ort.fuer_spot(spot, anker).quelle == "vorschlag"
+
+
+# --- Sessions am selben Ort wieder zusammenfuegen --------------------------
+
+
+def test_zwei_sessions_am_selben_ort_werden_zusammengefuegt():
+    """Gemessen am 28.08.: zwei Sessions lagen 5 m auseinander, getrennt durch
+    19 Minuten Pause. Das ist EIN Spot — die Pause gehoert zum Ort, so wie
+    Ankommen und Ueberlegen dazugehoeren. Die Zeitschwelle allein kann das
+    nicht sehen; die Anker sehen es."""
+    eins = _spot(0, 10, 20)
+    zwei = _spot(40, 50, 60)
+    anker = [_anker(m, nord_m=n) for m, n in ((0, 0), (20, 10), (40, 5), (60, 0))]
+
+    ergebnis = ort.fasse_gleichen_ort_zusammen([eins, zwei], anker)
+
+    assert len(ergebnis) == 1
+    assert len(ergebnis[0].aufnahmen) == 6
+
+
+def test_zwei_sessions_an_verschiedenen_orten_bleiben_getrennt():
+    """Untergrenze: sonst wuerde alles zu einem einzigen Spot verschmelzen."""
+    eins = _spot(0, 10, 20)
+    zwei = _spot(40, 50, 60)
+    anker = [_anker(m, nord_m=n) for m, n in ((0, 0), (20, 10), (40, 3000), (60, 3010))]
+
+    ergebnis = ort.fasse_gleichen_ort_zusammen([eins, zwei], anker)
+
+    assert len(ergebnis) == 2
+
+
+def test_nur_zeitlich_benachbarte_sessions_werden_zusammengefuegt():
+    """Zwei Aufenthalte am selben Fleck mit einem anderen Ort dazwischen sind
+    zwei Besuche, nicht einer — sonst schluckte der erste den zweiten mitsamt
+    allem, was dazwischen liegt."""
+    eins, mitte, drei = _spot(0, 10), _spot(30, 40), _spot(60, 70)
+    anker = [
+        _anker(0),
+        _anker(10),
+        _anker(30, nord_m=3000),
+        _anker(40, nord_m=3000),
+        _anker(60),
+        _anker(70),
+    ]
+
+    ergebnis = ort.fasse_gleichen_ort_zusammen([eins, mitte, drei], anker)
+
+    assert len(ergebnis) == 3
+
+
+def test_eine_session_ohne_ort_verschmilzt_nicht():
+    """Ohne Anker ist unbekannt, wo sie war — und Unbekanntes wird nicht
+    stillschweigend einem Nachbarn zugeschlagen."""
+    eins = _spot(0, 10)
+    zwei = _spot(40, 50)
+    anker = [_anker(0), _anker(10)]
+
+    assert len(ort.fasse_gleichen_ort_zusammen([eins, zwei], anker)) == 2
+
+
+def test_die_aufnahmen_bleiben_chronologisch():
+    """Die Serienerkennung setzt die Reihenfolge voraus."""
+    eins = _spot(0, 10, 20)
+    zwei = _spot(40, 50, 60)
+    anker = [_anker(m, nord_m=n) for m, n in ((0, 0), (20, 10), (40, 5), (60, 0))]
+
+    (zusammen,) = ort.fasse_gleichen_ort_zusammen([eins, zwei], anker)
+
+    zeiten = [a.zeitpunkt for a in zusammen.aufnahmen]
+    assert zeiten == sorted(zeiten)

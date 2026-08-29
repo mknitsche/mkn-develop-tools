@@ -100,6 +100,51 @@ def fuer_spot(spot: Spot, anker: Sequence[Anker], *, rand_s: float = RAND_S) -> 
     )
 
 
+def fasse_gleichen_ort_zusammen(
+    sessions: Sequence[Spot], anker: Sequence[Anker], *, rand_s: float = RAND_S
+) -> list[Spot]:
+    """Fuegt zeitlich benachbarte Sessions zusammen, die am selben Ort liegen.
+
+    Die Pause gehoert zum Ort. Wer an einem Spot ankommt, sich umsieht,
+    ueberlegt und dann weiterfotografiert, erzeugt eine Luecke, die groesser
+    ist als die Sessionschwelle — und trotzdem ist es EIN Spot. Die Zeit allein
+    kann das nicht sehen; die Anker sehen es.
+
+    Gemessen am 28.08.: zwei Sessions lagen 5 m auseinander, getrennt durch 19
+    Minuten Pause. Der einzige solche Fall einer ganzen Fotowoche — die
+    Zeitschwelle sitzt also gut, aber nicht perfekt.
+
+    „Derselbe Ort" braucht keine eigene Zahl: er ist es, wenn die Mittelpunkte
+    naeher beieinander liegen als der groessere der beiden Radien. Damit
+    skaliert die Regel mit der Genauigkeit, die die Anker hergeben, statt eine
+    Entfernung zu behaupten.
+    """
+    ergebnis: list[Spot] = []
+    for spot in sessions:
+        if ergebnis and _gleicher_ort(ergebnis[-1], spot, anker, rand_s):
+            vereint = sorted(
+                [*ergebnis[-1].aufnahmen, *spot.aufnahmen],
+                key=lambda a: (a.zeitpunkt, a.stamm),
+            )
+            ergebnis[-1] = Spot(aufnahmen=tuple(vereint))
+        else:
+            ergebnis.append(spot)
+    return ergebnis
+
+
+def _gleicher_ort(a: Spot, b: Spot, anker: Sequence[Anker], rand_s: float) -> bool:
+    """Beide Orte bestimmbar UND naeher als der groessere ihrer Radien?"""
+    ort_a = fuer_spot(a, anker, rand_s=rand_s)
+    ort_b = fuer_spot(b, anker, rand_s=rand_s)
+    if ort_a is None or ort_b is None:
+        return False
+    abstand = _entfernung_m(
+        Anker(zeit=a.von, lat=ort_a.lat, lon=ort_a.lon, name=None),
+        Anker(zeit=b.von, lat=ort_b.lat, lon=ort_b.lon, name=None),
+    )
+    return abstand <= max(ort_a.radius_m, ort_b.radius_m)
+
+
 def verwirf_widerlegte(
     anker: Sequence[Anker], *, faktor: float = _WIDERSPRUCH_FAKTOR
 ) -> list[Anker]:
