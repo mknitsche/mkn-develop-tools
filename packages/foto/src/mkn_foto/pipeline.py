@@ -18,6 +18,7 @@ beim Zusammenstecken schief und nirgends sonst:
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -25,6 +26,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from mkn_foto import (
+    anreichern,
     entscheidung,
     gpx,
     inventar,
@@ -88,7 +90,18 @@ class Lauf:
     orte: dict[int, Ort] = field(default_factory=dict)
     anker: list[Anker] = field(default_factory=list)
     offen: list[tuple[Spot, Ort | None]] = field(default_factory=list)
+    """Weder verortet NOCH beantwortet — nur DAS wird vorgelegt."""
+
+    beantwortet: list[tuple[Spot, str]] = field(default_factory=list)
+    """Vom Menschen beantwortet, aber ohne Ortsangabe: "Loeschen - war im Hotel",
+    "ist schwarz - falsch belichtet". Das sind VOLLSTAENDIGE Antworten, sie
+    liefern nur keine Koordinate.
+
+    Die Unterscheidung fehlte und hat KT-1 am 2026-08-30 elf von zwoelf Ordnern
+    erneut vorgelegt: "da sind aber die drin, die ich schon beantwortet habe".
+    OFFEN hiess damals NICHT VERORTET — und das ist nicht dasselbe."""
     geschrieben: schreiben.Ergebnis | None = None
+    angereichert: anreichern.Ergebnis | None = None
 
     @property
     def belegt(self) -> int:
@@ -173,6 +186,7 @@ def fahre(
     lauf.spots = ort.fasse_gleichen_ort_zusammen(roh, lauf.anker)
 
     beantwortet = _beantwortete_orte(notiz_ordner, lauf.anker)
+    alle_antworten = notizen.lies(Path(notiz_ordner)) if notiz_ordner else []
 
     for s in lauf.spots:
         # Eine menschliche Antwort geht VOR der Geometrie: sie ist eine Aussage,
@@ -194,6 +208,10 @@ def fahre(
         # gemeldet. Ein Enum-Wert aus dem Gedaechtnis statt aus der Quelle (HC-10).
         if gefunden is not None and gefunden.quelle != OFFEN:
             lauf.orte[id(s)] = gefunden
+        elif (antwort := _antwort_text(s, alle_antworten)) is not None:
+            # Beantwortet, nur ohne Ort. NICHT vorlegen -- das hiesse, dem
+            # Menschen seine eigene Arbeit zurueckzugeben.
+            lauf.beantwortet.append((s, antwort))
         else:
             # Kein Beleg heisst: vorlegen, nicht raten. Ein Vorschlag geht als
             # Vorschlag mit — er ist eine Frage, die sich mit Ja beantworten
@@ -202,6 +220,13 @@ def fahre(
 
     if schreiben_aktiv:
         lauf.geschrieben = schreiben.kopiere(lauf.aufnahmen, Path(ziel), serien=lauf.serien)
+        # Und JETZT die Anreicherung -- in den ZIELbaum, nie in die Originale.
+        # Dieser Schritt fehlte am 2026-08-30 komplett: der Baum hiess
+        # "angereichert" und enthielt 1.227 RAW-Dateien mit 139 Sidecars, alle
+        # davon schon vorher vorhanden. Die ganze Ortsarbeit lag im
+        # Arbeitsspeicher und war mit dem Prozessende weg.
+        mit_ort, serien_auf_kopien = _fuer_anreicherung(lauf)
+        lauf.angereichert = anreichern.schreibe(mit_ort, serien=serien_auf_kopien)
 
     if entscheidungen is not None and lauf.offen:
         entscheidung.bereite_vor(lauf.offen, Path(entscheidungen))
@@ -249,3 +274,66 @@ def _passende_antwort(spot: Spot, beantwortet: Sequence[tuple[notizen.Notiz, Ort
         if spot.von <= n.bis and n.von <= spot.bis:
             return gefunden
     return None
+
+
+def _antwort_text(spot: Spot, gelesen: Sequence[notizen.Notiz]) -> str | None:
+    """Der Antworttext, falls dieser Spot schon einmal beantwortet wurde.
+
+    Verglichen wird auf Ueberlappung der Zeitfenster, wie bei `_passende_antwort`:
+    der Ordnername traegt Minuten, der Spot Sekunden, und ein Spot kann seit der
+    Antwort mit einem Nachbarn zusammengefasst worden sein.
+    """
+    for n in gelesen:
+        if spot.von <= n.bis and n.von <= spot.bis:
+            return n.text
+    return None
+
+
+def _fuer_anreicherung(
+    lauf: Lauf,
+) -> tuple[list[tuple[Aufnahme, Ort | None]], list[Serie]]:
+    """Baut die Kopien-Objekte GENAU EINMAL und gibt Orte und Serien darauf zurueck.
+
+    Angereichert wird die Kopie, nicht das Original -- die Aufnahme bekommt hier
+    also die neuen Pfade untergeschoben. `dataclasses.replace` statt Mutation:
+    die Originalaufnahme bleibt unberuehrt, sonst zeigte das Inventar nach dem
+    Lauf auf den Zielbaum.
+
+    **Warum EINE Funktion und nicht zwei.** Die erste Fassung hatte zwei --
+    eine fuer die Orte, eine fuer die Serien. Beide riefen `replace` auf und
+    erzeugten damit VERSCHIEDENE Objekte; `anreichern` ordnet Stichworte aber
+    ueber die Objekt-Identitaet zu, und die Zuordnung griff ins Leere. Alles
+    blieb gruen: Sidecars entstanden, Orte standen drin, nur die Serienangabe
+    fehlte lautlos. Gefunden, weil der Test auf die SERIENMARKE prueft statt auf
+    das Wort "Technik" -- letzteres steht durch das Einzelbild-Stichwort ohnehin
+    in jedem Sidecar.
+    """
+    if lauf.geschrieben is None:
+        return [], []
+
+    ort_je_aufnahme: dict[int, Ort | None] = {}
+    for s in lauf.spots:
+        gefunden = lauf.orte.get(id(s))
+        for a in s.aufnahmen:
+            ort_je_aufnahme[id(a)] = gefunden
+
+    je_id = dict(lauf.geschrieben.kopien)
+    kopie_je_original: dict[int, Aufnahme] = {}
+    paare: list[tuple[Aufnahme, Ort | None]] = []
+    for a in lauf.aufnahmen:
+        pfade = je_id.get(id(a))
+        if not pfade:
+            continue
+        kopie = dataclasses.replace(a, dateien=pfade)
+        kopie_je_original[id(a)] = kopie
+        paare.append((kopie, ort_je_aufnahme.get(id(a))))
+
+    serien_auf_kopien: list[Serie] = []
+    for s in lauf.serien:
+        mitglieder = tuple(
+            kopie_je_original[id(a)] for a in s.aufnahmen if id(a) in kopie_je_original
+        )
+        if mitglieder:
+            serien_auf_kopien.append(dataclasses.replace(s, aufnahmen=mitglieder))
+
+    return paare, serien_auf_kopien

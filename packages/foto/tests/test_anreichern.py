@@ -1,0 +1,185 @@
+"""Das Modul, das dem Baum seinen Namen gibt.
+
+**Warum es diese Datei gibt.** Am 2026-08-30 lief die Pipeline ueber 1.293
+Aufnahmen und schrieb 2.520 Dateien in einen Ordner namens "03 Bilder
+angereichert". Darin lagen 1.227 RAW-Dateien und **139 XMP-Sidecars** — die 139,
+die schon vorher existierten. Kein einziger neuer. Die gesamte Ortsarbeit lag im
+Arbeitsspeicher und war mit dem Prozessende weg.
+
+KT-1: *"bei den dateien auf 1tb fehlen systemisch die xmps ... es müsste ja zu
+jeder raw ein jpeg und ein xmp geben"*. Er hat recht, und die Spec sagt es auch
+(§ 6, § 10): RAW bekommt einen Sidecar, JPEG bekommt die Daten eingebettet.
+
+Der Baum hiess "angereichert" und enthielt keine Anreicherung. Eine Zahl wie
+"91 % verortet" ist wahr ueber die Rechnung und wertlos ueber das Ergebnis,
+solange sie in keiner Datei steht.
+"""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+from datetime import datetime
+from pathlib import Path
+
+import pytest
+from mkn_foto import anreichern
+from mkn_foto.modell import Aufnahme, Ort, Serie
+
+pytestmark = pytest.mark.skipif(
+    shutil.which("exiftool") is None, reason="exiftool nicht verfuegbar"
+)
+
+ORT = Ort(lat=47.68, lon=11.57, radius_m=250, name="Lenggries", quelle="schild")
+
+
+def _lies(pfad: Path, *felder: str) -> dict[str, str]:
+    roh = subprocess.run(
+        ["exiftool", "-s", "-s", "-s", *[f"-{f}" for f in felder], str(pfad)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+    return dict(zip(felder, roh, strict=False))
+
+
+def _aufnahme(ordner: Path, stamm: str, endungen=(".RAF",)) -> Aufnahme:
+    ordner.mkdir(parents=True, exist_ok=True)
+    dateien = {}
+    for e in endungen:
+        p = ordner / f"{stamm}{e}"
+        if e in (".JPG", ".JPEG"):
+            # Ein echtes, minimal gueltiges JPEG -- in eine Attrappe kann
+            # exiftool nicht schreiben, und der Test pruefte dann sich selbst.
+            subprocess.run(
+                ["exiftool", "-q", "-o", str(p), "-n", "-IFD0:Make=Test"],
+                capture_output=True,
+                check=False,
+            )
+            if not p.exists():
+                p.write_bytes(
+                    bytes.fromhex(
+                        "ffd8ffe000104a46494600010100000100010000ffdb004300"
+                        + "08" * 64
+                        + "ffc0000b080001000101011100ffc4001f00"
+                        + "00" * 28
+                        + "ffda0008010100003f00d2cf20ffd9"
+                    )
+                )
+        else:
+            p.write_bytes(b"roh-inhalt")
+        dateien[e] = p
+    return Aufnahme(
+        zeitpunkt=datetime(2026, 8, 24, 6, 19, 0),
+        kamera="XE5",
+        stamm=stamm,
+        dateien=dateien,
+        exif={},
+    )
+
+
+def test_raw_bekommt_einen_sidecar(tmp_path):
+    """Die Zusicherung, die am 2026-08-30 fehlte: zu jeder RAW ein XMP."""
+    a = _aufnahme(tmp_path, "DSCF3541", (".RAF",))
+
+    ergebnis = anreichern.schreibe([(a, ORT)])
+
+    sidecar = tmp_path / "DSCF3541.xmp"
+    assert sidecar.exists(), f"kein Sidecar angelegt: {sorted(p.name for p in tmp_path.iterdir())}"
+    assert ergebnis.sidecars == 1
+
+
+def test_das_raw_bleibt_bitgleich(tmp_path):
+    """Ein Sidecar ist genau deshalb der richtige Weg: das undokumentierte
+    Hersteller-Format wird nicht angefasst.
+
+    Die Testdatei traegt die RAW-Endung, hat aber BESCHREIBBAREN Inhalt. Das ist
+    der Punkt: mit einer Attrappe waere die Zusicherung hohl gewesen — exiftool
+    haette ohnehin nicht hineinschreiben koennen, und der Test haette auch dann
+    bestanden, wenn der Code den Einbettungs-Weg genommen haette. Firsthand
+    gemessen: die Mutation ueberlebte ihn. Der Code entscheidet nach ENDUNG, der
+    Inhalt darf deshalb ein anderer sein.
+    """
+    a = _aufnahme(tmp_path, "DSCF3541", (".JPG",))
+    beschreibbar = a.dateien.pop(".JPG").rename(tmp_path / "DSCF3541.RAF")
+    a.dateien[".RAF"] = beschreibbar
+    vorher = beschreibbar.read_bytes()
+
+    anreichern.schreibe([(a, ORT)])
+
+    assert beschreibbar.read_bytes() == vorher, (
+        "die RAW-Datei wurde veraendert — der Code hat eingebettet statt einen Sidecar zu schreiben"
+    )
+    assert (tmp_path / "DSCF3541.xmp").exists(), "und der Sidecar fehlt auch noch"
+
+
+def test_der_ort_steht_wirklich_drin(tmp_path):
+    """Nicht "exiftool wurde aufgerufen", sondern: was steht in der Datei?"""
+    a = _aufnahme(tmp_path, "DSCF3541", (".RAF",))
+
+    anreichern.schreibe([(a, ORT)])
+
+    f = _lies(
+        tmp_path / "DSCF3541.xmp", "GPSLatitude", "GPSLongitude", "GPSHPositioningError", "City"
+    )
+    assert f["City"] == "Lenggries"
+    assert "47" in f["GPSLatitude"] and "40" in f["GPSLatitude"]
+    assert f["GPSHPositioningError"].startswith("250")
+
+
+def test_ohne_ort_wird_kein_ort_geschrieben(tmp_path):
+    """Die oberste Regel: im Zweifel nicht schreiben. Ein Spot ohne belegten Ort
+    darf keine Koordinate bekommen — auch keine ungefaehre."""
+    a = _aufnahme(tmp_path, "DSCF3541", (".RAF",))
+
+    anreichern.schreibe([(a, None)])
+
+    sidecar = tmp_path / "DSCF3541.xmp"
+    assert sidecar.exists(), (
+        "auch ohne Ort muss ein Sidecar entstehen -- sonst fehlen genau bei den "
+        "Bildern die XMPs, die weder Ort noch Serie haben (nach dem Lauf vom "
+        "2026-08-30 waeren das rund 112 gewesen)"
+    )
+    f = _lies(sidecar, "GPSLatitude", "City")
+    assert not f.get("GPSLatitude"), f"Koordinate erfunden: {f}"
+    assert not f.get("City"), f"Ortsname erfunden: {f}"
+
+
+def test_jpeg_bekommt_die_daten_eingebettet(tmp_path):
+    """Fuer JPEG gibt es keine Sidecar-Konvention (Spec § 10) — und niemals
+    beides fuer dieselbe Datei, das waeren zwei Zustaende ueber eine Sache."""
+    a = _aufnahme(tmp_path, "DSCF3542", (".JPG",))
+
+    ergebnis = anreichern.schreibe([(a, ORT)])
+
+    assert not (tmp_path / "DSCF3542.xmp").exists(), (
+        "fuer ein JPEG wurde ein Sidecar angelegt statt einzubetten"
+    )
+    f = _lies(a.dateien[".JPG"], "City")
+    assert f.get("City") == "Lenggries", f"nichts eingebettet: {f}"
+    assert ergebnis.eingebettet == 1
+
+
+def test_paar_bekommt_beides_getrennt(tmp_path):
+    """Ein RAW+JPEG-Paar: der Sidecar gehoert zur RAW, die Einbettung ins JPEG."""
+    a = _aufnahme(tmp_path, "DSCF3543", (".RAF", ".JPG"))
+
+    ergebnis = anreichern.schreibe([(a, ORT)])
+
+    assert (tmp_path / "DSCF3543.xmp").exists(), "der Sidecar zur RAW fehlt"
+    assert _lies(a.dateien[".JPG"], "City").get("City") == "Lenggries"
+    assert ergebnis.sidecars == 1 and ergebnis.eingebettet == 1
+
+
+def test_serie_wird_zum_stichwort(tmp_path):
+    """Ohne diese Zusicherung waere ein Schreiber, der nur den Ort schreibt und
+    die Serien-Zugehoerigkeit verwirft, genauso gruen."""
+    a1 = _aufnahme(tmp_path, "DSCF3544", (".RAF",))
+    a2 = _aufnahme(tmp_path, "DSCF3545", (".RAF",))
+    serie = Serie(typ="pan", nummer=1, aufnahmen=(a1, a2), quelle="kamera", sicher=True)
+
+    anreichern.schreibe([(a1, ORT), (a2, ORT)], serien=[serie])
+
+    f = _lies(tmp_path / "DSCF3544.xmp", "Subject", "HierarchicalSubject")
+    assert "pan01" in f.get("Subject", ""), f"Serienstichwort fehlt: {f}"
+    assert "Serie|pan01" in f.get("HierarchicalSubject", ""), f"nicht hierarchisch: {f}"

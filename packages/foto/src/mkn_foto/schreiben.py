@@ -52,6 +52,14 @@ class Ergebnis:
     uebersprungen: int = 0
     ziele: list[Path] = field(default_factory=list)
 
+    kopien: list[tuple[int, dict[str, Path]]] = field(default_factory=list)
+    """Aufnahme-Identitaet -> ihre neuen Pfade im Zielbaum.
+
+    Die Anreicherung schreibt in den ZIELbaum, nie in die Originale, und braucht
+    dafuer diese Zuordnung. Eine flache Liste aller Ziele reicht nicht: sie sagt
+    nicht, welche Datei zu welcher Aufnahme gehoert -- die Anreicherung schriebe
+    dann den Ort der einen Session an das Bild der anderen."""
+
 
 def kopiere(
     aufnahmen: Sequence[Aufnahme],
@@ -81,11 +89,13 @@ def kopiere(
         merkmale = abschnitt.get(id(a), {"typ": "std"})
 
         sidecar_getan = False
+        neue_pfade: dict[str, Path] = {}
         for endung, quelle in a.dateien.items():
             ziel = ziel_tag / archiv_name(a, endung, **merkmale)
             shutil.copy2(quelle, ziel)
             ergebnis.kopiert += 1
             ergebnis.ziele.append(ziel)
+            neue_pfade[endung] = ziel
 
             # EIN Sidecar je Aufnahme, nicht je Endung: RAW und JPEG desselben
             # Ausloesers teilen sich einen, und beide Kopien landen ohnehin auf
@@ -97,6 +107,8 @@ def kopiere(
                 shutil.copy2(begleiter, ziel.with_suffix(SIDECAR))
                 ergebnis.sidecars += 1
                 sidecar_getan = True
+
+        ergebnis.kopien.append((id(a), neue_pfade))
 
     return ergebnis
 

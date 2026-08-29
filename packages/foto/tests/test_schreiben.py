@@ -160,3 +160,25 @@ def test_sidecar_wird_je_aufnahme_nur_einmal_kopiert(tmp_path):
     assert ergebnis.sidecars == 1, (
         f"der Zaehler meldet {ergebnis.sidecars}, im Ziel liegt {len(sidecars)}"
     )
+
+
+def test_kopiere_meldet_die_zieldateien_je_aufnahme(tmp_path):
+    """Die Anreicherung muss in den ZIELbaum schreiben, nie in die Originale.
+
+    Dafuer braucht sie die Zuordnung Aufnahme -> neue Pfade. Eine flache Liste
+    aller Ziele reicht nicht: sie sagt nicht, welche Datei zu welcher Aufnahme
+    gehoert, und die Anreicherung schriebe dann den Ort der einen Session an das
+    Bild der anderen.
+    """
+    a1 = _aufnahme(tmp_path, "DSCF3541", endungen=(".RAF", ".JPG"))
+    a2 = _aufnahme(tmp_path, "DSCF3542", endungen=(".RAF",))
+
+    ergebnis = schreiben.kopiere([a1, a2], tmp_path / "ziel")
+
+    assert len(ergebnis.kopien) == 2, f"unerwartete Zuordnung: {ergebnis.kopien}"
+    zu_a1 = dict(ergebnis.kopien)[id(a1)]
+    assert set(zu_a1) == {".RAF", ".JPG"}
+    assert all(p.parent.name == "2026-08-27" for p in zu_a1.values())
+    assert all(str(tmp_path / "ziel") in str(p) for p in zu_a1.values()), (
+        "die gemeldeten Pfade zeigen auf die Originale statt in den Zielbaum"
+    )
