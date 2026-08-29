@@ -119,6 +119,36 @@ def test_zwei_bilder_kommen_beide_an(tmp_path: Path):
     assert sum(1 for t in teile if t.get("type") == "image") == 2
 
 
+def test_lokales_modell_ist_gleichrangig_waehlbar():
+    """Wer ein Modell auf dem eigenen Rechner hat, soll es nehmen duerfen -
+    ohne Schluessel und ohne dass Daten das Geraet verlassen."""
+    w = modelle.waehle(anbieter="ollama", modell="gemma4:26b")
+    assert w.anbieter == "ollama"
+
+
+def test_lokales_modell_verlangt_keinen_schluessel(monkeypatch):
+    """Untergrenze zur Schluessel-Pruefung: ein lokaler Lauf darf nicht an
+    einer fehlenden Umgebungsvariable scheitern, die es dort gar nicht gibt."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MOONSHOT_API_KEY", raising=False)
+    w = modelle.waehle(anbieter="ollama", modell="gemma4:26b")
+    assert w.schluessel() is None
+
+
+def test_ollama_baut_seine_eigene_bildform(tmp_path: Path):
+    """Drei Anbieter, drei Bildformen. Ollama haengt die Bilder als Liste an
+    die Nachricht, nicht als Inhaltsteil - wer die falsche Form baut, bekommt
+    eine Antwort ohne Bild."""
+    bild = tmp_path / "b.jpg"
+    bild.write_bytes(_MINI_JPEG)
+    w = modelle.waehle(anbieter="ollama", modell="gemma4:26b")
+
+    nachricht = w.baue_anfrage("x", bilder=[bild])["messages"][0]
+
+    assert len(nachricht["images"]) == 1
+    assert isinstance(nachricht["content"], str)
+
+
 def test_moonshot_baut_die_andere_bildform(tmp_path: Path):
     """Anthropic und OpenAI-kompatible Anbieter erwarten verschiedene Formen.
     Wer eine davon fuer beide baut, bekommt vom anderen einen 400er - oder,

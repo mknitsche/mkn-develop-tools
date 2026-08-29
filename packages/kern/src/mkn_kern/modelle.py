@@ -36,9 +36,12 @@ class KeinSchluessel(RuntimeError):
 
 @dataclass(frozen=True)
 class _Anbieter:
-    schluessel_variable: str
+    schluessel_variable: str | None
+    """``None`` bei lokalen Anbietern: dort gibt es keinen Schluessel, und eine
+    Pruefung darauf wuerde einen Lauf verhindern, der gar nichts braucht."""
+
     basis_url: str
-    bildform: str  # "anthropic" | "openai"
+    bildform: str  # "anthropic" | "openai" | "ollama"
 
 
 #: Was dieses Werkzeug ansprechen kann. Bewusst NUR Anbieter-Wissen, keine
@@ -55,6 +58,14 @@ ANBIETER: dict[str, _Anbieter] = {
         basis_url="https://api.moonshot.ai/v1/chat/completions",
         bildform="openai",
     ),
+    # Lokal: kein Schluessel, keine Uebertragung. Wer ein Modell auf dem
+    # eigenen Rechner hat, soll es nehmen duerfen — das ist bei Bildmaterial
+    # nicht nur eine Kosten-, sondern eine Datenschutzfrage.
+    "ollama": _Anbieter(
+        schluessel_variable=None,
+        basis_url="http://127.0.0.1:11434/api/chat",
+        bildform="ollama",
+    ),
 }
 
 
@@ -69,9 +80,15 @@ class Wahl:
     def _profil(self) -> _Anbieter:
         return ANBIETER[self.anbieter]
 
-    def schluessel(self) -> str:
-        """Liest den Schluessel des GEWAEHLTEN Anbieters aus der Umgebung."""
+    def schluessel(self) -> str | None:
+        """Liest den Schluessel des GEWAEHLTEN Anbieters aus der Umgebung.
+
+        ``None`` bei lokalen Anbietern — dort ist das kein Mangel, sondern der
+        Normalfall.
+        """
         name = self._profil.schluessel_variable
+        if name is None:
+            return None
         wert = os.environ.get(name)
         if not wert:
             raise KeinSchluessel(
@@ -89,6 +106,16 @@ class Wahl:
         Anbieter bedeutungslos, und ein stillschweigend weggelassenes Bild
         ergibt eine fluessige, vollstaendig erfundene Antwort.
         """
+        if self._profil.bildform == "ollama":
+            # Ollama haengt die Bilder als eigene Liste an die Nachricht, statt
+            # sie in den Inhalt zu mischen.
+            nachricht: dict[str, Any] = {"role": "user", "content": text}
+            if bilder:
+                nachricht["images"] = [
+                    base64.standard_b64encode(p.read_bytes()).decode() for p in bilder
+                ]
+            return {"model": self.modell, "stream": False, "messages": [nachricht]}
+
         teile: list[dict[str, Any]] = [{"type": "text", "text": text}]
         for pfad in bilder:
             teile.append(self._bildteil(pfad))
