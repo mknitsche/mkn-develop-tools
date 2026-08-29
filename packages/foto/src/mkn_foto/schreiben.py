@@ -80,16 +80,23 @@ def kopiere(
         ziel_tag.mkdir(parents=True, exist_ok=True)
         merkmale = abschnitt.get(id(a), {"typ": "std"})
 
+        sidecar_getan = False
         for endung, quelle in a.dateien.items():
             ziel = ziel_tag / archiv_name(a, endung, **merkmale)
             shutil.copy2(quelle, ziel)
             ergebnis.kopiert += 1
             ergebnis.ziele.append(ziel)
 
+            # EIN Sidecar je Aufnahme, nicht je Endung: RAW und JPEG desselben
+            # Ausloesers teilen sich einen, und beide Kopien landen ohnehin auf
+            # demselben Zielnamen. Die erste Fassung tat es zweimal -- kein
+            # Datenverlust, aber doppelte Arbeit und ein Zaehler, der luegt: der
+            # Lauf ueber die echte Reise meldete 272 Sidecars, im Ziel lagen 139.
             begleiter = quelle.with_suffix(SIDECAR)
-            if begleiter.exists():
+            if not sidecar_getan and begleiter.exists():
                 shutil.copy2(begleiter, ziel.with_suffix(SIDECAR))
                 ergebnis.sidecars += 1
+                sidecar_getan = True
 
     return ergebnis
 
