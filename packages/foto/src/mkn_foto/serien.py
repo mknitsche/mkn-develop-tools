@@ -120,3 +120,57 @@ def _zu_serien(gruppen: list[list[Aufnahme]], *, typ: str, sicher: bool) -> list
         for gruppe in gruppen
         if len(gruppe) >= _MIN_SERIENLAENGE
     ]
+
+
+# --- Stufe 2: Kandidaten --------------------------------------------------
+
+_KANDIDAT_MAX_LUECKE_S = 10.0
+_KANDIDAT_MIN_LAENGE = 4
+
+# Was konstant bleiben MUSS. Die Belichtungszeit steht bewusst NICHT hier:
+# bei Zeitautomatik misst die Kamera jedes Bild neu, und ein Kriterium
+# "alles konstant" verpasst genau die Panoramen — firsthand gemessen an einer
+# Reihe mit f/8 und 34 mm konstant, waehrend die Zeit von 1/300 auf 1/240 lief.
+_MERKMALE = ("EXIF:FocalLength", "EXIF:FNumber")
+
+
+def kandidaten(aufnahmen: Sequence[Aufnahme], schon_erkannt: Sequence[Serie]) -> list[Serie]:
+    """Moegliche Serien, ueber die erst der Blick auf das Bild entscheidet.
+
+    Diese Stufe raet, und sie soll grosszuegig raten: der teure Fehler ist
+    nicht der falsche Verdacht — den raeumt Stufe 3 aus —, sondern der
+    uebersehene Fall, denn was hier nicht vorgeschlagen wird, sieht niemand
+    mehr an.
+
+    Aufnahmen, die schon in einer bezeugten Serie stecken, bleiben aussen vor
+    UND trennen: sonst waechst ein Kandidat quer durch eine bezeugte Reihe
+    hindurch zusammen, und dieselbe Aufnahme traegt zwei Zuordnungen, von
+    denen der Dateiname nur eine tragen kann.
+    """
+    belegt = {id(a) for s in schon_erkannt for a in s.aufnahmen}
+    gruppen: list[list[Aufnahme]] = []
+    vorige: Aufnahme | None = None
+    for a in _chronologisch(aufnahmen):
+        if id(a) in belegt:
+            vorige = None
+            continue
+        neu = (
+            vorige is None
+            or (a.zeitpunkt - vorige.zeitpunkt).total_seconds() > _KANDIDAT_MAX_LUECKE_S
+            or a.kamera != vorige.kamera
+            or any(_weicht_ab(a, vorige, merkmal) for merkmal in _MERKMALE)
+        )
+        if neu:
+            gruppen.append([])
+        gruppen[-1].append(a)
+        vorige = a
+
+    lang_genug = [g for g in gruppen if len(g) >= _KANDIDAT_MIN_LAENGE]
+    return [
+        Serie(typ="pan", nummer=nummer, aufnahmen=tuple(g), quelle="heuristik", sicher=False)
+        for nummer, g in enumerate(lang_genug, start=1)
+    ]
+
+
+def _weicht_ab(a: Aufnahme, b: Aufnahme, merkmal: str) -> bool:
+    return a.exif.get(merkmal) != b.exif.get(merkmal)
