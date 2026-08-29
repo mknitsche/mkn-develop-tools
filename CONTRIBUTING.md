@@ -69,9 +69,9 @@ needs in order to take part.
 ## Who decides what goes in
 
 This project is owned and maintained by Matthias Nitsche. **Contributions are
-welcome; integration and releases are not delegated.** Every merge into `main`
-and every release is the maintainer's decision — there is no path by which a
-change enters this project without that decision.
+welcome; the decision to take one in rests with the maintainer.** Every merge
+into `main` and every release is his decision — there is no path by which a
+change enters this project without it.
 
 That is a statement of governance, not of distrust: a single owner means a
 single place where responsibility sits, and you always know who answered you and
