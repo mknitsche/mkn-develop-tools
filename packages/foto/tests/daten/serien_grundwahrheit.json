@@ -1,0 +1,256 @@
+{
+  "zweck": "Handbeurteilte Grundwahrheit fuer die Serienerkennung (Stufe 2/3). Die EXIF-harten Belichtungsreihen stehen hier bewusst NICHT drin - die Kamera beweist sie selbst, eine Handbeurteilung waere dort schlechter als die Quelle.",
+  "kriterien": {
+    "panorama": "Der Ausschnitt wandert seitlich fortlaufend weiter, benachbarte Bilder ueberlappen.",
+    "serienbild": "Gleiches Motiv, kaum Versatz; die Szene oder das Motiv aendert sich, nicht der Blickwinkel.",
+    "mehrdeutig": "Nicht entscheidbar. Wird NICHT gewertet - ein mehrdeutiger Fall mit erfundener Wahrheit misst nichts."
+  },
+  "herkunft": {
+    "beurteilt_von": "macb-claude, am Kontaktbogen (5 Bilder je Gruppe nebeneinander)",
+    "datum": "2026-08-29",
+    "session": "macb-S314",
+    "archiv": "FotoUrlaubMittenwald 2026-08-22..28, 1233 RAW, 626 Gruppen",
+    "warnung": "blind_beurteilt=false heisst: das Urteil entstand, NACHDEM Modellantworten zu dieser Gruppe vorlagen. Solche Eintraege duerfen einen Modellvergleich nicht entscheiden - genau dieser Fehler ist in der ersten PoC-Runde passiert."
+  },
+  "gruppen": [
+    {
+      "id": "sk00",
+      "label": "serienbild",
+      "blind_beurteilt": true,
+      "begruendung": "Baumstamm ueber Bach; nur geringer Versatz zwischen den Bildern, kein Fortschritt der Szene",
+      "anzahl": 4,
+      "dateien": [
+        "2026-08-24/D850/D85_2284.NEF",
+        "2026-08-24/D850/D85_2285.NEF",
+        "2026-08-24/D850/D85_2286.NEF",
+        "2026-08-24/D850/D85_2287.NEF"
+      ]
+    },
+    {
+      "id": "sk01",
+      "label": "panorama",
+      "blind_beurteilt": true,
+      "begruendung": "Hochformat, Flussbett; die Bergform wandert von Bild zu Bild deutlich weiter",
+      "anzahl": 8,
+      "dateien": [
+        "2026-08-24/D850/D85_2300.NEF",
+        "2026-08-24/D850/D85_2301.NEF",
+        "2026-08-24/D850/D85_2302.NEF",
+        "2026-08-24/D850/D85_2303.NEF",
+        "2026-08-24/D850/D85_2304.NEF",
+        "2026-08-24/D850/D85_2305.NEF",
+        "2026-08-24/D850/D85_2306.NEF",
+        "2026-08-24/D850/D85_2307.NEF"
+      ]
+    },
+    {
+      "id": "sk02",
+      "label": "panorama",
+      "blind_beurteilt": true,
+      "begruendung": "Hochformat, Talhang; Wald und Wiese schieben sich fortlaufend durch den Ausschnitt",
+      "anzahl": 10,
+      "dateien": [
+        "2026-08-25/D850/D85_2380.NEF",
+        "2026-08-25/D850/D85_2381.NEF",
+        "2026-08-25/D850/D85_2382.NEF",
+        "2026-08-25/D850/D85_2383.NEF",
+        "2026-08-25/D850/D85_2384.NEF",
+        "2026-08-25/D850/D85_2385.NEF",
+        "2026-08-25/D850/D85_2386.NEF",
+        "2026-08-25/D850/D85_2387.NEF",
+        "2026-08-25/D850/D85_2388.NEF",
+        "2026-08-25/D850/D85_2389.NEF"
+      ]
+    },
+    {
+      "id": "sk03",
+      "label": "serienbild",
+      "blind_beurteilt": true,
+      "begruendung": "Personen mit Stativ am Weg; Ausschnitt konstant, nur die Personen bewegen sich",
+      "anzahl": 4,
+      "dateien": [
+        "2026-08-26/X-E5/DSCF3317.RAF",
+        "2026-08-26/X-E5/DSCF3318.RAF",
+        "2026-08-26/X-E5/DSCF3319.RAF",
+        "2026-08-26/X-E5/DSCF3320.RAF"
+      ]
+    },
+    {
+      "id": "sk04",
+      "label": "panorama",
+      "blind_beurteilt": false,
+      "begruendung": "Sonnenuntergang; Sonne wandert nach links, ein Dach kommt von rechts herein",
+      "anzahl": 5,
+      "dateien": [
+        "2026-08-26/D850/D85_2550.NEF",
+        "2026-08-26/D850/D85_2551.NEF",
+        "2026-08-26/D850/D85_2552.NEF",
+        "2026-08-26/D850/D85_2553.NEF",
+        "2026-08-26/D850/D85_2554.NEF"
+      ]
+    },
+    {
+      "id": "sk05",
+      "label": "serienbild",
+      "blind_beurteilt": true,
+      "begruendung": "Sonnenuntergang ueber Bergen; Kamera rahmt neu, kein systematischer Schwenk",
+      "anzahl": 14,
+      "dateien": [
+        "2026-08-26/D850/D85_2561.NEF",
+        "2026-08-26/D850/D85_2562.NEF",
+        "2026-08-26/D850/D85_2563.NEF",
+        "2026-08-26/D850/D85_2564.NEF",
+        "2026-08-26/D850/D85_2565.NEF",
+        "2026-08-26/D850/D85_2566.NEF",
+        "2026-08-26/D850/D85_2567.NEF",
+        "2026-08-26/D850/D85_2568.NEF",
+        "2026-08-26/D850/D85_2569.NEF",
+        "2026-08-26/D850/D85_2570.NEF",
+        "2026-08-26/D850/D85_2571.NEF",
+        "2026-08-26/D850/D85_2572.NEF",
+        "2026-08-26/D850/D85_2573.NEF",
+        "2026-08-26/D850/D85_2574.NEF"
+      ]
+    },
+    {
+      "id": "sk06",
+      "label": "mehrdeutig",
+      "blind_beurteilt": false,
+      "begruendung": "Klamm, dunkel; stark unterschiedliche Blickrichtungen ohne erkennbare Ueberlappung",
+      "anzahl": 30,
+      "dateien": [
+        "2026-08-27/X-E5/DSCF3582.RAF",
+        "2026-08-27/X-E5/DSCF3583.RAF",
+        "2026-08-27/X-E5/DSCF3584.RAF",
+        "2026-08-27/X-E5/DSCF3585.RAF",
+        "2026-08-27/X-E5/DSCF3586.RAF",
+        "2026-08-27/X-E5/DSCF3587.RAF",
+        "2026-08-27/X-E5/DSCF3588.RAF",
+        "2026-08-27/X-E5/DSCF3589.RAF",
+        "2026-08-27/X-E5/DSCF3590.RAF",
+        "2026-08-27/X-E5/DSCF3591.RAF",
+        "2026-08-27/X-E5/DSCF3592.RAF",
+        "2026-08-27/X-E5/DSCF3593.RAF",
+        "2026-08-27/X-E5/DSCF3594.RAF",
+        "2026-08-27/X-E5/DSCF3595.RAF",
+        "2026-08-27/X-E5/DSCF3596.RAF",
+        "2026-08-27/X-E5/DSCF3597.RAF",
+        "2026-08-27/X-E5/DSCF3598.RAF",
+        "2026-08-27/X-E5/DSCF3599.RAF",
+        "2026-08-27/X-E5/DSCF3600.RAF",
+        "2026-08-27/X-E5/DSCF3601.RAF",
+        "2026-08-27/X-E5/DSCF3602.RAF",
+        "2026-08-27/X-E5/DSCF3603.RAF",
+        "2026-08-27/X-E5/DSCF3604.RAF",
+        "2026-08-27/X-E5/DSCF3605.RAF",
+        "2026-08-27/X-E5/DSCF3606.RAF",
+        "2026-08-27/X-E5/DSCF3607.RAF",
+        "2026-08-27/X-E5/DSCF3608.RAF",
+        "2026-08-27/X-E5/DSCF3609.RAF",
+        "2026-08-27/X-E5/DSCF3610.RAF",
+        "2026-08-27/X-E5/DSCF3611.RAF"
+      ]
+    },
+    {
+      "id": "sk07",
+      "label": "panorama",
+      "blind_beurteilt": true,
+      "begruendung": "Alpenpanorama; Gipfel, See und Grat wandern fortlaufend durch den Ausschnitt",
+      "anzahl": 17,
+      "dateien": [
+        "2026-08-28/X-E5/DSCF3629.RAF",
+        "2026-08-28/X-E5/DSCF3630.RAF",
+        "2026-08-28/X-E5/DSCF3631.RAF",
+        "2026-08-28/X-E5/DSCF3632.RAF",
+        "2026-08-28/X-E5/DSCF3633.RAF",
+        "2026-08-28/X-E5/DSCF3634.RAF",
+        "2026-08-28/X-E5/DSCF3635.RAF",
+        "2026-08-28/X-E5/DSCF3636.RAF",
+        "2026-08-28/X-E5/DSCF3637.RAF",
+        "2026-08-28/X-E5/DSCF3638.RAF",
+        "2026-08-28/X-E5/DSCF3639.RAF",
+        "2026-08-28/X-E5/DSCF3640.RAF",
+        "2026-08-28/X-E5/DSCF3641.RAF",
+        "2026-08-28/X-E5/DSCF3642.RAF",
+        "2026-08-28/X-E5/DSCF3643.RAF",
+        "2026-08-28/X-E5/DSCF3644.RAF",
+        "2026-08-28/X-E5/DSCF3645.RAF"
+      ]
+    },
+    {
+      "id": "sk09",
+      "label": "panorama",
+      "blind_beurteilt": true,
+      "begruendung": "Hochformat, Gletscherhang; neues Gelaende in jedem Bild",
+      "anzahl": 5,
+      "dateien": [
+        "2026-08-28/D850/D85_2661.NEF",
+        "2026-08-28/D850/D85_2662.NEF",
+        "2026-08-28/D850/D85_2663.NEF",
+        "2026-08-28/D850/D85_2664.NEF",
+        "2026-08-28/D850/D85_2665.NEF"
+      ]
+    },
+    {
+      "id": "sk10",
+      "label": "mehrdeutig",
+      "blind_beurteilt": false,
+      "begruendung": "beginnt an der Seilbahn, endet am Geroellhang - die Gruppe deckt einen Weg ab, keine Folge",
+      "anzahl": 34,
+      "dateien": [
+        "2026-08-28/X-E5/DSCF3676.RAF",
+        "2026-08-28/X-E5/DSCF3677.RAF",
+        "2026-08-28/X-E5/DSCF3678.RAF",
+        "2026-08-28/X-E5/DSCF3679.RAF",
+        "2026-08-28/X-E5/DSCF3680.RAF",
+        "2026-08-28/X-E5/DSCF3681.RAF",
+        "2026-08-28/X-E5/DSCF3682.RAF",
+        "2026-08-28/X-E5/DSCF3683.RAF",
+        "2026-08-28/X-E5/DSCF3684.RAF",
+        "2026-08-28/X-E5/DSCF3685.RAF",
+        "2026-08-28/X-E5/DSCF3686.RAF",
+        "2026-08-28/X-E5/DSCF3687.RAF",
+        "2026-08-28/X-E5/DSCF3688.RAF",
+        "2026-08-28/X-E5/DSCF3689.RAF",
+        "2026-08-28/X-E5/DSCF3690.RAF",
+        "2026-08-28/X-E5/DSCF3691.RAF",
+        "2026-08-28/X-E5/DSCF3692.RAF",
+        "2026-08-28/X-E5/DSCF3693.RAF",
+        "2026-08-28/X-E5/DSCF3694.RAF",
+        "2026-08-28/X-E5/DSCF3695.RAF",
+        "2026-08-28/X-E5/DSCF3696.RAF",
+        "2026-08-28/X-E5/DSCF3697.RAF",
+        "2026-08-28/X-E5/DSCF3698.RAF",
+        "2026-08-28/X-E5/DSCF3699.RAF",
+        "2026-08-28/X-E5/DSCF3700.RAF",
+        "2026-08-28/X-E5/DSCF3701.RAF",
+        "2026-08-28/X-E5/DSCF3702.RAF",
+        "2026-08-28/X-E5/DSCF3703.RAF",
+        "2026-08-28/X-E5/DSCF3704.RAF",
+        "2026-08-28/X-E5/DSCF3705.RAF",
+        "2026-08-28/X-E5/DSCF3706.RAF",
+        "2026-08-28/X-E5/DSCF3707.RAF",
+        "2026-08-28/X-E5/DSCF3708.RAF",
+        "2026-08-28/X-E5/DSCF3709.RAF"
+      ]
+    },
+    {
+      "id": "sk11",
+      "label": "mehrdeutig",
+      "blind_beurteilt": true,
+      "begruendung": "Gletscherbereich; der Schwenk geht weg und kehrt zurueck",
+      "anzahl": 9,
+      "dateien": [
+        "2026-08-28/D850/D85_2689.NEF",
+        "2026-08-28/D850/D85_2690.NEF",
+        "2026-08-28/D850/D85_2691.NEF",
+        "2026-08-28/D850/D85_2692.NEF",
+        "2026-08-28/D850/D85_2693.NEF",
+        "2026-08-28/D850/D85_2694.NEF",
+        "2026-08-28/D850/D85_2695.NEF",
+        "2026-08-28/D850/D85_2696.NEF",
+        "2026-08-28/D850/D85_2697.NEF"
+      ]
+    }
+  ]
+}
