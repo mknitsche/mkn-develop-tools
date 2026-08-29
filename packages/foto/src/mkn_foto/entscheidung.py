@@ -28,13 +28,26 @@ from mkn_foto.modell import Aufnahme, Ort, Spot
 ANZAHL = 5
 """Wie viele Bilder je Session gezeigt werden."""
 
-_LISTE = "liste.md"
-"""Die Liste ist zugleich die Signatur: liegt sie im Ziel, stammt der Ordner
-von einem frueheren Lauf und darf geraeumt werden."""
+NOTIZ = "ort.md"
+"""Je Ordner eine Notiz zum Hineinschreiben. Geschrieben wird dort, wo die
+Bilder liegen — nicht in einer zentralen Liste, die veraltet, sobald jemand
+zwei Ordner zu einem Spot zusammenfasst."""
+
+_SIGNATUR = "_so-gehts.md"
+"""Liegt diese Datei im Ziel, stammt der Ordner von einem frueheren Lauf und
+darf geraeumt werden. Sie enthaelt nur das Verfahren, keine Sessiondaten —
+sonst waere sie ein zweiter Zustand neben den Notizen und wuerde veralten."""
+
+
+_UEBERSCHRIFT = "## Ort"
 
 
 class ZielNichtLeer(RuntimeError):
     """Im Zielordner liegt etwas, das nicht von einem frueheren Lauf stammt."""
+
+
+class NotizenVorhanden(RuntimeError):
+    """Im Zielordner stehen ausgefuellte Notizen — die waeren sonst weg."""
 
 
 def waehle(spot: Spot, anzahl: int = ANZAHL) -> tuple[Aufnahme, ...]:
@@ -60,7 +73,12 @@ def bereite_vor(
     *,
     anzahl: int = ANZAHL,
 ) -> Path:
-    """Legt je Eintrag einen Ordner mit Bildern an und schreibt `liste.md`.
+    """Legt je Session einen Ordner mit Bildern und einer Notiz an.
+
+    Der Ordner heisst nach Datum und Zeitspanne, OHNE laufende Nummer: mit ihr
+    laesst sich weder etwas zusammenfassen noch verschieben, ohne dass die
+    Reihenfolge luegt. Ohne sie sortieren sich die Ordner von selbst
+    chronologisch.
 
     `eintraege` sind die offenen Sessions mit dem, was ueber sie bekannt ist —
     ein Vorschlag mit Name und Radius ist eine Frage, die sich mit Ja
@@ -70,23 +88,8 @@ def bereite_vor(
     _raeume_frueheren_lauf(ziel)
     ziel.mkdir(parents=True, exist_ok=True)
 
-    # Die schwerste Entscheidung zuerst. Wer chronologisch abarbeitet, faengt
-    # bei den Streubildern an — im gemessenen Bestand sind das elf von zwanzig
-    # Sessions mit zusammen 26 Aufnahmen, waehrend die neun echten Spots 410
-    # tragen. Der Ordnername traegt das Datum weiterhin, die Reihenfolge also
-    # die Wichtigkeit und nicht die Zeit.
-    eintraege = sorted(eintraege, key=lambda e: len(e[0].aufnahmen), reverse=True)
-
-    zeilen = [
-        "# Offene Orte",
-        "",
-        f"{len(eintraege)} Sessions warten auf eine Entscheidung.",
-        "",
-    ]
-
-    for nummer, (spot, ort) in enumerate(eintraege, start=1):
-        name = f"{nummer:02d}_{spot.von:%Y-%m-%d_%H%M}-{spot.bis:%H%M}"
-        ordner = ziel / name
+    for spot, ort in eintraege:
+        ordner = ziel / f"{spot.von:%Y-%m-%d_%H%M}-{spot.bis:%H%M}"
         ordner.mkdir(exist_ok=True)
 
         kopiert = 0
@@ -96,26 +99,56 @@ def bereite_vor(
                     shutil.copy2(pfad, ordner / pfad.name)
                     kopiert += 1
 
-        zeilen.append(f"## {name}")
-        zeilen.append("")
-        zeilen.append(f"- {len(spot.aufnahmen)} Aufnahmen, {spot.von:%H:%M} bis {spot.bis:%H:%M}")
-        if kopiert:
-            zeilen.append(f"- {kopiert} Bilder zum Ansehen im Ordner")
-        else:
-            zeilen.append("- **kein JPEG vorhanden** — nur RAW, hier ist nichts zu sehen")
-        if ort is None:
-            zeilen.append("- kein Anker in der Naehe: der Ort ist voellig offen")
-        else:
-            benennung = f" ({ort.name})" if ort.name else ""
-            zeilen.append(
-                f"- Vorschlag: {ort.lat:.5f}, {ort.lon:.5f}{benennung}, "
-                f"Radius {ort.radius_m} m — nicht belegt genug zum Schreiben"
-            )
-        zeilen.append("- **Ort:** ")
-        zeilen.append("")
+        (ordner / NOTIZ).write_text(_notiz(spot, ort, kopiert), encoding="utf-8")
 
-    (ziel / "liste.md").write_text("\n".join(zeilen), encoding="utf-8")
+    (ziel / _SIGNATUR).write_text(_verfahren(len(eintraege)), encoding="utf-8")
     return ziel
+
+
+def _notiz(spot: Spot, ort: Ort | None, kopiert: int) -> str:
+    zeilen = [
+        f"# {spot.von:%Y-%m-%d} {spot.von:%H:%M} bis {spot.bis:%H:%M}",
+        "",
+        f"- {len(spot.aufnahmen)} Aufnahmen in dieser Session",
+    ]
+    if kopiert:
+        zeilen.append(f"- {kopiert} davon liegen hier zum Ansehen")
+    else:
+        zeilen.append("- **kein JPEG vorhanden** — nur RAW, hier ist nichts zu sehen")
+    if ort is None:
+        zeilen.append("- kein Anker in der Naehe: der Ort ist voellig offen")
+    else:
+        benennung = f" ({ort.name})" if ort.name else ""
+        zeilen.append(
+            f"- Vorschlag: {ort.lat:.5f}, {ort.lon:.5f}{benennung}, "
+            f"Radius {ort.radius_m} m — nicht belegt genug zum Schreiben"
+        )
+    zeilen += ["", "## Ort", "", "", "## Gehoert zusammen mit", "", ""]
+    return "\n".join(zeilen)
+
+
+def _verfahren(anzahl: int) -> str:
+    return "\n".join(
+        [
+            "# So geht es",
+            "",
+            f"{anzahl} Sessions warten auf eine Entscheidung. Je Ordner liegen ein paar",
+            "Bilder und eine `ort.md`.",
+            "",
+            "1. Ordner oeffnen, Bilder ansehen.",
+            f"2. In `{NOTIZ}` unter **Ort** hineinschreiben, wo das war.",
+            "3. Ist es derselbe Spot wie ein anderer Ordner, den anderen Ordnernamen",
+            "   unter **Gehoert zusammen mit** eintragen — oder die Ordner",
+            "   zusammenschieben, wie es bequemer ist.",
+            "",
+            "Die Ordner tragen keine Nummern, damit beides moeglich ist. Sie sortieren",
+            "sich nach Datum von selbst.",
+            "",
+            "Diese Datei enthaelt keine Sessiondaten und veraltet deshalb nicht. Ein",
+            "neuer Lauf raeumt diesen Ordner allerdings — vorher die Notizen sichern.",
+            "",
+        ]
+    )
 
 
 def _raeume_frueheren_lauf(ziel: Path) -> None:
@@ -136,13 +169,34 @@ def _raeume_frueheren_lauf(ziel: Path) -> None:
     inhalt = list(ziel.iterdir())
     if not inhalt:
         return
-    if not (ziel / _LISTE).exists():
+    beschrieben = sorted(n.parent.name for n in ziel.glob(f"*/{NOTIZ}") if _ist_beschrieben(n))
+    if beschrieben:
+        raise NotizenVorhanden(
+            f"In {ziel} sind {len(beschrieben)} Notizen ausgefuellt "
+            f"({', '.join(beschrieben[:3])}{' …' if len(beschrieben) > 3 else ''}). "
+            "Ein neuer Lauf wuerde sie loeschen. Bitte den Ordner erst sichern "
+            "oder umbenennen."
+        )
+    if not (ziel / _SIGNATUR).exists():
         raise ZielNichtLeer(
             f"{ziel} ist nicht leer und stammt nicht aus einem frueheren Lauf "
-            f"(kein {_LISTE}). Bitte einen anderen Zielordner waehlen."
+            f"(kein {_SIGNATUR}). Bitte einen anderen Zielordner waehlen."
         )
     for eintrag in inhalt:
         if eintrag.is_dir():
             shutil.rmtree(eintrag)
         else:
             eintrag.unlink()
+
+
+def _ist_beschrieben(notiz: Path) -> bool:
+    """Steht unter der Ort-Ueberschrift etwas, das nicht vom Werkzeug stammt?
+
+    Nur der Abschnitt zaehlt, in den geschrieben wird — die Zeilen darueber
+    schreibt das Werkzeug selbst, und sie waeren sonst jedes Mal ein Hindernis.
+    """
+    text = notiz.read_text(encoding="utf-8")
+    if _UEBERSCHRIFT not in text:
+        return False
+    dahinter = text.split(_UEBERSCHRIFT, 1)[1]
+    return any(zeile.strip() and not zeile.startswith("#") for zeile in dahinter.splitlines())
