@@ -345,7 +345,11 @@ def test_die_meldung_nennt_verbrauch_und_hochrechnung(tmp_path):
 
     letzte = meldungen[-1]
     assert "EUR" in letzte or "€" in letzte, f"kein Verbrauch in der Meldung: {letzte}"
-    assert "min" in letzte or "s" in letzte, f"keine Zeitangabe: {letzte}"
+    # Auf die konkrete Form pruefen, nicht auf ein "s": das steckt auch in
+    # "Tokens", und die erste Fassung blieb deshalb gruen, als die Zeitangabe
+    # ganz entfiel.
+    assert "gelaufen" in letzte, f"keine verstrichene Zeit: {letzte}"
+    assert "noch ~" in letzte, f"keine Hochrechnung: {letzte}"
 
 
 def test_ohne_melde_funktion_laeuft_es_trotzdem(tmp_path):
