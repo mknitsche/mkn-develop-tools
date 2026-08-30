@@ -119,3 +119,45 @@ def test_ein_urheber_ohne_namen_ist_keiner(tmp_path: Path) -> None:
     datei = _schreibe(tmp_path / "k.json", {"urheber": {"stadt": "M", "email": "e@m.de"}})
 
     assert konfig.lade(datei).urheber is None
+
+
+def test_die_farbnamen_kommen_aus_der_konfiguration(tmp_path: Path) -> None:
+    """**Der weisse Kasten in KT-1s Lightroom.**
+
+    Am 2026-08-30 meldete er: teils weisse Kaesten, aber weder Bildrahmen noch
+    Kasten in der richtigen Farbe. Der Katalog enthielt die Werte nachweislich
+    (433 Purple, 158 Blue) -- Lightroom kannte nur die NAMEN nicht.
+
+    Der Grund steht in Lightrooms eigenen Label-Sets:
+
+        label4 = ZSTR "$$$/AgLibrary/Menu/Photo/Label/Blue=Blue"
+
+    Das `=Blue` ist der Fallback fuer die ENGLISCHE Oberflaeche. Ein deutsches
+    Lightroom loest denselben Schluessel zu "Blau" auf und erwartet genau
+    diesen String im XMP. Ein Label, dessen Name nicht zum Satz passt, zeigt
+    Lightroom als leeres Feld an -- vorhanden, aber farblos.
+
+    Deshalb gehoeren die Namen dem ANWENDER, nicht dem Werkzeug: sie haengen an
+    seiner Programmsprache, und die kann das Werkzeug nicht wissen.
+
+    `photoshop:Urgency` bleibt davon unberuehrt -- die Zahl ist
+    sprachunabhaengig, und Capture One liest sie.
+    """
+    datei = _schreibe(
+        tmp_path / "k.json",
+        {"farben": {"serie": "Blau", "unklar": "Violett"}},
+    )
+
+    k = konfig.lade(datei)
+
+    assert k.farbe_serie == "Blau"
+    assert k.farbe_unklar == "Violett"
+
+
+def test_ohne_angabe_bleiben_die_englischen_namen(tmp_path: Path) -> None:
+    """Adobe-Englisch ist der Standard: es ist die Sprache, in der die Werte im
+    XMP-Standard selbst stehen, und die Fallback-Sprache jedes Label-Sets."""
+    k = konfig.lade(tmp_path / "gibtsnicht.json")
+
+    assert k.farbe_serie == "Blue"
+    assert k.farbe_unklar == "Purple"

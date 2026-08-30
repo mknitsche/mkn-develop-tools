@@ -48,6 +48,23 @@ class Konfig:
     modell: tuple[str, str] | None = None
     urheber: Urheber | None = None
 
+    farbe_serie: str = "Blue"
+    farbe_unklar: str = "Purple"
+    """Die Namen der beiden Farben, die das Werkzeug setzt.
+
+    **Sie gehoeren dem Anwender, nicht dem Werkzeug.** Lightroom vergleicht den
+    String im XMP mit den Namen SEINES Farbbeschriftungssatzes, und die sind
+    uebersetzt: ein deutsches Lightroom erwartet "Blau" und "Violett", ein
+    englisches "Blue" und "Purple". Passt der Name nicht, zeigt Lightroom ein
+    LEERES Feld an -- das Label ist da, die Farbe fehlt.
+
+    Genau so ist es KT-1 am 2026-08-30 ergangen: sein Katalog enthielt 433
+    Purple und 158 Blue, und er sah weisse Kaesten.
+
+    Der Standard bleibt Englisch: es ist die Fallback-Sprache jedes
+    Label-Sets. `photoshop:Urgency` ist davon unberuehrt -- die Zahl ist
+    sprachunabhaengig, und Capture One liest sie."""
+
 
 def _pfad(wert: object) -> Path | None:
     """Loest `~` auf.
@@ -90,7 +107,11 @@ def lade(pfad: Path | None = None) -> Konfig:
             nutzungsbedingungen=str(urheber_daten.get("nutzungsbedingungen", "")),
         )
 
+    farben = roh.get("farben") or {}
+
     return Konfig(
+        farbe_serie=str(farben.get("serie") or "Blue"),
+        farbe_unklar=str(farben.get("unklar") or "Purple"),
         ziel=_pfad(roh.get("ziel")),
         schluessel_datei=_pfad(roh.get("schluessel_datei")),
         modell=(str(anbieter), str(name)) if anbieter and name else None,

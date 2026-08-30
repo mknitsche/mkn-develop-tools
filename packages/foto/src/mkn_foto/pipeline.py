@@ -346,6 +346,10 @@ def fahre(
         # trugen Sammelkoordinaten statt eigener Positionen.
         beschreibungen: dict[int, str] = {}
         unklar: dict[int, str] = {}
+        # Wer in einer Belichtungsreihe steckt, dessen Belichtung ist Absicht.
+        in_belichtungsreihe = {
+            id(a) for s in serien_auf_kopien if s.typ == "hdr" for a in s.aufnahmen
+        }
         # Was in der Konfiguration steht, muss auch wirken: ein dokumentiertes
         # Feld, das nichts tut, ist schlimmer als ein fehlendes -- der Anwender
         # traegt es ein, sieht kein Ergebnis und sucht den Fehler bei sich.
@@ -381,7 +385,22 @@ def fahre(
                     continue
                 if schreibbar.get("beschreibung"):
                     beschreibungen[id(aufnahme)] = schreibbar["beschreibung"]
-                if schreibbar.get("belichtung") in ("unterbelichtet", "ueberbelichtet"):
+                if (
+                    schreibbar.get("belichtung") in ("unterbelichtet", "ueberbelichtet")
+                    and id(aufnahme) not in in_belichtungsreihe
+                ):
+                    # ABER NICHT bei einer Belichtungsreihe. Eine HDR-Serie
+                    # BESTEHT aus absichtlich ueber- und unterbelichteten
+                    # Bildern -- das ist ihr Zweck, kein Mangel.
+                    #
+                    # Ohne diese Ausnahme meldet das Modell folgerichtig
+                    # "unterbelichtet", Violett schlaegt Blau (KT-1s Rangfolge,
+                    # richtig), und die Serie wird unsichtbar. Gemessen an
+                    # seinem Baum vom 2026-08-30: 394 Bilder mit `Technik|hdr`,
+                    # davon 156 blau und **238 violett**. Der Fehler traf die
+                    # Mehrheit, und kein Test konnte ihn finden -- das Werkzeug
+                    # tat genau, was ihm gesagt wurde. Gefunden hat es KT-1, im
+                    # Bildbetrachter.
                     unklar[id(aufnahme)] = "Belichtung"
 
         lauf.angereichert = anreichern.schreibe(
@@ -394,6 +413,10 @@ def fahre(
             # nie im Code dieses oeffentlichen Pakets. Fehlt sie, wird kein
             # Urheber geschrieben; das ist ein gueltiger Zustand.
             urheber_angaben=einstellungen.urheber,
+            # Die Namen gehoeren dem Anwender: Lightroom vergleicht sie mit den
+            # Namen SEINES Farbbeschriftungssatzes, und die sind uebersetzt.
+            farbe_serie=einstellungen.farbe_serie,
+            farbe_unklar=einstellungen.farbe_unklar,
         )
 
     if entscheidungen is not None and lauf.offen:
