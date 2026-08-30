@@ -17,15 +17,24 @@ Alle Tests offline: der Transport ist injiziert, kein Netz, kein Schluessel.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
-from mkn_foto import kontaktbogen, motivlauf, vorschau
+from mkn_foto import bildurteil, kontaktbogen, motivlauf, vorschau
 
 from mkn_kern import modelle
 
 pytest.importorskip("PIL")
 from PIL import Image
+
+# Ohne exiftool schreibt `_merke` nichts -- und ein Test, der die ABWESENHEIT
+# einer Datei behauptet, wird dann vakuum gruen: er besteht, ohne je etwas
+# geprueft zu haben (LP-36, Untergrenze). `test_anreichern.py` hatte den Riegel
+# von Anfang an, diese Datei nicht.
+pytestmark = pytest.mark.skipif(
+    shutil.which("exiftool") is None, reason="exiftool nicht verfuegbar"
+)
 
 
 def kontaktbogen_breite_einer_kachel() -> int:
@@ -554,6 +563,14 @@ def test_neben_einem_jpeg_entsteht_kein_sidecar(tmp_path) -> None:
     assert not bild.with_suffix(".xmp").exists(), (
         "neben dem JPEG liegt ein Sidecar -- die Traeger-Regel gilt nur an einer Stelle"
     )
+    # Die Untergrenze: ohne sie besteht dieser Test auch dann, wenn gar nichts
+    # geschrieben wurde. "Keine Datei daneben" ist ueber dem Nichts trivial wahr
+    # -- die Aussage lautet "eingebettet STATT daneben", und die Haelfte davon
+    # steht sonst nirgends in diesem Test (LP-36).
+    assert bild in motivlauf.aus_baum([bild]).urteile, (
+        "die Marke wurde weder daneben noch eingebettet geschrieben -- "
+        "der Test ueber die Abwesenheit des Sidecars beweist so gar nichts"
+    )
 
 
 def test_ein_jpeg_urteil_ueberlebt_den_abbruch_ebenfalls(tmp_path) -> None:
@@ -588,3 +605,67 @@ def test_ein_jpeg_urteil_ueberlebt_den_abbruch_ebenfalls(tmp_path) -> None:
 
     wieder = motivlauf.aus_baum([bild])
     assert bild in wieder.urteile, "das eingebettete Urteil wird beim naechsten Lauf nicht gefunden"
+
+
+def test_ein_fremdes_stichwort_gilt_nicht_als_urteil(tmp_path) -> None:
+    """**Ein Teilstring ist keine Marke.**
+
+    `aus_baum` erkannte ein beurteiltes Bild daran, dass `Motiv|` im Feldtext
+    vorkommt. Ein fremdes Stichwort aus Capture One wie `Themen|Motiv|Ideen`
+    enthaelt das ebenfalls -- das Bild haette als beurteilt gegolten und **nie**
+    ein Urteil bekommen. Das ist die teurere der beiden Fehlrichtungen: ein
+    doppelter Aufruf kostet zwei Cent, ein nie gestellter kostet die Aussage.
+
+    Geprueft wird deshalb je EINTRAG auf seinen Anfang, nicht der
+    zusammengesetzte Text auf ein Vorkommen. Gefunden vom Cross-Modell-Review.
+    """
+    from PIL import Image
+
+    bild = tmp_path / "fremd.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+    import subprocess as sp
+
+    sp.run(
+        [
+            "exiftool",
+            "-q",
+            "-overwrite_original",
+            "-XMP-lr:HierarchicalSubject+=Themen|Motiv|Ideen",
+            str(bild),
+        ],
+        capture_output=True,
+        check=False,
+    )
+
+    zustand = motivlauf.aus_baum([bild])
+
+    assert bild not in zustand.urteile, (
+        "ein fremdes Stichwort, das 'Motiv|' nur enthaelt, gilt als Urteil -- "
+        "dieses Bild bekaeme nie eines"
+    )
+
+
+def test_ein_fehlgeschlagenes_merken_wird_gemeldet(tmp_path, caplog) -> None:
+    """**Ein stiller Schreibfehlschlag kostet nicht einen Aufruf, sondern jeden Lauf.**
+
+    Der Docstring von `_merke` sagt, ein Fehler koste "im schlimmsten Fall EINEN
+    doppelten Aufruf". Das gilt fuer einen einmaligen Ausrutscher. Kann ein
+    Format grundsaetzlich nicht beschrieben werden -- HEIC braucht exiftool
+    >= 12.44 fuer XMP, eine Datei ist schreibgeschuetzt oder defekt --, schlaegt
+    es bei JEDEM Bild und in JEDEM Lauf fehl. Ohne Meldung sieht das niemand:
+    die Marke fehlt, und `aus_baum` haelt das Bild folgerichtig fuer offen.
+
+    Aus einem doppelten Aufruf wird so ein doppelter LAUF. Gefunden vom
+    Cross-Modell-Review; der Rueckgabewert wurde vorher verworfen.
+    """
+    import logging
+
+    kaputt = tmp_path / "kaputt.jpg"
+    kaputt.write_bytes(b"das ist kein JPEG")
+
+    with caplog.at_level(logging.WARNING, logger="mkn_foto.motivlauf"):
+        motivlauf._merke(kaputt, bildurteil.Urteil(sicher=True, motive=("Wald",)))
+
+    assert any("nicht gemerkt" in r.getMessage() for r in caplog.records), (
+        "ein fehlgeschlagenes Einbetten wurde nicht gemeldet"
+    )
