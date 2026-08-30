@@ -148,7 +148,17 @@ def schreibe(
                 ziel, extra = pfad, ["-overwrite_original"]
                 zaehler = "eingebettet"
             else:
-                ziel, extra = pfad.with_suffix(SIDECAR), []
+                # `-overwrite_original`: sonst legt exiftool neben JEDEN
+                # vorhandenen Sidecar eine `.xmp_original`. Nach einem Lauf ueber
+                # 1.234 Aufnahmen lagen 1.228 solcher Kopien in KT-1s
+                # Bilderordner -- klein (2,5 MB), aber genau das, was er
+                # verboten hatte, und wer den Ordner oeffnet, sieht doppelt so
+                # viele Dateien wie Bilder.
+                #
+                # Die Sicherung ist hier auch sachlich ueberfluessig: der
+                # Zielbaum IST bereits die Kopie, die Originale werden nie
+                # angefasst.
+                ziel, extra = pfad.with_suffix(SIDECAR), ["-overwrite_original"]
                 zaehler = "sidecars"
                 # Ein vorhandener Sidecar wird ERGAENZT, nie ersetzt: dort steht
                 # oft die Handarbeit aus Capture One.
