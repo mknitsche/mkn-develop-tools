@@ -1019,3 +1019,78 @@ def test_der_lauf_weist_die_notiz_kosten_mit_aus(tmp_path, monkeypatch) -> None:
     gesamt = lauf.motive.messung
     assert gesamt.aufrufe == 2, "die Notiz-Anfrage fehlt in der Gesamtzahl"
     assert gesamt.tokens_ein == 2900
+
+
+def test_eine_belichtungsreihe_verliert_ihre_serienfarbe_nicht(tmp_path, monkeypatch) -> None:
+    """**KT-1s Befund, 2026-08-30: 238 von 394 HDR-Bildern ohne Serienfarbe.**
+
+    Woertlich: *"es sind viele bildserien (egal ob hdr oder eben als pano serie
+    hinterlegt), die auch in fastviewraw keine kennzeichnung haben"*.
+
+    Zwei richtige Regeln ergaben eine falsche. *Violett schlaegt Blau* ist KT-1s
+    Entscheidung und richtig. *Fehlbelichtung kennzeichnen* ist sein Wunsch und
+    ebenfalls richtig. Aber eine HDR-Belichtungsreihe BESTEHT aus absichtlich
+    ueber- und unterbelichteten Bildern -- das ist ihr Zweck, kein Mangel. Das
+    Modell meldete folgerichtig "unterbelichtet", Violett ueberschrieb Blau, und
+    die Serie war unsichtbar.
+
+    Gemessen an seinem Baum: 394 Bilder mit `Technik|hdr`, davon 156 blau und
+    **238 violett**. Der Fehler traf also die Mehrheit.
+
+    Kein Test haette das gefunden: das Werkzeug tat genau, was ihm gesagt wurde.
+    """
+    import json as _json
+    import shutil
+
+    if shutil.which("exiftool") is None:
+        import pytest as _p
+
+        _p.skip("exiftool nicht verfuegbar")
+
+    from PIL import Image
+
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    felder = []
+    for i in range(3):
+        Image.new("RGB", (200, 150), (30 + i * 60, 90, 120)).save(quelle / f"B{i}.JPG")
+        felder.append(
+            {
+                "EXIF:DateTimeOriginal": f"2026:08:24 06:19:0{i}",
+                "EXIF:Model": "X-E5",
+                "MakerNotes:AutoBracketing": 1,
+                "MakerNotes:SequenceNumber": i + 1,
+            }
+        )
+    monkeypatch.setattr(inventar.exif, "lies", lambda pfade: felder[: len(pfade)])
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        # Das Modell meldet, was es sieht: eine Belichtungsreihe ist dunkel.
+        return 200, _json.dumps(
+            {
+                "content": [
+                    {"text": '{"sicher": true, "motive": ["Berg"], "belichtung": "unterbelichtet"}'}
+                ],
+                "usage": {"input_tokens": 10, "output_tokens": 2},
+            }
+        ).encode()
+
+    lauf = pipeline.fahre(
+        quelle,
+        tmp_path / "ziel",
+        schreiben_aktiv=True,
+        modell=("anthropic", "test"),
+        schluessel="k",
+        transport=transport,
+    )
+
+    assert lauf.serien, "keine Serie erkannt - der Test prueft dann nichts (LP-36)"
+    import subprocess
+
+    for pfad in sorted((tmp_path / "ziel").rglob("*.JPG")):
+        aus = subprocess.run(
+            ["exiftool", "-s3", "-XMP:Label", str(pfad)], capture_output=True, text=True
+        ).stdout.strip()
+        assert aus != "Purple", (
+            f"{pfad.name}: die Belichtungswarnung hat die Serienfarbe verdraengt"
+        )

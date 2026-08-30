@@ -291,3 +291,41 @@ def test_neben_dem_sidecar_bleibt_keine_kopie_liegen(tmp_path) -> None:
     assert sidecar.exists(), "der vorhandene Sidecar muss ergaenzt werden"
     uebrig = list(tmp_path.glob("*_original"))
     assert not uebrig, f"Sicherungskopien liegen geblieben: {[p.name for p in uebrig]}"
+
+
+def test_die_farbnamen_werden_bis_in_die_datei_durchgereicht(tmp_path, monkeypatch) -> None:
+    """Die Einstellung muss ankommen, nicht nur existieren.
+
+    Der Weg geht ueber vier Stationen: Konfigurationsdatei -> `Konfig` ->
+    `pipeline.fahre` -> `anreichern.schreibe` -> exiftool. Reisst er an EINER,
+    sieht KT-1 weiterhin weisse Kaesten -- und die Einstellung, die er gesetzt
+    hat, waere ein Feld ohne Wirkung.
+    """
+    aufnahme = _aufnahme(tmp_path, "DSCF8", (".RAF",))
+    serie = Serie(typ="pan", nummer=1, aufnahmen=(aufnahme,), quelle="heuristik", sicher=True)
+    gerufen: list[list[str]] = []
+    monkeypatch.setattr(
+        anreichern, "_ruf_exiftool", lambda args, ziel: gerufen.append(args) or True
+    )
+
+    anreichern.schreibe([(aufnahme, ORT)], serien=[serie], farbe_serie="Blau")
+
+    assert "-XMP:Label=Blau" in gerufen[0]
+    # Die Zahl bleibt: sie ist sprachunabhaengig, und Capture One liest sie.
+    assert "-XMP-photoshop:Urgency=3" in gerufen[0]
+
+
+def test_auch_die_unklar_farbe_ist_einstellbar(tmp_path, monkeypatch) -> None:
+    aufnahme = _aufnahme(tmp_path, "DSCF9", (".RAF",))
+    gerufen: list[list[str]] = []
+    monkeypatch.setattr(
+        anreichern, "_ruf_exiftool", lambda args, ziel: gerufen.append(args) or True
+    )
+
+    anreichern.schreibe([(aufnahme, ORT)], unklar={id(aufnahme): "Ort"}, farbe_unklar="Violett")
+
+    # ueber ALLE Aufrufe: eine Aufnahme kann mehrere Dateien haben, und welche
+    # zuerst drankommt, ist keine Zusicherung wert.
+    alle = [x for ruf in gerufen for x in ruf]
+    assert "-XMP:Label=Violett" in alle
+    assert "-XMP-photoshop:Urgency=5" in alle

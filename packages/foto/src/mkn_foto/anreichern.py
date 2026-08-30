@@ -110,6 +110,8 @@ def schreibe(
     unklar: dict[int, str] | None = None,
     motive: dict[int, tuple[str, ...]] | None = None,
     urheber_angaben: Urheber | None = None,
+    farbe_serie: str = FARBE,
+    farbe_unklar: str = FARBE_UNKLAR,
 ) -> Ergebnis:
     """Schreibt Ort, Serie, Technik und Beschreibung an jede Aufnahme.
 
@@ -141,6 +143,8 @@ def schreibe(
                 unklar_grund=unklar.get(id(aufnahme)),
                 urheber_angaben=urheber_angaben,
                 jahr=aufnahme.zeitpunkt.year if aufnahme.zeitpunkt else None,
+                farbe_serie=farbe_serie,
+                farbe_unklar=farbe_unklar,
             )
             if not argumente:
                 continue
@@ -184,6 +188,8 @@ def _argumente(
     unklar_grund: str | None = None,
     urheber_angaben: Urheber | None = None,
     jahr: int | None = None,
+    farbe_serie: str = FARBE,
+    farbe_unklar: str = FARBE_UNKLAR,
 ) -> list[str]:
     """Baut die exiftool-Argumente nach der Traeger-Tabelle der Spec § 6.
 
@@ -228,7 +234,7 @@ def _argumente(
     if unklar_grund:
         # Violett schlaegt Blau: ein Bild traegt nur eine Farbe, und die
         # Unklarheit ist die Information, die sonst nirgends sichtbar steht.
-        args += [f"-XMP:Label={FARBE_UNKLAR}", f"-XMP-photoshop:Urgency={URGENCY_UNKLAR}"]
+        args += [f"-XMP:Label={farbe_unklar}", f"-XMP-photoshop:Urgency={URGENCY_UNKLAR}"]
         if eingebettet:
             args.append(f"-IPTC:Urgency={URGENCY_UNKLAR}")
         # Das Filterwort und der Grund darunter -- beide, weil das eine filtert
@@ -247,7 +253,7 @@ def _argumente(
         #
         # Blau gehoert dem Werkzeug und heisst "gehoert zu einer Serie". Rot,
         # Gelb und Gruen sind KT-1s Bewertungsachse und werden nie angefasst.
-        args += [f"-XMP:Label={FARBE}", f"-XMP-photoshop:Urgency={URGENCY}"]
+        args += [f"-XMP:Label={farbe_serie}", f"-XMP-photoshop:Urgency={URGENCY}"]
         if eingebettet:
             args.append(f"-IPTC:Urgency={URGENCY}")
 
