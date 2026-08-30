@@ -9,30 +9,9 @@ personenbezogenen Daten). Die Loesung ist dieselbe wie beim API-Schluessel:
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from mkn_foto import urheber
-
-
-def test_die_angaben_kommen_aus_der_datei_des_anwenders(tmp_path: Path) -> None:
-    datei = tmp_path / "urheber.json"
-    datei.write_text(
-        json.dumps({"name": "Erika Muster", "stadt": "M", "land": "Germany", "email": "e@m.de"}),
-        encoding="utf-8",
-    )
-
-    wer = urheber.lade(datei)
-
-    assert wer is not None
-    assert wer.name == "Erika Muster"
-    assert wer.email == "e@m.de"
-
-
-def test_ohne_datei_wird_nichts_geschrieben_statt_zu_raten(tmp_path: Path) -> None:
-    """Keine Angaben ist ein gueltiger Zustand — nicht jeder will seinen Namen
-    in den Bildern. Das Werkzeug erfindet dann nichts."""
-    assert urheber.lade(tmp_path / "gibtsnicht.json") is None
 
 
 def test_der_name_steht_in_allen_drei_traegern(tmp_path: Path) -> None:
@@ -80,26 +59,6 @@ def test_die_erreichbarkeit_steht_in_den_kontaktfeldern(tmp_path: Path) -> None:
     assert "-XMP-iptcCore:CreatorCountry=Germany" in args
 
 
-def test_eine_datei_ohne_namen_ist_wie_keine_datei(tmp_path: Path) -> None:
-    """Halb ausgefuellt ist nicht halb gueltig.
-
-    Ohne Namen ergeben Stadt und Mailadresse keinen Urheber — und ein Absturz
-    mitten im Lauf waere die schlechteste aller Antworten auf eine Datei, die
-    der Anwender selbst angelegt hat.
-    """
-    datei = tmp_path / "urheber.json"
-    datei.write_text('{"stadt": "M", "email": "e@m.de"}', encoding="utf-8")
-
-    assert urheber.lade(datei) is None
-
-
-def test_kaputtes_json_stuerzt_nicht_ab(tmp_path: Path) -> None:
-    datei = tmp_path / "urheber.json"
-    datei.write_text("{kein json", encoding="utf-8")
-
-    assert urheber.lade(datei) is None
-
-
 def test_der_rechtevermerk_bleibt_kurz(tmp_path: Path) -> None:
     """Der IPTC-Fachstandard, nicht Sparsamkeit.
 
@@ -129,20 +88,3 @@ def test_der_rechtestatus_wird_ausdruecklich_gesetzt(tmp_path: Path) -> None:
     args = urheber.Urheber(name="Erika Muster").argumente(jahr=2019, eingebettet=False)
 
     assert "-XMP-xmpRights:Marked=True" in args
-
-
-def test_website_und_nutzungsbedingungen_kommen_aus_der_datei(tmp_path: Path) -> None:
-    """KT-1: *"auch ein punkt, den ein anwender vorgibt"*. Nichts davon steht
-    im Code -- auch nicht als Vorgabe."""
-    datei = tmp_path / "u.json"
-    datei.write_text(
-        '{"name": "E", "website": "https://x.de", "rechte_url": "https://x.de/r",'
-        ' "nutzungsbedingungen": "Keine Nutzung ohne Erlaubnis."}',
-        encoding="utf-8",
-    )
-
-    args = urheber.lade(datei).argumente(jahr=2019, eingebettet=False)
-
-    assert "-XMP-iptcCore:CreatorWorkURL=https://x.de" in args
-    assert "-XMP-xmpRights:WebStatement=https://x.de/r" in args
-    assert "-XMP-xmpRights:UsageTerms=Keine Nutzung ohne Erlaubnis." in args

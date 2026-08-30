@@ -32,6 +32,7 @@ from mkn_foto import (
     geotag,
     gpx,
     inventar,
+    konfig,
     mediathek,
     motivlauf,
     notizen,
@@ -39,7 +40,6 @@ from mkn_foto import (
     schreiben,
     serien,
     spots,
-    urheber,
 )
 from mkn_foto.modell import Anker, Aufnahme, Ort, Serie, Spot
 
@@ -261,9 +261,22 @@ def fahre(
         # trugen Sammelkoordinaten statt eigener Positionen.
         beschreibungen: dict[int, str] = {}
         unklar: dict[int, str] = {}
+        # Was in der Konfiguration steht, muss auch wirken: ein dokumentiertes
+        # Feld, das nichts tut, ist schlimmer als ein fehlendes -- der Anwender
+        # traegt es ein, sieht kein Ergebnis und sucht den Fehler bei sich.
+        # Der AUFRUF hat Vorrang: wer ein Modell uebergibt, meint es.
+        einstellungen = konfig.lade()
+        modell = modell or einstellungen.modell
         if modell is not None:
             lauf.motive = _bildanalyse(
-                mit_ort, serien_auf_kopien, modell, schluessel, transport, melde, melde_alle
+                mit_ort,
+                serien_auf_kopien,
+                modell,
+                schluessel,
+                transport,
+                melde,
+                melde_alle,
+                einstellungen.schluessel_datei,
             )
             for aufnahme, _ in mit_ort:
                 urteil = lauf.motive.fuer(_erstes_bild(aufnahme))
@@ -289,7 +302,7 @@ def fahre(
             # Wer die Bilder gemacht hat, steht in der Datei des Anwenders --
             # nie im Code dieses oeffentlichen Pakets. Fehlt sie, wird kein
             # Urheber geschrieben; das ist ein gueltiger Zustand.
-            urheber_angaben=urheber.lade(),
+            urheber_angaben=einstellungen.urheber,
         )
 
     if entscheidungen is not None and lauf.offen:
@@ -452,13 +465,25 @@ def _erstes_bild(aufnahme: Aufnahme) -> Path:
 
 
 def _bildanalyse(
-    mit_ort, serien_auf_kopien, modell, schluessel, transport, melde=None, melde_alle=25
+    mit_ort,
+    serien_auf_kopien,
+    modell,
+    schluessel,
+    transport,
+    melde=None,
+    melde_alle=25,
+    schluessel_datei=None,
 ) -> motivlauf.Ergebnis:
     """Setzt die Eintraege fuer den Motivlauf zusammen: Serien als Gruppe,
     der Rest einzeln."""
     from mkn_kern import modelle
 
     wahl = modelle.Wahl(anbieter=modell[0], modell=modell[1])
+    # Der Ort der Schluesseldatei kommt aus der Konfiguration, sofern der
+    # Aufrufer keinen Schluessel direkt mitgibt. Gelesen wird zur Laufzeit,
+    # gespeichert wird nichts.
+    if schluessel is None:
+        schluessel = wahl.schluessel(ablage=schluessel_datei)
     in_serie: dict[int, Serie] = {}
     for s in serien_auf_kopien:
         for a in s.aufnahmen:

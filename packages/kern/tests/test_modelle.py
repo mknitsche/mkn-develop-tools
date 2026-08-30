@@ -314,3 +314,30 @@ def test_der_schluessel_wird_nirgends_gespeichert(tmp_path, monkeypatch):
 
     assert "geheim-123" not in repr(w), f"der Schluessel steckt in der Wahl: {w!r}"
     assert "geheim-123" not in str(vars(w)), "der Schluessel wurde als Feld abgelegt"
+
+
+def test_der_ort_darf_auch_vom_aufrufer_kommen(tmp_path, monkeypatch) -> None:
+    """Nicht jeder Anwender setzt Umgebungsvariablen.
+
+    Bis 2026-08-30 war `MKN_LLM_SCHLUESSEL_DATEI` der einzige Weg, den Ort zu
+    nennen. Damit haette die Konfigurationsdatei ein Feld `schluessel_datei`
+    getragen, das NICHTS tut -- ein Feld, das Deckung behauptet und keine hat.
+    Der Aufrufer darf den Ort deshalb direkt uebergeben; die Umgebung behaelt
+    Vorrang, denn wer sie setzt, meint sie.
+    """
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv(modelle.SCHLUESSEL_DATEI_VARIABLE, raising=False)
+    datei = tmp_path / "keys.json"
+    datei.write_text('{"anthropic": "sk-aus-der-konfig"}', encoding="utf-8")
+
+    wahl = modelle.waehle("anthropic", "irgendeins")
+
+    assert wahl.schluessel(ablage=datei) == "sk-aus-der-konfig"
+
+
+def test_die_umgebung_schlaegt_den_uebergebenen_ort(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-aus-der-umgebung")
+    datei = tmp_path / "keys.json"
+    datei.write_text('{"anthropic": "sk-aus-der-konfig"}', encoding="utf-8")
+
+    assert modelle.waehle("anthropic", "x").schluessel(ablage=datei) == "sk-aus-der-umgebung"

@@ -6,14 +6,9 @@ fuer immer, und in der Git-Historie auch dann noch, wenn die Zeile geloescht
 ist. Deshalb gilt hier dieselbe Regel wie beim API-Schluessel: **das Werkzeug
 kennt den Platz, nicht den Wert.**
 
-Der Anwender legt eine kleine JSON-Datei an::
-
-    {"name": "...", "stadt": "...", "land": "...", "email": "..."}
-
-und nennt ihren Pfad ueber ``MKN_FOTO_URHEBER_DATEI``. Sagt er nichts, sucht
-das Werkzeug an einer einzigen naheliegenden Stelle nach — und schreibt sonst
-keinen Urheber. **Nichts zu schreiben ist ein gueltiges Ergebnis:** wer seinen
-Namen nicht in den Bildern haben will, bekommt ihn nicht hinein.
+Der Anwender traegt sie in seine Konfiguration ein (`mkn_foto.konfig`), unter
+`urheber`. **Nichts zu schreiben ist ein gueltiges Ergebnis:** wer seinen Namen
+nicht in den Bildern haben will, bekommt ihn nicht hinein.
 
 **Warum drei Traeger fuer denselben Namen** (Spec-Logik wie beim Ort): XMP,
 IPTC/IIM und EXIF sind drei getrennte Karteien in derselben Datei, und die
@@ -23,16 +18,7 @@ Capture Ones IPTC-Ansicht und in jedem EXIF-Betrachter namenlos.
 
 from __future__ import annotations
 
-import json
-import os
 from dataclasses import dataclass
-from pathlib import Path
-
-DATEI_VARIABLE = "MKN_FOTO_URHEBER_DATEI"
-"""Zeigt auf die JSON-Datei mit den Angaben des Anwenders."""
-
-STANDARD_ORT = Path.home() / ".config" / "mkn-foto" / "urheber.json"
-"""Die eine Stelle, an der ohne Umgebungsvariable nachgesehen wird."""
 
 
 @dataclass(frozen=True)
@@ -91,33 +77,3 @@ class Urheber:
                 args.append(f"-IPTC:CopyrightNotice=© {jahr} {self.name}")
 
         return args
-
-
-def lade(pfad: Path | None = None) -> Urheber | None:
-    """Liest die Angaben — oder gibt `None` zurueck, wenn es keine gibt.
-
-    Eine fehlende oder unlesbare Datei ist kein Absturz: sie bedeutet schlicht
-    "kein Urheber". Ein fehlender ``name`` ebenso — ohne ihn ergaeben Stadt und
-    Mailadresse keinen Sinn.
-    """
-    if pfad is None:
-        genannt = os.environ.get(DATEI_VARIABLE)
-        pfad = Path(genannt) if genannt else STANDARD_ORT
-
-    try:
-        rohdaten = json.loads(pfad.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-    if not isinstance(rohdaten, dict) or not rohdaten.get("name"):
-        return None
-
-    return Urheber(
-        name=str(rohdaten["name"]),
-        stadt=str(rohdaten.get("stadt", "")),
-        website=str(rohdaten.get("website", "")),
-        rechte_url=str(rohdaten.get("rechte_url", "")),
-        nutzungsbedingungen=str(rohdaten.get("nutzungsbedingungen", "")),
-        land=str(rohdaten.get("land", "")),
-        email=str(rohdaten.get("email", "")),
-    )

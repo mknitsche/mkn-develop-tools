@@ -18,6 +18,92 @@ Windows  https://exiftool.org  (exiftool.exe on PATH)
 
 Nothing else is required — no database, no network, no account.
 
+## Getting started
+
+Four steps. Nothing is installed system-wide, nothing is sent anywhere you did
+not configure.
+
+**1 — Tell the tool who you are and what you have.** One file, at
+`~/.config/mkn-foto/konfig.json`, or wherever `MKN_FOTO_KONFIG` points:
+
+```json
+{
+  "ziel": "/Volumes/YourDisk/enriched",
+  "schluessel_datei": "~/.config/mkn-foto/keys.json",
+  "modell": {"anbieter": "anthropic", "name": "claude-opus-5"},
+  "urheber": {
+    "name": "Erika Muster",
+    "stadt": "Munich",
+    "land": "Germany",
+    "email": "erika@example.org",
+    "website": "https://example.org"
+  }
+}
+```
+
+Every field may be left out. Without `urheber` no authorship is written; without
+`modell` no model is asked and the tool runs on camera facts alone; without
+`ziel` the destination comes from the call.
+
+**2 — Put your API key somewhere else.** The configuration names the *place* of
+the key file, never the key. A configuration travels into backups, templates and
+the occasional screenshot; a key should not.
+
+```json
+{"anthropic": "sk-ant-...", "gemini": "..."}
+```
+
+One file can hold several providers. A single key may also be stored under
+`api_key`, so someone with one provider need not know its name.
+
+Precedence, highest first: the provider's own environment variable
+(`ANTHROPIC_API_KEY`, …), then `MKN_LLM_SCHLUESSEL_DATEI`, then
+`schluessel_datei` from the configuration. Whoever sets an environment variable
+means it — that is what makes a one-off switch possible without editing a file.
+
+**3 — Point it at your shooting tree.** The source stays untouched; everything is
+written into a copy under `ziel`.
+
+**4 — Run it twice.** The second run over the same tree does the same thing as
+the first — it skips what is already copied and still enriches it. That is not a
+detail: the first version silently did *nothing* on a second run and reported
+success.
+
+## Configuration reference
+
+| Field | Meaning | If absent |
+|---|---|---|
+| `ziel` | destination tree; `~` is expanded | taken from the call |
+| `schluessel_datei` | **path to** the key file, never the key | environment variable, if set |
+| `modell.anbieter` | `anthropic`, `gemini`, `kimi`, `ollama` | no model is asked |
+| `modell.name` | exact model id — you choose, there is no default | — |
+| `urheber.name` | written to Creator, Artist, By-line | no authorship written |
+| `urheber.stadt` / `.land` | IPTC creator contact | omitted |
+| `urheber.email` | creator contact — the machine-readable field | omitted |
+| `urheber.website` | `CreatorWorkURL` | omitted |
+| `urheber.rechte_url` | `xmpRights:WebStatement` — your licence page | omitted |
+| `urheber.nutzungsbedingungen` | `xmpRights:UsageTerms` — your terms in words | omitted |
+
+A file that exists but is **broken** is loud, with its own path in the message. A
+typo in your own configuration is the most common error there is, and if it
+passed as "no configuration", the tool would appear to run and write nothing.
+
+### How rights are written, and why in that shape
+
+The copyright notice stays **short and readable** — `© 2019 Erika Muster`, with
+the year taken from the *exposure*, not from today. Reachability goes into the
+IPTC creator-contact fields, and licence wording into `UsageTerms`. This follows
+the IPTC Photo Metadata standard rather than convenience: newsrooms, agencies and
+image search read the *structured* fields, so a notice stuffed with an address is
+tedious for humans and worthless to machines, because nothing parses it.
+
+`xmpRights:Marked` is set as well. Without it the rights status is formally
+*unknown*, even with a notice sitting next to it.
+
+The name is written to XMP, IPTC/IIM **and** EXIF. These are three separate
+registers in one file and programmes read different ones; setting only
+`XMP-dc:Creator` leaves you anonymous in an EXIF viewer.
+
 ## Design
 
 The design this implements lives outside this repository (it references the

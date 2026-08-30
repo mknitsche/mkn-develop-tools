@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from mkn_foto import anreichern, inventar, pipeline, urheber
+from mkn_foto import anreichern, inventar, konfig, pipeline
 from mkn_foto.modell import Anker
 
 
@@ -727,9 +727,9 @@ def test_die_pipeline_laedt_den_urheber_und_reicht_ihn_durch(tmp_path, monkeypat
     und trotzdem steht kein Name in den Bildern, wenn die Pipeline dazwischen
     nicht lädt. Genau das ist heute Nacht dreimal passiert.
     """
-    datei = tmp_path / "urheber.json"
-    datei.write_text('{"name": "Erika Muster", "email": "e@m.de"}', encoding="utf-8")
-    monkeypatch.setenv(urheber.DATEI_VARIABLE, str(datei))
+    datei = tmp_path / "konfig.json"
+    datei.write_text('{"urheber": {"name": "Erika Muster", "email": "e@m.de"}}', encoding="utf-8")
+    monkeypatch.setenv(konfig.DATEI_VARIABLE, str(datei))
 
     gesehen: dict[str, object] = {}
     monkeypatch.setattr(
@@ -760,3 +760,68 @@ def test_die_pipeline_laedt_den_urheber_und_reicht_ihn_durch(tmp_path, monkeypat
 
     assert gesehen.get("urheber_angaben") is not None, "Urheber kam nie an"
     assert gesehen["urheber_angaben"].name == "Erika Muster"
+
+
+def test_die_pipeline_nimmt_modell_und_schluesselort_aus_der_konfiguration(
+    tmp_path, monkeypatch
+) -> None:
+    """Was in der Konfiguration steht, muss auch wirken.
+
+    Ein Feld, das dokumentiert ist und nichts tut, ist schlimmer als ein
+    fehlendes: der Anwender traegt es ein, sieht kein Ergebnis und sucht den
+    Fehler bei sich. Also geht dieser Test den Weg von der Datei bis zum
+    Aufruf -- Modell UND Schluesselort.
+    """
+    import json as _json
+    import shutil
+
+    if shutil.which("exiftool") is None:
+        import pytest as _p
+
+        _p.skip("exiftool nicht verfuegbar")
+
+    from PIL import Image
+
+    schluessel_datei = tmp_path / "keys.json"
+    schluessel_datei.write_text('{"anthropic": "sk-aus-der-konfig"}', encoding="utf-8")
+    kfg = tmp_path / "konfig.json"
+    kfg.write_text(
+        _json.dumps(
+            {
+                "schluessel_datei": str(schluessel_datei),
+                "modell": {"anbieter": "anthropic", "name": "modell-aus-der-konfig"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv(konfig.DATEI_VARIABLE, str(kfg))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MKN_LLM_SCHLUESSEL_DATEI", raising=False)
+
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    Image.new("RGB", (200, 150), (10, 20, 30)).save(quelle / "P0.JPG")
+    monkeypatch.setattr(
+        inventar.exif,
+        "lies",
+        lambda pfade: [{"EXIF:DateTimeOriginal": "2026:08:24 06:19:00", "EXIF:Model": "X-E5"}],
+    )
+
+    gesehen: dict[str, object] = {}
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        gesehen["schluessel"] = kopf.get("x-api-key")
+        gesehen["modell"] = _json.loads(koerper)["model"]
+        return 200, _json.dumps(
+            {
+                "content": [{"text": _json.dumps({"sicher": False})}],
+                "usage": {"input_tokens": 10, "output_tokens": 1},
+            }
+        ).encode()
+
+    pipeline.fahre(quelle, tmp_path / "ziel", schreiben_aktiv=True, transport=transport)
+
+    assert gesehen.get("modell") == "modell-aus-der-konfig", "Modell kam nicht aus der Konfig"
+    assert gesehen.get("schluessel") == "sk-aus-der-konfig", (
+        "Schluesselort kam nicht aus der Konfig"
+    )
