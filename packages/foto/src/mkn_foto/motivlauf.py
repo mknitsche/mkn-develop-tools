@@ -20,6 +20,7 @@ an, und sie landete sonst als Stichwort in einer Datei.
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
 import tempfile
@@ -28,7 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mkn_foto import bildurteil, kontaktbogen, messung, vorschau
+from mkn_foto import anreichern, bildurteil, kontaktbogen, messung, vorschau
 from mkn_kern import anfrage, modelle
 
 _LOG = logging.getLogger(__name__)
@@ -235,8 +236,12 @@ Genauer ginge es nur mit den `cache_read_input_tokens` aus der Antwort -- die
 werden bisher nicht ausgewertet."""
 
 SIDECAR = ".xmp"
-"""Wohin ein Zwischenurteil geschrieben wird — dieselbe Endung wie in
-`anreichern`, denn es ist dieselbe Datei."""
+"""Die Sidecar-Endung. Wohin ein Zwischenurteil GEHOERT, entscheidet dagegen
+`anreichern.traeger` -- eine Endung ist keine Regel.
+
+Der Kommentar hier sagte frueher "dieselbe Datei wie in `anreichern`", und genau
+das stimmte nur fuer RAW. Bei einem JPEG bettet `anreichern` ein, waehrend hier
+danebengeschrieben wurde: dieselbe Aussage an zwei Stellen."""
 
 MOTIV_MARKE = "Motiv|"
 """Woran ein bereits beurteiltes Bild zu erkennen ist. Der Baum IST der Zustand
@@ -259,10 +264,20 @@ def _merke(bild: Path, urteil: bildurteil.Urteil) -> None:
         # Ein unsicheres Urteil schreibt nichts -- Regel A. Es wird beim
         # naechsten Lauf erneut gefragt, und das ist richtig so.
         return
-    ziel = bild.with_suffix(SIDECAR)
-    args = [f"-XMP-lr:HierarchicalSubject+={MOTIV_MARKE}{w}" for w in urteil.motive]
+    # Die Traeger-Regel kommt aus `anreichern`, nicht aus diesem Modul: JPEG
+    # traegt eingebettet, RAW bekommt einen Sidecar. Die fruehere eigene Fassung
+    # (`bild.with_suffix(SIDECAR)`) kannte sie nicht und legte ihre Marke neben
+    # JEDES Bild -- auch neben ein JPEG, in das `anreichern` unmittelbar danach
+    # einbettet. Bei 65 JPEG ohne RAW im Bestand waren das 65 ueberzaehlige
+    # Dateien und, schlimmer, dieselbe Aussage an zwei Stellen.
+    ziel, eingebettet = anreichern.traeger(bild)
+    args = []
+    for w in urteil.motive:
+        # Idempotent wie in `anreichern`: ein zweiter Lauf ueber dieselbe Datei
+        # darf das Stichwort nicht verdoppeln.
+        args += anreichern._setze("XMP-lr:HierarchicalSubject", f"{MOTIV_MARKE}{w}")
     befehl = ["exiftool", "-q", *args]
-    if ziel.exists():
+    if eingebettet or ziel.exists():
         befehl += ["-overwrite_original", str(ziel)]
     else:
         befehl += ["-o", str(ziel), str(bild)]
@@ -281,8 +296,21 @@ def aus_baum(bilder: Sequence[Path]) -> Ergebnis:
     bleiben.
     """
     ergebnis = Ergebnis()
+    eingebettete: list[Path] = []
     for bild in bilder:
-        seite = bild.with_suffix(".xmp")
+        ziel, eingebettet = anreichern.traeger(bild)
+        if eingebettet and ziel.exists():
+            # Ein JPEG traegt seine Marke IN sich. Sie mit `read_text` zu suchen
+            # hiesse, bis zu 20 MB Bilddaten je Datei zu lesen -- ueber den
+            # Bestand rund 26 GB. Solche Dateien werden gesammelt und in EINEM
+            # exiftool-Aufruf gefragt.
+            eingebettete.append(ziel)
+        # **Beim Lesen nachsichtig, beim Schreiben streng.** Auch ein JPEG wird
+        # zusaetzlich auf einen Sidecar geprueft: Baeume aus frueheren Laeufen
+        # tragen dort ihre Marke, weil die Traeger-Regel damals nicht galt.
+        # Wer sie ignoriert, laesst einen Wiederaufnahme-Lauf jedes bezahlte
+        # Urteil erneut kaufen -- teurer als der Fehler, den die Regel behebt.
+        seite = bild.with_suffix(SIDECAR)
         if not seite.exists():
             continue
         try:
@@ -293,4 +321,43 @@ def aus_baum(bilder: Sequence[Path]) -> Ergebnis:
         if MOTIV_MARKE in inhalt:
             # Der genaue Inhalt steht in der Datei; hier zaehlt nur "erledigt".
             ergebnis.urteile[bild] = bildurteil.Urteil(sicher=True, fehler="aus dem Baum")
+
+    marken = set(_mit_marke(eingebettete))
+    for bild in bilder:
+        if bild in marken:
+            ergebnis.urteile[bild] = bildurteil.Urteil(sicher=True, fehler="aus dem Baum")
     return ergebnis
+
+
+def _mit_marke(bilder: Sequence[Path]) -> list[Path]:
+    """Welche dieser Dateien die Motiv-Marke eingebettet tragen — EIN Aufruf.
+
+    Ein Fehlschlag gilt als "nicht beurteilt": das kostet im schlimmsten Fall
+    einen doppelten Modellaufruf. Die Gegenrichtung waere teurer -- ein Bild
+    faelschlich fuer erledigt zu halten, hiesse, dass es NIE ein Urteil bekommt.
+    """
+    if not bilder:
+        return []
+    try:
+        roh = subprocess.run(
+            ["exiftool", "-q", "-json", "-XMP-lr:HierarchicalSubject", *[str(b) for b in bilder]],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=300,
+        ).stdout
+    except (OSError, subprocess.SubprocessError) as exc:
+        _LOG.warning("eingebettete Marken nicht lesbar, gelten als offen (%s)", exc)
+        return []
+    if not roh.strip():
+        return []
+    try:
+        eintraege = json.loads(roh)
+    except json.JSONDecodeError as exc:
+        _LOG.warning("Markenabfrage unlesbar, gilt als offen (%s)", exc)
+        return []
+    gefunden: list[Path] = []
+    for e in eintraege:
+        if MOTIV_MARKE in str(e.get("HierarchicalSubject", "")):
+            gefunden.append(Path(e["SourceFile"]))
+    return gefunden

@@ -149,7 +149,7 @@ dev = [
 
 [[package]]
 name = "mkn-foto"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/foto" }
 dependencies = [
     { name = "pillow" },
@@ -160,7 +160,7 @@ requires-dist = [{ name = "pillow", specifier = ">=10" }]
 
 [[package]]
 name = "mkn-kern"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/kern" }
 
 [[package]]

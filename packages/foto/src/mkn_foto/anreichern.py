@@ -86,6 +86,43 @@ hierarchisch darunter: `Pruefen|Ort`, `Pruefen|Belichtung`."""
 EINGEBETTET = frozenset({".JPG", ".JPEG", ".HEIC"})
 """Formate mit eigener Metadaten-Konvention. Alles andere bekommt einen Sidecar."""
 
+
+def traeger(pfad: Path) -> tuple[Path, bool]:
+    """Wohin die Angaben zu dieser Datei gehoeren: `(Ziel, eingebettet)`.
+
+    **Eine Stelle je Format -- und diese Funktion ist die eine Stelle je Regel.**
+    Sie lebte vorher nur als `if`-Zweig im Schreiber, und `motivlauf._merke`
+    hatte seine eigene Fassung: eine, die die Regel gar nicht kannte und ihre
+    Marke blind neben JEDES Bild legte. Bei 65 JPEG ohne RAW im Bestand entstand
+    so ein Sidecar neben einer Datei, in die unmittelbar danach eingebettet
+    wurde -- dieselbe Aussage an zwei Stellen, was Spec Paragraf 10 ausdruecklich
+    verbietet, plus 71 ueberzaehlige Dateien in KT-1s Ordner.
+
+    Zwei Aufrufer mit derselben Frage und verschiedenen Antworten. Deshalb steht
+    die Antwort jetzt hier und nicht dort.
+    """
+    if pfad.suffix.upper() in EINGEBETTET:
+        return pfad, True
+    return pfad.with_suffix(SIDECAR), False
+
+
+def _setze(feld: str, wert: str) -> list[str]:
+    """Ein Listenwert, der genau EINMAL dasteht -- auch beim zweiten Lauf.
+
+    `-=` vor `+=`: exiftool arbeitet die Argumente der Reihe nach ab, entfernt
+    also ein vorhandenes Vorkommen und legt es genau einmal neu an. Fremde Werte
+    im selben Feld bleiben unberuehrt -- dort steht KT-1s Handarbeit aus Capture
+    One, und die darf kein Lauf loeschen. Firsthand geprueft, nicht angenommen.
+
+    Ohne das entstand die Verdopplung, die KT-1s Direktive verletzte (*"alle
+    inhalte muessen bei jpeg und raw gleich sein"*): `motivlauf._merke` legt die
+    Motiv-Marke waehrend des Laufs an, hier wurde dieselbe danach ein zweites
+    Mal angehaengt. Gemessen am Lauf ueber die 42 Nuernberger Aufnahmen: 29 von
+    42 Sidecars (69 %) trugen ihre Stichworte doppelt, die JPEGs einfach.
+    """
+    return [f"-{feld}-={wert}", f"-{feld}+={wert}"]
+
+
 _ROH = frozenset({".NEF", ".RAF"})
 
 
@@ -148,8 +185,9 @@ def schreibe(
             )
             if not argumente:
                 continue
-            if endung.upper() in EINGEBETTET:
-                ziel, extra = pfad, ["-overwrite_original"]
+            ziel, ist_eingebettet = traeger(pfad)
+            if ist_eingebettet:
+                extra = ["-overwrite_original"]
                 zaehler = "eingebettet"
             else:
                 # `-overwrite_original`: sonst legt exiftool neben JEDEN
@@ -162,7 +200,7 @@ def schreibe(
                 # Die Sicherung ist hier auch sachlich ueberfluessig: der
                 # Zielbaum IST bereits die Kopie, die Originale werden nie
                 # angefasst.
-                ziel, extra = pfad.with_suffix(SIDECAR), ["-overwrite_original"]
+                extra = ["-overwrite_original"]
                 zaehler = "sidecars"
                 # Ein vorhandener Sidecar wird ERGAENZT, nie ersetzt: dort steht
                 # oft die Handarbeit aus Capture One.
@@ -239,12 +277,12 @@ def _argumente(
             args.append(f"-IPTC:Urgency={URGENCY_UNKLAR}")
         # Das Filterwort und der Grund darunter -- beide, weil das eine filtert
         # und das andere erklaert.
-        args += [
-            f"-XMP-dc:Subject+={PRUEFEN}",
-            f"-XMP-lr:HierarchicalSubject+={PRUEFEN}",
-            f"-XMP-dc:Subject+={unklar_grund}",
-            f"-XMP-lr:HierarchicalSubject+={PRUEFEN}|{unklar_grund}",
-        ]
+        args += (
+            _setze("XMP-dc:Subject", PRUEFEN)
+            + _setze("XMP-lr:HierarchicalSubject", PRUEFEN)
+            + _setze("XMP-dc:Subject", unklar_grund)
+            + _setze("XMP-lr:HierarchicalSubject", f"{PRUEFEN}|{unklar_grund}")
+        )
     elif serienbild:
         # ZWEIMAL, und das ist keine Vorsicht: Capture One liest `xmp:Label`
         # nicht, sondern die aeltere Notation `photoshop:Urgency`. Dort ist 3
@@ -261,7 +299,8 @@ def _argumente(
         args.append(f"-XMP-dc:Description={beschreibung}")
 
     for wort in stichworte:
-        args += [f"-XMP-dc:Subject+={wort.split('|')[-1]}", f"-XMP-lr:HierarchicalSubject+={wort}"]
+        args += _setze("XMP-dc:Subject", wort.split("|")[-1])
+        args += _setze("XMP-lr:HierarchicalSubject", wort)
 
     return args
 

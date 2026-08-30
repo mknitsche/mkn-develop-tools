@@ -329,3 +329,82 @@ def test_auch_die_unklar_farbe_ist_einstellbar(tmp_path, monkeypatch) -> None:
     alle = [x for ruf in gerufen for x in ruf]
     assert "-XMP:Label=Violett" in alle
     assert "-XMP-photoshop:Urgency=5" in alle
+
+
+def test_ein_vorhandenes_stichwort_wird_nicht_verdoppelt(tmp_path) -> None:
+    """**KT-1s Direktive: „alle inhalte muessen bei jpeg und raw gleich sein."**
+
+    Sie waren es nicht. Firsthand am Lauf ueber die 42 Nuernberger Aufnahmen
+    (2026-08-30): **29 von 42 Sidecars (69 %) trugen ihre Motiv-Stichworte
+    doppelt**, die JPEGs einfach.
+
+    Die Ursache ist die Naht zwischen zwei Schreibern. `motivlauf._merke`
+    hinterlegt die Motiv-Marke waehrend des Laufs -- die Abbruchsicherung, ohne
+    die ein bezahlter Aufruf verloren geht. Danach ergaenzt `anreichern` per
+    `+=` dieselben Worte noch einmal.
+
+    Angehaengt wird also gegen einen Stand, den ein frueherer Schritt schon
+    geschrieben hat. Genau deshalb genuegt es nicht, `_merke` zu aendern: die
+    Verdopplung entsteht HIER und muss hier aufhoeren -- auch dann, wenn KT-1
+    dasselbe Stichwort von Hand in Capture One vergeben hat.
+
+    Fremde Stichworte bleiben unberuehrt; das ist der Grund fuer `+=` und wird
+    von `test_handarbeit_im_sidecar_bleibt_stehen` gedeckt.
+    """
+    a = _aufnahme(tmp_path, "DSCF9001", (".RAF",))
+    sidecar = tmp_path / "DSCF9001.xmp"
+    subprocess.run(
+        [
+            "exiftool",
+            "-q",
+            "-o",
+            str(sidecar),
+            "-XMP-lr:HierarchicalSubject+=Motiv|Wald",
+            "-XMP-dc:Subject+=Wald",
+            str(a.dateien[".RAF"]),
+        ],
+        capture_output=True,
+        check=False,
+    )
+    assert sidecar.exists(), "Vorbedingung nicht hergestellt: kein Sidecar"
+
+    anreichern.schreibe([(a, ORT)], motive={id(a): ("Wald",)})
+
+    hierarchisch = _lies(sidecar, "HierarchicalSubject").get("HierarchicalSubject", "")
+    # exiftool liefert mehrwertige Felder als Liste; `_lies` reicht deren
+    # str()-Form durch. Gezaehlt wird deshalb im Text, nicht ueber ein Trennzeichen
+    # -- eine Zerlegung an "," traf hier NULL Vorkommen und behauptete damit das
+    # Gegenteil des Befunds, den sie zeigen sollte.
+    treffer = hierarchisch.count("Motiv|Wald")
+    assert treffer == 1, f"'Motiv|Wald' steht {treffer}x drin: {hierarchisch}"
+
+
+def test_handarbeit_im_sidecar_bleibt_stehen(tmp_path) -> None:
+    """Die Gegenprobe -- und sie ist die eigentliche Schranke.
+
+    Ein Sidecar traegt oft KT-1s Arbeit aus Capture One. Wer die Verdopplung
+    dadurch behebt, dass er den Zweig vor dem Schreiben leert, loescht sie --
+    und der Test darueber bliebe gruen. Deshalb steht hier ein fremdes
+    Stichwort, das kein Lauf je vergeben wuerde.
+    """
+    a = _aufnahme(tmp_path, "DSCF9002", (".RAF",))
+    sidecar = tmp_path / "DSCF9002.xmp"
+    subprocess.run(
+        [
+            "exiftool",
+            "-q",
+            "-o",
+            str(sidecar),
+            "-XMP-lr:HierarchicalSubject+=Eigenes|Von Hand",
+            str(a.dateien[".RAF"]),
+        ],
+        capture_output=True,
+        check=False,
+    )
+    assert sidecar.exists(), "Vorbedingung nicht hergestellt: kein Sidecar"
+
+    anreichern.schreibe([(a, ORT)], motive={id(a): ("Wald",)})
+
+    hierarchisch = _lies(sidecar, "HierarchicalSubject").get("HierarchicalSubject", "")
+    assert "Eigenes|Von Hand" in hierarchisch, f"Handarbeit geloescht: {hierarchisch}"
+    assert "Motiv|Wald" in hierarchisch, f"eigenes Stichwort fehlt: {hierarchisch}"

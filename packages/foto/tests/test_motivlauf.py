@@ -514,3 +514,77 @@ def test_ein_unsicheres_urteil_wird_nicht_gemerkt(tmp_path) -> None:
 
     assert not bild.with_suffix(".xmp").exists(), "ein unsicheres Urteil landete in der Datei"
     assert bild not in motivlauf.aus_baum([bild]).urteile
+
+
+def test_neben_einem_jpeg_entsteht_kein_sidecar(tmp_path) -> None:
+    """**KT-1s 71 ueberzaehlige Dateien -- der Mechanismus.**
+
+    Die Traeger-Regel der Spec Paragraf 10 kennt eine Stelle je Format: RAW
+    bekommt einen Sidecar, JPEG traegt seine Angaben eingebettet. `_merke` kannte
+    sie nicht und legte seine Marke blind nach `bild.with_suffix('.xmp')` -- auch
+    neben ein JPEG, in das `anreichern` unmittelbar danach einbettet.
+
+    Das Ergebnis ist nicht nur Muell. Dieselbe Aussage steht dann an ZWEI Stellen
+    (Spec: „zwei Zustaende ueber eine Sache"), und Lightroom bevorzugt bei
+    vorhandenem Sidecar diesen -- angezeigt wird moeglicherweise etwas anderes,
+    als in der Datei steht.
+
+    Gemessen am 2026-08-30: der Bestand traegt 65 JPEG ohne RAW, KT-1 zaehlte 71
+    ueberzaehlige Dateien. Firsthand nachgestellt an drei D850-JPEGs: zwei
+    bekamen einen Sidecar, den `anreichern` nie geschrieben hatte (es meldete
+    „1 Sidecars, 4 eingebettet" bei vier Aufnahmen).
+    """
+    from PIL import Image
+
+    bild = tmp_path / "nur.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        return 200, json.dumps(
+            {"content": [{"text": '{"sicher": true, "motive": ["Wald"]}'}]}
+        ).encode()
+
+    motivlauf.fahre(
+        [(bild, None)],
+        modelle.Wahl(anbieter="anthropic", modell="x"),
+        schluessel="k",
+        transport=transport,
+    )
+
+    assert not bild.with_suffix(".xmp").exists(), (
+        "neben dem JPEG liegt ein Sidecar -- die Traeger-Regel gilt nur an einer Stelle"
+    )
+
+
+def test_ein_jpeg_urteil_ueberlebt_den_abbruch_ebenfalls(tmp_path) -> None:
+    """Die andere Haelfte derselben Aenderung -- und ohne sie waere sie ein Rueckschritt.
+
+    Wird die Marke bei einem JPEG eingebettet statt danebengelegt, muss die
+    Wiederaufnahme genau dort nachsehen. Sonst faende `aus_baum` nichts mehr,
+    haelte jedes JPEG fuer unbeurteilt und zahlte beim naechsten Lauf ALLE
+    Urteile erneut -- teurer als der Fehler, den die Aenderung behebt.
+
+    Der Abbruch-Test daneben benutzt ebenfalls JPEGs und wuerde diesen Fall
+    mitnehmen; er steht hier trotzdem eigenstaendig, weil er eine ANDERE
+    Zusicherung traegt: dort geht es um das Schreiben waehrend des Laufs, hier
+    um das Wiederfinden ueber die Traeger-Regel hinweg.
+    """
+    from PIL import Image
+
+    bild = tmp_path / "b.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        return 200, json.dumps(
+            {"content": [{"text": '{"sicher": true, "motive": ["Wald"]}'}]}
+        ).encode()
+
+    motivlauf.fahre(
+        [(bild, None)],
+        modelle.Wahl(anbieter="anthropic", modell="x"),
+        schluessel="k",
+        transport=transport,
+    )
+
+    wieder = motivlauf.aus_baum([bild])
+    assert bild in wieder.urteile, "das eingebettete Urteil wird beim naechsten Lauf nicht gefunden"
