@@ -289,7 +289,7 @@ def test_ein_zweiter_lauf_benennt_nichts_doppelt(tmp_path):
     # entfernt" hat den Test in dieser Form ueberlebt -- verhaltensgleich bis auf
     # den Rueckgabewert, und der wuerde Bewegungen melden, die nie stattfanden.
     # Eine Zahl, die im Laufbericht steht und luegt, ist kein Detail (LP-40).
-    assert zweiter == 0, f"der zweite Lauf meldet {zweiter} Bewegungen statt 0"
+    assert not zweiter, f"der zweite Lauf hat {len(zweiter)} Dateien bewegt statt keiner"
 
 
 def test_die_umbenennung_ist_umkehrbar(tmp_path):

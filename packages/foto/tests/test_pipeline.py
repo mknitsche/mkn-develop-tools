@@ -16,6 +16,7 @@ Drei Dinge fallen genau hier durch und nirgends sonst:
 
 from __future__ import annotations
 
+import dataclasses
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -1094,3 +1095,115 @@ def test_eine_belichtungsreihe_verliert_ihre_serienfarbe_nicht(tmp_path, monkeyp
         assert aus != "Purple", (
             f"{pfad.name}: die Belichtungswarnung hat die Serienfarbe verdraengt"
         )
+
+
+def test_das_urteil_wandert_beim_umbenennen_mit(tmp_path):
+    """**Ein Panorama darf nicht leerer sein als seine Nachbarn.**
+
+    `motivlauf.Ergebnis` fuehrt die Urteile ueber DATEIPFADE. Benennt der Vollzug
+    eine Gruppe von `std` auf `panNN` um, zeigen die alten Schluessel ins Leere
+    — und `anreichern` findet fuer genau die bestaetigten Panoramen kein Urteil
+    mehr.
+
+    Firsthand am Karwendel-Lauf (2026-08-31, 1.299 Aufnahmen): die Motive
+    standen im Sidecar, den `_merke` VOR der Umbenennung geschrieben hatte, und
+    fehlten im JPEG, das `anreichern` DANACH suchte. 23 Panoramen mit halben
+    Angaben — und dem Ergebnis sieht man das nicht an: die Datei ist da, sie
+    traegt nur weniger als ihr Nachbar. Gefunden hat es die
+    Vollstaendigkeitspruefung, nicht ein Test.
+    """
+    from mkn_foto import bildurteil, motivlauf, serien
+
+    a = _aufnahme_im_ziel(tmp_path, "DSCF3894")
+    b = _aufnahme_im_ziel(tmp_path, "DSCF3895")
+    alt_a = pipeline._erstes_bild(a)
+    alt_b = pipeline._erstes_bild(b)
+
+    ergebnis = motivlauf.Ergebnis()
+    ergebnis.urteile[alt_a] = bildurteil.Urteil(sicher=True, motive=("Kirche",))
+    ergebnis.mitglieder[alt_b] = alt_a
+
+    # **Der Test ruft den PRODUKTIVCODE.** Eine erste Fassung baute die Wanderung
+    # selbst nach und war damit hohl: die Mutation "Wanderung entfernen" liess
+    # sie gruen. Ein Test, der die Logik nachbaut, die er pruefen soll, prueft
+    # sich selbst (LP-40).
+    ergebnis.urteile[alt_a] = bildurteil.Serienurteil(
+        sicher=True, serie="panorama", bilder=(1, 2), motive=("Kirche",)
+    )
+    gruppe = serien.Gruppe(aufnahmen=(a, b), klasse="kandidat")
+    lauf = pipeline.Lauf(gruppen=[gruppe], serien=[])
+    lauf.motive = ergebnis
+
+    pipeline._vollziehe_serien(lauf)
+
+    # Nach dem Umbenennen muessen BEIDE Mitglieder ihr Urteil noch finden.
+    assert "pan01" in pipeline._erstes_bild(a).name, "gar nicht umbenannt"
+    assert ergebnis.fuer(pipeline._erstes_bild(a)) is not None, "der Vertreter verlor sein Urteil"
+    assert ergebnis.fuer(pipeline._erstes_bild(b)) is not None, "das Mitglied verlor sein Urteil"
+
+
+def _aufnahme_im_ziel(tmp_path, stamm: str):
+    """Eine Aufnahme, die als `std` im Zielbaum liegt — RAW und JPEG."""
+    import subprocess
+    from datetime import datetime
+
+    from mkn_foto import namen
+    from mkn_foto.modell import Aufnahme
+
+    tag = tmp_path / "ziel"
+    tag.mkdir(parents=True, exist_ok=True)
+    a = Aufnahme(
+        zeitpunkt=datetime(2026, 8, 30, 15, 54, 9),
+        kamera="XE5",
+        stamm=stamm,
+        dateien={},
+        exif={},
+    )
+    dateien = {}
+    for e in (".RAF", ".JPG"):
+        p = tag / namen.archiv_name(a, e)
+        subprocess.run(
+            ["exiftool", "-q", "-o", str(p), "-n", "-IFD0:Make=Test"],
+            capture_output=True,
+            check=False,
+        )
+        if not p.exists():
+            p.write_bytes(b"inhalt")
+        dateien[e] = p
+    return dataclasses.replace(a, dateien=dateien)
+
+
+def test_der_vollzug_liefert_die_serien_fuer_die_stichworte(tmp_path):
+    """**Der Dateiname darf dem Stichwort nicht widersprechen.**
+
+    `serien_auf_kopien` entsteht VOR dem Urteil — die bestaetigten Panoramen
+    sind darin nicht enthalten. Wer den Rueckgabewert von `_vollziehe_serien`
+    verwirft, bekommt eine Datei, die `pan01-01v02` heisst und `Technik|Einzelbild`
+    als Stichwort traegt: ein Widerspruch in derselben Datei.
+
+    Firsthand am Karwendel-Lauf (2026-08-31): alle 23 benannten Panoramen trugen
+    das falsche Stichwort. Gefunden hat es die Vollstaendigkeitspruefung.
+
+    **Diese Zusicherung deckt die Rueckgabe, nicht ihre Verwendung.** Dass der
+    Aufrufer sie an `anreichern.schreibe` weiterreicht, faengt heute nur der
+    Vollstaendigkeits-Check am fertigen Baum — ein Integrationstest ueber die
+    ganze Kette waere die vollstaendigere Antwort und steht aus. Das ist
+    ausgesprochen, nicht verschwiegen.
+    """
+    from mkn_foto import bildurteil, motivlauf, serien
+
+    a = _aufnahme_im_ziel(tmp_path, "DSCF3894")
+    b = _aufnahme_im_ziel(tmp_path, "DSCF3895")
+
+    ergebnis = motivlauf.Ergebnis()
+    ergebnis.urteile[pipeline._erstes_bild(a)] = bildurteil.Serienurteil(
+        sicher=True, serie="panorama", bilder=(1, 2), motive=("Kirche",)
+    )
+    lauf = pipeline.Lauf(gruppen=[serien.Gruppe(aufnahmen=(a, b), klasse="kandidat")], serien=[])
+    lauf.motive = ergebnis
+
+    vollzogen = pipeline._vollziehe_serien(lauf)
+
+    assert vollzogen, "der Vollzug liefert die Serien nicht zurueck"
+    assert vollzogen[0].typ == "pan"
+    assert len(vollzogen[0].aufnahmen) == 2
