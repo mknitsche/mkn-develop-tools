@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import tempfile
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from pathlib import Path
 from mkn_foto import (
     anreichern,
     bericht,
+    deckung,
     entscheidung,
     geotag,
     gpx,
@@ -96,9 +98,16 @@ class Lauf:
     """NUR belegte Serien -- die benennen Dateien und faerben sie."""
 
     kandidaten: list[Serie] = field(default_factory=list)
-    """Vermutungen der Heuristik. Sie benennen NICHTS (Regel A), sondern warten
-    auf das Urteil am Bild. Im Protokoll stehen sie, damit sie nicht verloren
-    gehen -- und damit sichtbar ist, wie viel noch auf Stufe 3 wartet."""
+    """Die ZEITFENSTER aus Stufe 2 -- grosszuegig geschnitten, noch keine
+    Aussage. Was darin zusammengehoert, entscheidet die Messung (`gruppen`).
+
+    Sie hiessen frueher "Vermutungen der Heuristik" und wurden gesetzt, aber
+    nirgends gelesen: ueber 1.234 Kursbilder wurde deshalb null Panorama
+    erkannt."""
+
+    gruppen: list = field(default_factory=list)
+    """Was die Deckungsmessung aus den Fenstern gemacht hat: Gruppen mit Klasse
+    (`kandidat` | `wiederholung` | `einzeln`), Schritten und Rastervermutung."""
     spots: list[Spot] = field(default_factory=list)
     orte: dict[int, Ort] = field(default_factory=dict)
     anker: list[Anker] = field(default_factory=list)
@@ -333,6 +342,10 @@ def fahre(
 
     if schreiben_aktiv:
         lauf.geschrieben = schreiben.kopiere(lauf.aufnahmen, Path(ziel), serien=lauf.serien)
+        # NEU -- die Messung, und zwar auf den KOPIEN. Sie ist zustandslos,
+        # kostet nichts und laeuft nach einem Abbruch einfach neu; die Kopien
+        # sind ab hier der Zustand, an dem die Wiederaufnahme haengt.
+        lauf.gruppen = _vermesse_fenster(lauf)
         # Und JETZT die Anreicherung -- in den ZIELbaum, nie in die Originale.
         # Dieser Schritt fehlte am 2026-08-30 komplett: der Baum hiess
         # "angereichert" und enthielt 1.227 RAW-Dateien mit 139 Sidecars, alle
@@ -539,6 +552,55 @@ def _fuer_anreicherung(
             serien_auf_kopien.append(dataclasses.replace(s, aufnahmen=mitglieder))
 
     return paare, serien_auf_kopien
+
+
+def _vermesse_fenster(lauf: Lauf) -> list:
+    """Misst die Deckung innerhalb jedes Zeitfensters — auf den Kopien.
+
+    **Der Schritt, den es bisher nicht gab.** `lauf.kandidaten` wurde gesetzt und
+    nirgends gelesen; damit war Stufe 3 nicht etwa fehlerhaft, sondern gar nicht
+    vorhanden. Ueber 1.234 Kursbilder ergab das null Panoramen — auch fuer die
+    Reihe, die die Spec selbst als "echtes Poster-Raster" fuehrt.
+
+    Gemessen wird auf den Kopien im Zielbaum, nicht auf den Originalen: die
+    Wiederaufnahme liest spaeter die Namen DORT, alle Stufen teilen sich EINE
+    Vorschau-Extraktion, und ab hier haengt der Lauf nicht mehr an der Quelle.
+
+    Die Vorschauen kommen stapelweise (ein exiftool-Aufruf fuer viele Dateien,
+    gemessen Faktor 8,5) und liegen in einem Wegwerf-Ordner; ein harter Abbruch
+    hinterlaesst dort nichts, was in einem der beiden Baeume stoert.
+    """
+    if not lauf.kandidaten or lauf.geschrieben is None:
+        return []
+
+    je_id = dict(lauf.geschrieben.kopien)
+    quellen: dict[int, Path] = {}
+    for f in lauf.kandidaten:
+        for a in f.aufnahmen:
+            pfade = je_id.get(id(a))
+            if pfade:
+                quellen[id(a)] = _erstes_bild(dataclasses.replace(a, dateien=pfade))
+
+    if not quellen:
+        return []
+
+    with tempfile.TemporaryDirectory(prefix="mkn-foto-deckung-") as raum:
+        vorschau_je_quelle = deckung.vorschauen_stapel(list(quellen.values()), Path(raum))
+        schritte_je_fenster: dict[int, list] = {}
+        for i, f in enumerate(lauf.kandidaten):
+            bilder = []
+            for a in f.aufnahmen:
+                pfad = vorschau_je_quelle.get(quellen.get(id(a)))
+                if pfad is None:
+                    # Ohne Bild keine Messung. Das trifft den Film im Bestand
+                    # und jede Datei ohne extrahierbare Vorschau; sie bleibt
+                    # `std` und faellt nicht still aus, sondern erscheint als
+                    # Einzelbild.
+                    bilder = []
+                    break
+                bilder.append(deckung.vorbereiten(pfad))
+            schritte_je_fenster[i] = deckung.kette(bilder) if bilder else []
+        return serien.vermesse(lauf.kandidaten, schritte_je_fenster)
 
 
 def ort_fuer_bild(aufnahme: Aufnahme, lauf: Lauf) -> Ort | None:
