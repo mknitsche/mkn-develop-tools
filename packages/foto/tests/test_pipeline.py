@@ -516,3 +516,41 @@ def test_ohne_spur_bleibt_der_session_ort_der_rueckfall(tmp_path, monkeypatch):
         "ohne Interpolation ist das Bild ortlos — der Session-Ort muss der "
         f"Rueckfall bleiben: {orte}"
     )
+
+
+def test_eine_beantwortete_einzelaufnahme_kommt_nicht_wieder(tmp_path, monkeypatch):
+    """Der Fehler, der KT-1s Kritik nach dem V1-Lauf reproduzierte.
+
+    Ein Ordnername traegt MINUTEN (`2026-08-22_1841-1841`), ein Spot SEKUNDEN
+    (18:41:23). Bei einer Einzelaufnahme sind von und bis identisch — und dann
+    ueberlappen die beiden Fenster nicht: 18:41:23 liegt hinter 18:41:00.
+
+    Firsthand: fuenf Sessions, die KT-1 beantwortet hatte ("Loeschen - war im
+    Hotel", "ist schwarz - falsch belichtet"), standen nach dem Lauf wieder auf
+    der Frageliste. Genau das, was er zwei Stunden zuvor beanstandet hatte.
+    """
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    (quelle / "Z0001.RAF").write_bytes(b"roh")
+    monkeypatch.setattr(
+        inventar.exif,
+        "lies",
+        lambda pfade: [{"EXIF:DateTimeOriginal": "2026:08:22 18:41:23", "EXIF:Model": "X-E5"}],
+    )
+
+    notiz = tmp_path / "offen" / "2026-08-22_1841-1841"
+    notiz.mkdir(parents=True)
+    (notiz / "ort.md").write_text(
+        "# x\n\n## Ort\n\n## Gehoert zusammen mit\n\nGehoert zum vorherigen Ordner\n",
+        encoding="utf-8",
+    )
+
+    lauf = pipeline.fahre(
+        quelle, tmp_path / "ziel", notiz_ordner=tmp_path / "offen", schreiben_aktiv=False
+    )
+
+    assert not lauf.offen, (
+        "die beantwortete Einzelaufnahme steht wieder auf der Frageliste — "
+        f"Minuten- gegen Sekundengenauigkeit: {[(s.von, s.bis) for s, _ in lauf.offen]}"
+    )
+    assert len(lauf.beantwortet) == 1

@@ -33,7 +33,13 @@ ENTSCHEIDUNGEN = "_offene-orte.md"
 FELD = "**Antwort:**"
 """Der Marker, hinter den geschrieben wird. Bewusst EIN Wort in Fettschrift und
 am Zeilenanfang: er muss beim Ueberfliegen ins Auge springen und beim Einlesen
-eindeutig sein."""
+eindeutig sein.
+
+Die Anleitung in der Datei nennt ihn NICHT beim Namen -- `lies_entscheidungen`
+sucht Zeilen, die damit BEGINNEN, und ein Beispiel im Fliesstext waere eine
+zusaetzliche, leere Antwort. Wer ein Muster dokumentiert, schreibt es hin und
+faellt selbst durch (LP-35). Diese Begruendung gehoert hierher und nicht in die
+Datei, die KT-1 liest -- dort ist sie Werkzeug-Innensicht, die nur verwirrt."""
 
 _ORDNER = "%Y-%m-%d_%H%M"
 
@@ -135,11 +141,6 @@ def entscheidungsdatei(ziel: Path, offen: Sequence[tuple[Spot, Ort | None]]) -> 
         "du, was du weisst. Ein Ortsname reicht, ganze Saetze sind auch gut. Was du",
         "nicht weisst, laesst du leer; leere Zeilen stehen beim naechsten Mal einfach",
         "wieder hier.",
-        "",
-        "*(Die Anleitung schreibt den Marker bewusst nicht aus: der Leser sucht nach",
-        "Zeilen, die damit BEGINNEN, und ein Beispiel im Fliesstext waere eine",
-        "vierte, leere Antwort. Wer ein Muster dokumentiert, schreibt es hin und",
-        "faellt selbst durch.)*",
         "",
         "Die Bilder zum Ansehen liegen je Fall im gleichnamigen Ordner daneben.",
         "",
