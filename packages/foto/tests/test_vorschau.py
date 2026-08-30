@@ -204,11 +204,19 @@ def test_der_groesste_auszug_wird_genommen(quelle, tmp_path):
     if not quelle.exists():
         pytest.skip(f"Testbild fehlt: {quelle.name}")
 
+    from PIL import Image
+
     ziel = vorschau.hole(quelle, tmp_path / "v.jpg")
 
     assert ziel is not None
-    assert ziel.stat().st_size > 500_000, (
-        f"nur {ziel.stat().st_size} Bytes — das ist ein Vorschaubildchen, nicht der grosse Auszug"
+    # PIXEL, nicht Bytes: seit der Verkleinerung sagt die Dateigroesse nichts
+    # mehr darueber, WELCHER Auszug genommen wurde -- ein Vorschaubildchen
+    # bliebe nach dem Verkleinern klein, und der Test schlaege aus dem falschen
+    # Grund an. Ein Bildchen faellt an seiner Kantenlaenge auf.
+    with Image.open(ziel) as b:
+        laengste = max(b.width, b.height)
+    assert laengste >= 1000, (
+        f"nur {b.width}x{b.height} — das ist ein Vorschaubildchen, nicht der grosse Auszug"
     )
 
 
@@ -288,4 +296,95 @@ def test_der_auszug_behaelt_seine_eigene_ausrichtung(tmp_path):
     assert nachher == vorher, (
         f"die Ausrichtung des Originals ({original}) hat die des Auszugs "
         f"({vorher}) ueberschrieben — jetzt steht dort {nachher}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Die Verkleinerung — sie entscheidet ueber den Preis des ganzen Laufs.
+#
+# Gemessen am 2026-08-30, VOR dem ersten bezahlten Lauf: eine Nikon-Vorschau ist
+# 8256x5504 Pixel. Nach Anthropics Formel (Pixel/750) sind das **60.588
+# Bild-Tokens** — fuer EIN Bild. Bei 890 Einzelaufnahmen waeren das 54 Millionen
+# Tokens allein an Bilddaten.
+#
+# Anthropic verkleinert intern ohnehin auf 1568 px laengste Kante; was darueber
+# hinausgeht, wird uebertragen und weggeworfen. Wer es vorher tut, zahlt fuer
+# 2.185 statt 60.588 Tokens je Bild — Faktor 28.
+#
+# Der Plan sah die Verkleinerung vor ("exiftool-Extraktion mit Format-Kaskade +
+# Pillow-Verkleinerung"). Ich hatte sie nicht gebaut. Aufgefallen erst beim
+# Durchrechnen der Kosten, nicht beim Bauen.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("quelle", [NIKON, FUJI], ids=["nikon", "fuji"])
+def test_die_vorschau_wird_auf_modellmass_verkleinert(quelle, tmp_path):
+    if not quelle.exists():
+        pytest.skip(f"Testbild fehlt: {quelle.name}")
+    from PIL import Image
+
+    ziel = vorschau.hole(quelle, tmp_path / "v.jpg")
+
+    with Image.open(ziel) as b:
+        laengste = max(b.width, b.height)
+    assert laengste <= vorschau.MAX_KANTE_PX, (
+        f"{b.width}x{b.height} — das sind {b.width * b.height // 750} Bild-Tokens "
+        f"statt hoechstens {vorschau.MAX_KANTE_PX**2 // 750}"
+    )
+
+
+@pytest.mark.parametrize("quelle", [NIKON, FUJI], ids=["nikon", "fuji"])
+def test_das_seitenverhaeltnis_bleibt(quelle, tmp_path):
+    """Untergrenze: ein auf 1568x1568 gequetschtes Bild waere auch klein — und
+    das Modell saehe ein verzerrtes Motiv."""
+    if not quelle.exists():
+        pytest.skip(f"Testbild fehlt: {quelle.name}")
+    import io
+
+    from PIL import Image
+
+    # Der AUSZUG ist der Bezug, nicht die RAW-Datei: das eingebettete JPEG hat
+    # ein eigenes Seitenverhaeltnis (bei der Nikon 1,50 gegen 1,33 im Original).
+    # Die erste Fassung verglich RAW mit verkleinerter Vorschau und mass damit
+    # einen Unterschied, den die Verkleinerung gar nicht verursacht hat.
+    roh_bytes = subprocess.run(
+        ["exiftool", "-b", "-JpgFromRaw", "-PreviewImage", str(quelle)],
+        capture_output=True,
+        check=False,
+    ).stdout
+    with Image.open(io.BytesIO(roh_bytes)) as auszug:
+        vorher = auszug.width / auszug.height
+
+    ziel = vorschau.hole(quelle, tmp_path / "v.jpg")
+    with Image.open(ziel) as b:
+        nachher = b.width / b.height
+
+    assert abs(vorher - nachher) < 0.05, (
+        f"das Seitenverhaeltnis hat sich geaendert: {vorher:.3f} -> {nachher:.3f}"
+    )
+
+
+def test_ein_kleines_bild_wird_nicht_neu_komprimiert(tmp_path):
+    """Untergrenze zur Verkleinerung — und sie schuetzt etwas anderes, als sie
+    zunaechst zu schuetzen schien.
+
+    Gegen das VERGROESSERN braucht es keinen Riegel: `Image.thumbnail` tut es
+    von sich aus nie, und die Mutation, die den Fruehausstieg entfernte,
+    ueberlebte den Test deshalb. Was der Ausstieg wirklich verhindert, ist das
+    NEU-KOMPRIMIEREN: jedes Speichern eines JPEG verliert Bildinformation, und
+    bei einer Datei, die schon klein genug ist, gaebe es dafuer keinen Gegenwert.
+    """
+    from PIL import Image
+
+    klein = tmp_path / "klein.jpg"
+    Image.new("RGB", (800, 600), (50, 100, 150)).save(klein, quality=95)
+    vorher = klein.read_bytes()
+
+    ergebnis = vorschau.verkleinere(klein, klein)
+
+    with Image.open(ergebnis) as b:
+        assert (b.width, b.height) == (800, 600), f"vergroessert auf {b.width}x{b.height}"
+    assert klein.read_bytes() == vorher, (
+        "das Bild wurde neu komprimiert, obwohl es klein genug war — jedes "
+        "Speichern kostet Bildinformation ohne Gegenwert"
     )
