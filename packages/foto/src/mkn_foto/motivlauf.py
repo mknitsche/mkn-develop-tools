@@ -80,7 +80,7 @@ def fahre(
     getan = 0
     begonnen_gesamt = time.monotonic()
     kopf = _kopf(wahl, schluessel)
-    ziel = modelle.ANBIETER[wahl.anbieter].basis_url
+    ziel = wahl.url()
 
     with tempfile.TemporaryDirectory(prefix="mkn-foto-motiv-") as arbeitsraum:
         raum = Path(arbeitsraum)
@@ -167,12 +167,28 @@ def _bildvorlage(vertreter: Path, gruppe: Sequence[Path] | None, ziel: Path) -> 
 
 
 def _als_bild(quelle: Path, ziel: Path) -> Path | None:
-    """Ein anzeigbares JPEG — direkt oder als eingebettete Vorschau.
+    """Ein anzeigbares JPEG auf Modellmass — direkt oder als eingebettete Vorschau.
 
-    Ein JPEG ist schon eines; eine RAW-Datei traegt ihres eingebettet.
+    Eine RAW-Datei traegt ihre Vorschau eingebettet; ein JPEG ist schon ein
+    Bild. **Beide muessen aber auf Modellmass**, und genau daran fehlte es:
+
+    Die erste Fassung reichte ein JPEG unveraendert durch ("ist ja schon ein
+    Bild"). Bei einer D850 sind das 6192x4128 Pixel -- rund 34.000 Tokens statt
+    2.185, das Fuenfzehnfache, je Bild. Kein Bildurteil braucht 25 Megapixel.
+
+    Es ist derselbe Fehler wie einen Tag zuvor im RAW-Zweig (dort gingen die
+    Vorschauen in Originalgroesse hinaus: 60.588 Tokens je Bild, 252 EUR statt
+    16). Der RAW-Zweig wurde repariert, dieser blieb -- weil niemand nach dem
+    zweiten Zweig gefragt hat. Ein Fix ist erst fertig, wenn er ALLE Wege
+    erreicht, die das Problem haben.
+
+    Das Original bleibt unberuehrt: verkleinert wird in den Arbeitsraum.
     """
     if quelle.suffix.upper() in (".JPG", ".JPEG"):
-        return quelle if vorschau.ist_brauchbar(quelle) else None
+        if not vorschau.ist_brauchbar(quelle):
+            return None
+        ziel.parent.mkdir(parents=True, exist_ok=True)
+        return vorschau.verkleinere(quelle, ziel)
     return vorschau.hole(quelle, ziel)
 
 
@@ -183,6 +199,11 @@ def _kopf(wahl: modelle.Wahl, schluessel: str | None) -> dict[str, str]:
     wert = schluessel or wahl.schluessel() or ""
     if wahl.anbieter == "anthropic":
         return {"x-api-key": wert, "anthropic-version": "2023-06-01"}
+    if wahl.anbieter == "gemini":
+        # Google nimmt kein `Bearer`. Haette die Adresse gestimmt, waere dies
+        # der naechste 401 gewesen -- und ein gefaelschter Transport findet
+        # weder das eine noch das andere, weil er sich nirgends anmeldet.
+        return {"x-goog-api-key": wert}
     return {"authorization": f"Bearer {wert}"}
 
 

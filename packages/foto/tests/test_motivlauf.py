@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 
 import pytest
-from mkn_foto import kontaktbogen, motivlauf
+from mkn_foto import kontaktbogen, motivlauf, vorschau
 
 from mkn_kern import modelle
 
@@ -362,3 +362,72 @@ def test_ohne_melde_funktion_laeuft_es_trotzdem(tmp_path):
     ergebnis = motivlauf.fahre([(bild, None)], _wahl(), transport=transport, schluessel="x")
 
     assert len(ergebnis.urteile) == 1
+
+
+def test_gemini_wird_richtig_adressiert_und_angemeldet(tmp_path, monkeypatch) -> None:
+    """Adresse UND Kopf -- zwei Fehler an derselben Naht.
+
+    Gegen die echte API kam `404`, weil die Adresse auf `/models` endete. Und
+    haette sie gestimmt, waere der naechste Fehler `401` gefolgt: Google nimmt
+    `x-goog-api-key`, kein `Bearer`. Beides konnte ein gefaelschter Transport
+    nicht finden -- er waehlt keine Adresse an und meldet sich nirgends an.
+    """
+    from PIL import Image
+
+    bild = tmp_path / "b.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+
+    gesehen: dict[str, object] = {}
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        gesehen["url"] = url
+        gesehen["kopf"] = kopf
+        return 200, json.dumps(
+            {
+                "candidates": [{"content": {"parts": [{"text": '{"sicher": false}'}]}}],
+                "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 2},
+            }
+        ).encode()
+
+    wahl = modelle.Wahl(anbieter="gemini", modell="gemini-2.5-flash")
+    motivlauf.fahre([(bild, None)], wahl, schluessel="AIza-test", transport=transport)
+
+    assert gesehen["url"].endswith("/models/gemini-2.5-flash:generateContent")
+    assert gesehen["kopf"].get("x-goog-api-key") == "AIza-test"
+    assert "authorization" not in gesehen["kopf"]
+
+
+def test_ein_grosses_jpeg_geht_nicht_in_voller_groesse_hinaus(tmp_path) -> None:
+    """Der teuerste Fehler dieser Nacht -- zum ZWEITEN Mal.
+
+    **Gemessen, 2026-08-30.** Eine RAW-Datei bekam laengst eine verkleinerte
+    Vorschau; ein JPEG wurde als "ist schon ein Bild" DURCHGEREICHT. Bei einer
+    D850 sind das 6192x4128 Pixel = rund 34.000 Tokens statt 2.185 -- das
+    **Fuenfzehnfache**, je Bild.
+
+    Im laufenden Archiv sind 136 von 1.363 Aufnahmen reine JPEGs ohne RAW.
+    Haette der Lauf sie erreicht, waere er um rund 20 EUR teurer geworden --
+    fuer nichts, denn keine Bildbeurteilung braucht 25 Megapixel.
+
+    Es ist derselbe Fehler wie in der Nacht zuvor, nur im anderen Zweig: dort
+    gingen die RAW-Vorschauen in Originalgroesse hinaus (60.588 Tokens je
+    Bild, 252 EUR statt 16). Der RAW-Zweig wurde repariert, der JPEG-Zweig
+    blieb -- weil niemand nach dem zweiten Zweig gefragt hat.
+
+    **Das Original wird dabei NICHT angefasst.** Verkleinert wird eine Kopie
+    im Arbeitsraum; die Datei des Anwenders bleibt, wie sie ist.
+    """
+    from PIL import Image
+
+    gross = tmp_path / "gross.JPG"
+    Image.new("RGB", (6192, 4128), (120, 60, 30)).save(gross, quality=60)
+    vorher = gross.stat().st_size
+
+    vorlage = motivlauf._bildvorlage(gross, None, tmp_path / "arbeit" / "v.jpg")
+
+    assert vorlage is not None
+    breite, hoehe = Image.open(vorlage).size
+    assert max(breite, hoehe) <= vorschau.MAX_KANTE_PX, f"{breite}x{hoehe} geht ungekuerzt hinaus"
+    # Und das Original ist unberuehrt.
+    assert Image.open(gross).size == (6192, 4128), "das Original wurde veraendert"
+    assert gross.stat().st_size == vorher

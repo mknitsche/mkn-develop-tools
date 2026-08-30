@@ -42,7 +42,14 @@ class _Anbieter:
     Pruefung darauf wuerde einen Lauf verhindern, der gar nichts braucht."""
 
     basis_url: str
-    bildform: str  # "anthropic" | "openai" | "ollama"
+    bildform: str  # "anthropic" | "openai" | "ollama" | "gemini"
+
+    modell_im_pfad: bool = False
+    """Ob das Modell in die ADRESSE gehoert statt in den Rumpf.
+
+    Google verlangt ``/models/<modell>:generateContent``; Anthropic, Moonshot
+    und Ollama sprechen EINE Adresse fuer alle Modelle. Wer allen dasselbe
+    Schema aufzwingt, repariert einen und bricht drei."""
 
 
 #: Was dieses Werkzeug ansprechen kann. Bewusst NUR Anbieter-Wissen, keine
@@ -75,6 +82,7 @@ ANBIETER: dict[str, _Anbieter] = {
         schluessel_variable="GEMINI_API_KEY",
         basis_url="https://generativelanguage.googleapis.com/v1beta/models",
         bildform="gemini",
+        modell_im_pfad=True,
     ),
     "moonshot": _Anbieter(
         schluessel_variable="MOONSHOT_API_KEY",
@@ -102,6 +110,21 @@ class Wahl:
     @property
     def _profil(self) -> _Anbieter:
         return ANBIETER[self.anbieter]
+
+    def url(self) -> str:
+        """Die Adresse, die dieses Modell wirklich annimmt.
+
+        **Warum das eine eigene Frage ist.** Die erste Fassung nahm die
+        `basis_url` unveraendert -- fuer Anthropic richtig, fuer Google ein
+        `404`: dort endete die Adresse auf `/models`, und das ist kein
+        Endpunkt, sondern ein Verzeichnis. Gefunden erst gegen die echte API;
+        ein gefaelschter Transport konnte es nicht finden, weil er die Adresse
+        nie anwaehlt.
+        """
+        profil = self._profil
+        if profil.modell_im_pfad:
+            return f"{profil.basis_url}/{self.modell}:generateContent"
+        return profil.basis_url
 
     def schluessel(self, *, ablage: Path | None = None) -> str | None:
         """Liest den Schluessel des GEWAEHLTEN Anbieters — Umgebung, dann Datei.
