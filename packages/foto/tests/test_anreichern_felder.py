@@ -61,6 +61,24 @@ def _lies(pfad: Path, *felder: str) -> dict[str, str]:
     return {f: str(daten[f]) for f in felder if f in daten}
 
 
+def _lies_zahl(pfad: Path, feld: str) -> str:
+    """Liest ein Feld NUMERISCH.
+
+    exiftool haengt an manche Werte eine Beschreibung an -- `Urgency=5` kommt
+    als "5 (normal urgency)" zurueck, `Urgency=3` dagegen als "3". Ein Test, der
+    auf Gleichheit prueft, faellt dann bei einem Wert und nicht beim anderen,
+    und der Grund sieht nach einem Fehler im Code aus.
+    """
+    roh = subprocess.run(
+        ["exiftool", "-json", "-s", "-n", f"-{feld}", str(pfad)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    daten = json.loads(roh)[0] if roh.strip() else {}
+    return str(daten.get(feld, ""))
+
+
 def _raw(ordner: Path, stamm: str = "DSCF9001") -> Aufnahme:
     ordner.mkdir(parents=True, exist_ok=True)
     p = ordner / f"{stamm}.RAF"
@@ -145,3 +163,89 @@ def test_eine_beschreibung_wird_geschrieben(tmp_path):
 
     f = _lies(tmp_path / "DSCF9007.xmp", "Description")
     assert f.get("Description") == "Sonnenuntergang ueber der Bergkette."
+
+
+# ---------------------------------------------------------------------------
+# Violett — die Kennzeichnung von Unklarheit (KT-1, 2026-08-30)
+#
+# Violett war in der Spec die einzige bewusst unbelegte Farbe. KT-1 hat ihr eine
+# Bedeutung gegeben: "immer wenn etwas unklar oder fehlerhaft identifiziert ist,
+# bekommt es ein stichwort und diese farbe - dann kann ich schnell nachsehen, was
+# unklar war - ein stichwort kann ich zwar filtern, aber die farbe zeigt es
+# gleich".
+#
+# Und er hat den Konflikt selbst gesehen, den ich uebersehen hatte: **ein Bild
+# traegt nur EINE Farbe.** Eine unklare Aufnahme, die zu einer Serie gehoert,
+# kann nicht blau UND violett sein. Seine Regelung: Stichwort immer, Fehlfarbe
+# wenn moeglich, sonst hat die Kennzeichnung Vorrang.
+#
+# Das laeuft auf "Violett schlaegt Blau" hinaus, und das ist auch sachlich
+# richtig: die Serienzugehoerigkeit steht DREIFACH in der Datei (Ordner,
+# Dateiname, Stichwort) — die Farbe ist dort nur Sichthilfe. Die Unklarheit
+# dagegen steht sonst nirgends sichtbar.
+# ---------------------------------------------------------------------------
+
+
+def test_ein_unklares_bild_wird_violett(tmp_path):
+    a = _raw(tmp_path, "DSCF9010")
+
+    anreichern.schreibe([(a, SPOT)], unklar={id(a): "Ort"})
+
+    f = _lies(tmp_path / "DSCF9010.xmp", "Label", "Subject", "HierarchicalSubject")
+    assert f.get("Label") == "Purple", f"nicht violett: {f}"
+    assert _lies_zahl(tmp_path / "DSCF9010.xmp", "Urgency") == "5", (
+        "photoshop:Urgency ist nicht 5 — Capture One zeigt dann keine Farbe"
+    )
+
+
+def test_das_pruefen_stichwort_ist_immer_gleich(tmp_path):
+    """Der Filter. Er muss WORTGLEICH sein, sonst findet eine Suche nur einen
+    Teil — und dann ist die Liste unvollstaendig, ohne dass man es sieht."""
+    a = _raw(tmp_path, "DSCF9011")
+
+    anreichern.schreibe([(a, SPOT)], unklar={id(a): "Belichtung"})
+
+    f = _lies(tmp_path / "DSCF9011.xmp", "Subject", "HierarchicalSubject")
+    assert anreichern.PRUEFEN in f.get("Subject", ""), f"Filterwort fehlt: {f}"
+    # Und der Grund darunter, hierarchisch.
+    assert f"{anreichern.PRUEFEN}|Belichtung" in f.get("HierarchicalSubject", ""), (
+        f"der Grund steht nicht hierarchisch unter dem Filterwort: {f}"
+    )
+
+
+def test_violett_schlaegt_blau(tmp_path):
+    """KT-1s Vorrang-Regel, und der Fall, den er selbst gefunden hat.
+
+    Ein Bild traegt nur eine Farbe. Eine unklare Aufnahme IN einer Serie muss
+    violett sein, nicht blau: die Serienzugehoerigkeit steht dreifach in der
+    Datei, die Unklarheit sonst nirgends sichtbar.
+    """
+    a1 = _raw(tmp_path, "DSCF9012")
+    a2 = _raw(tmp_path, "DSCF9013")
+    serie = Serie(typ="pan", nummer=1, aufnahmen=(a1, a2), quelle="kamera", sicher=True)
+
+    anreichern.schreibe([(a1, SPOT), (a2, SPOT)], serien=[serie], unklar={id(a1): "Serie"})
+
+    unklar = _lies(tmp_path / "DSCF9012.xmp", "Label", "Subject")
+    klar = _lies(tmp_path / "DSCF9013.xmp", "Label")
+
+    assert unklar.get("Label") == "Purple", f"das unklare Serienbild ist blau geblieben: {unklar}"
+    assert _lies_zahl(tmp_path / "DSCF9012.xmp", "Urgency") == "5"
+    # Das Serien-Stichwort bleibt trotzdem — nur die Farbe weicht.
+    assert "pan01" in unklar.get("Subject", ""), (
+        f"mit der Farbe ist auch die Serienangabe verlorengegangen: {unklar}"
+    )
+    # Und das klare Mitglied bleibt blau.
+    assert klar.get("Label") == "Blue", f"das klare Mitglied ist nicht mehr blau: {klar}"
+
+
+def test_ein_klares_bild_bleibt_ohne_pruefen(tmp_path):
+    """Untergrenze: sonst waere ein Werkzeug, das alles als unklar markiert,
+    genauso gruen — und die Filterliste enthielte den ganzen Bestand."""
+    a = _raw(tmp_path, "DSCF9014")
+
+    anreichern.schreibe([(a, SPOT)])
+
+    f = _lies(tmp_path / "DSCF9014.xmp", "Label", "Subject")
+    assert anreichern.PRUEFEN not in f.get("Subject", ""), f"faelschlich markiert: {f}"
+    assert f.get("Label") != "Purple"

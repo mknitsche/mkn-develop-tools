@@ -169,3 +169,148 @@ def test_ohne_bilder_bleibt_die_anfrage_reiner_text():
 
 
 _MINI_JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")
+
+
+# --- Gemini (KT-1, 2026-08-30) ---------------------------------------------
+#
+# KT-1: "da ich ja mehrere api keys in den credential habe, kannst du sogar fuer
+# die sw testen, ob es mit anthropic bzw. mit gemini funktioniert (kimi hatten
+# wir ja ausgeschlossen / und ok, gemini noch gar nicht probiert)".
+#
+# Fuer ein veroeffentlichtes Werkzeug ist das die ehrlichere Probe: was nur bei
+# EINEM Anbieter laeuft, hat die Schnittstelle nicht verstanden, sondern eine
+# Eigenheit.
+
+
+def test_gemini_ist_gleichrangig_waehlbar():
+    w = modelle.waehle(anbieter="gemini", modell="gemini-3-pro")
+    assert w.anbieter == "gemini"
+    assert w.modell == "gemini-3-pro"
+
+
+def test_gemini_hat_eine_eigene_schluesselvariable(monkeypatch):
+    """Je Anbieter eine eigene Variable — sonst landet der Schluessel des einen
+    beim anderen, und das faellt erst am Abrechnungsbeleg auf."""
+    monkeypatch.setenv("GEMINI_API_KEY", "g-geheim")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "a-geheim")
+
+    assert modelle.waehle(anbieter="gemini", modell="x").schluessel() == "g-geheim"
+    assert modelle.waehle(anbieter="anthropic", modell="y").schluessel() == "a-geheim"
+
+
+def test_gemini_bekommt_das_bild_in_seiner_eigenen_form(tmp_path):
+    """Gemini erwartet weder Anthropics `source` noch OpenAIs `image_url`,
+    sondern `inline_data` mit `mime_type`. Wer die Form verwechselt, bekommt
+    eine Antwort — nur eben ohne Bild, und die ist fluessig und erfunden."""
+    bild = tmp_path / "b.jpg"
+    bild.write_bytes(b"\xff\xd8\xff\xe0BILD\xff\xd9")
+
+    koerper = modelle.waehle(anbieter="gemini", modell="x").baue_anfrage(
+        "Was ist zu sehen?", bilder=[bild]
+    )
+
+    teile = koerper["contents"][0]["parts"]
+    bildteile = [t for t in teile if "inline_data" in t]
+    assert bildteile, f"kein Bild in Gemini-Form: {[list(t) for t in teile]}"
+    assert bildteile[0]["inline_data"]["mime_type"] == "image/jpeg"
+    assert bildteile[0]["inline_data"]["data"], "das Bild ist leer"
+
+
+def test_gemini_traegt_den_text_mit(tmp_path):
+    """Untergrenze zur Zusicherung darueber: ein Bild ohne Frage ist so wertlos
+    wie eine Frage ohne Bild."""
+    koerper = modelle.waehle(anbieter="gemini", modell="x").baue_anfrage("Die Frage.")
+
+    texte = [t["text"] for t in koerper["contents"][0]["parts"] if "text" in t]
+    assert "Die Frage." in texte
+
+
+# --- Wo der Schluessel liegt (KT-1s Loesungsgedanke, 2026-08-30) ------------
+#
+# Sein Konzept, woertlich: *"es braucht eh eine beschreibung der sw ... meine
+# idee ist, dass in diesem how-to dann auch drinsteht, dass der anwender an einem
+# platz (ueber einen weg) der sw bekannt gibt, wo der api-schluessel fuer die
+# LLM-Nutzung liegt ... natuerlich wird der nicht in der sw persistiert ...
+# natuerlich ist der pfad und die definierte stelle nicht fix"*.
+#
+# Der Kern: **die Software kennt den ORT, nicht den Schluessel.** Der Anwender
+# sagt einmal, wo seiner liegt; gelesen wird zur Laufzeit, gespeichert nichts.
+
+
+def test_der_schluessel_kann_aus_einer_datei_kommen(tmp_path, monkeypatch):
+    """Der Weg fuer alle, die ihre Schluessel nicht in der Umgebung halten."""
+    ablage = tmp_path / "meine-schluessel.json"
+    ablage.write_text('{"api_key": "aus-der-datei"}', encoding="utf-8")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("MKN_LLM_SCHLUESSEL_DATEI", str(ablage))
+
+    assert modelle.waehle(anbieter="anthropic", modell="x").schluessel() == "aus-der-datei"
+
+
+def test_die_umgebung_hat_vorrang_vor_der_datei(tmp_path, monkeypatch):
+    """Wer die Variable setzt, meint sie — sonst waere ein schneller Wechsel
+    („einmal anders laufen lassen") nicht moeglich, ohne eine Datei anzufassen."""
+    ablage = tmp_path / "s.json"
+    ablage.write_text('{"api_key": "aus-der-datei"}', encoding="utf-8")
+    monkeypatch.setenv("MKN_LLM_SCHLUESSEL_DATEI", str(ablage))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "aus-der-umgebung")
+
+    assert modelle.waehle(anbieter="anthropic", modell="x").schluessel() == "aus-der-umgebung"
+
+
+def test_die_datei_darf_je_anbieter_einen_eigenen_schluessel_tragen(tmp_path, monkeypatch):
+    """Eine Datei fuer alle Anbieter — sonst braucht der Anwender je Anbieter
+    eine eigene, und der Sinn der einen definierten Stelle ist dahin."""
+    ablage = tmp_path / "s.json"
+    ablage.write_text('{"anthropic": "a-schluessel", "gemini": "g-schluessel"}', encoding="utf-8")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("MKN_LLM_SCHLUESSEL_DATEI", str(ablage))
+
+    assert modelle.waehle(anbieter="anthropic", modell="x").schluessel() == "a-schluessel"
+    assert modelle.waehle(anbieter="gemini", modell="x").schluessel() == "g-schluessel"
+
+
+def test_eine_fehlende_datei_sagt_wo_sie_gesucht_wurde(tmp_path, monkeypatch):
+    """Ein "Schluessel fehlt" ohne den gesuchten Ort schickt den Anwender auf
+    die Suche nach etwas, das er selbst konfiguriert hat."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("MKN_LLM_SCHLUESSEL_DATEI", str(tmp_path / "gibt-es-nicht.json"))
+
+    with pytest.raises(modelle.KeinSchluessel) as fehler:
+        modelle.waehle(anbieter="anthropic", modell="x").schluessel()
+
+    assert "gibt-es-nicht.json" in str(fehler.value), (
+        f"der gesuchte Ort fehlt in der Meldung: {fehler.value}"
+    )
+
+
+def test_ohne_jede_quelle_wird_die_umgebungsvariable_genannt(monkeypatch):
+    """Untergrenze: wer gar nichts konfiguriert hat, braucht den einfachsten
+    Weg genannt — nicht den, den er nicht kennt."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MKN_LLM_SCHLUESSEL_DATEI", raising=False)
+
+    with pytest.raises(modelle.KeinSchluessel) as fehler:
+        modelle.waehle(anbieter="anthropic", modell="x").schluessel()
+
+    assert "ANTHROPIC_API_KEY" in str(fehler.value)
+
+
+def test_der_schluessel_wird_nirgends_gespeichert(tmp_path, monkeypatch):
+    """KT-1s 1.5, und es ist die wichtigste der Zusicherungen: die Software
+    liest den Schluessel, sie behaelt ihn nicht.
+
+    Geprueft an der Wahl selbst — sie ist eingefroren und traegt nur Anbieter
+    und Modell. Ein Feld mehr waere ein Ort, an dem ein Schluessel liegen bleibt.
+    """
+    ablage = tmp_path / "s.json"
+    ablage.write_text('{"api_key": "geheim-123"}', encoding="utf-8")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("MKN_LLM_SCHLUESSEL_DATEI", str(ablage))
+
+    w = modelle.waehle(anbieter="anthropic", modell="x")
+    w.schluessel()
+
+    assert "geheim-123" not in repr(w), f"der Schluessel steckt in der Wahl: {w!r}"
+    assert "geheim-123" not in str(vars(w)), "der Schluessel wurde als Feld abgelegt"
