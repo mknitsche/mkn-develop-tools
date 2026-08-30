@@ -20,6 +20,7 @@ entscheidet erst der Blick auf das Bild.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from mkn_foto.modell import Aufnahme, Serie
 
@@ -203,3 +204,92 @@ def kandidaten(aufnahmen: Sequence[Aufnahme], schon_erkannt: Sequence[Serie]) ->
 
 def _weicht_ab(a: Aufnahme, b: Aufnahme, merkmal: str) -> bool:
     return a.exif.get(merkmal) != b.exif.get(merkmal)
+
+
+# --- Die Klammer: aus gemessenen Schritten werden Gruppen mit Klasse -------
+
+
+@dataclass(frozen=True)
+class Gruppe:
+    """Eine zusammenhaengend gemessene Folge — und was mit ihr geschehen soll."""
+
+    aufnahmen: tuple[Aufnahme, ...]
+
+    klasse: str
+    """`kandidat` (geht ans Modell) | `wiederholung` (Gruppen-Motivaufruf, kein
+    Name) | `einzeln` (wie bisher)."""
+
+    schritte: tuple = ()
+    """Die gemessenen Verbindungen — fuer das Protokoll, damit ein Urteil
+    nachvollziehbar bleibt und Grenzfaelle sichtbar werden."""
+
+    reihen: tuple[int, ...] = ()
+    """Bildanzahl je Reihe, aus den Schrittrichtungen abgeleitet. Nur bei
+    Kandidaten gefuellt; sonst leer."""
+
+
+def vermesse(fenster: Sequence[Serie], schritte_je_fenster: dict[int, Sequence]) -> list[Gruppe]:
+    """Macht aus Zeitfenstern und ihren gemessenen Schritten klassifizierte Gruppen.
+
+    **Die Klammer zwischen Messung und Urteil.** `deckung` liefert Zahlen ueber
+    Bildpaare; hier wird daraus entschieden, was ueberhaupt ans Modell geht.
+
+    Die Regel ist bewusst grosszuegig (Design § 3): **eine Gruppe mit mindestens
+    EINEM Schwenk-Schritt ist ein Kandidat.** Ein Kandidat kostet einen
+    Modellaufruf, ein uebersehener Fall kostet das Panorama -- und was hier nicht
+    vorgeschlagen wird, sieht niemand mehr an.
+
+    **Was hier NICHT entschieden wird, ist die Panorama-Frage selbst.** Die kann
+    die Messung nachweislich nicht beantworten: eine Gehsequenz durch eine Klamm
+    sieht panoramiger aus als ein echtes Panorama (Design § 3a, gemessen).
+    Die Klassifikation bereitet vor, das Urteil faellt am Bild.
+
+    `schritte_je_fenster` ordnet dem Index eines Fensters seine gemessenen
+    Schritte zu. Die Zuordnung laeuft ueber den Index und nicht ueber die
+    Aufnahme-Identitaet, weil ein Schritt zwei Aufnahmen verbindet und keiner
+    von beiden gehoert.
+    """
+    from mkn_foto import deckung as _deckung
+
+    ergebnis: list[Gruppe] = []
+    for i, f in enumerate(fenster):
+        schritte = list(schritte_je_fenster.get(i, ()))
+        for glied in _zusammenhaengend(len(f.aufnahmen), schritte):
+            mitglieder = tuple(f.aufnahmen[n] for n in sorted(glied))
+            eigene = tuple(s for s in schritte if s.von in glied and s.nach in glied)
+            if not eigene:
+                ergebnis.append(Gruppe(aufnahmen=mitglieder, klasse="einzeln"))
+                continue
+            hat_schwenk = any(s.art == "schwenk" for s in eigene)
+            ergebnis.append(
+                Gruppe(
+                    aufnahmen=mitglieder,
+                    klasse="kandidat" if hat_schwenk else "wiederholung",
+                    schritte=eigene,
+                    reihen=tuple(_deckung.raster(eigene)) if hat_schwenk else (),
+                )
+            )
+    return ergebnis
+
+
+def _zusammenhaengend(anzahl: int, schritte: Sequence) -> list[set[int]]:
+    """Zerlegt die Indices eines Fensters in verbundene Glieder.
+
+    Ein Schritt verbindet zwei Bilder; alles, was ueber Schritte erreichbar ist,
+    gehoert zusammen. Der Rueckgriff der Messung kann dabei ueber mehrere
+    Positionen springen (ein Raster ohne Schlangenmuster), deshalb wird die
+    Erreichbarkeit gerechnet und nicht die Nachbarschaft angenommen.
+    """
+    glied_von: dict[int, set[int]] = {n: {n} for n in range(anzahl)}
+    for s in schritte:
+        a, b = glied_von[s.von], glied_von[s.nach]
+        if a is b:
+            continue
+        vereint = a | b
+        for n in vereint:
+            glied_von[n] = vereint
+    gesehen: list[set[int]] = []
+    for n in range(anzahl):
+        if not any(n in g for g in gesehen):
+            gesehen.append(glied_von[n])
+    return gesehen
