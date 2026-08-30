@@ -22,9 +22,29 @@ jobs:
           python-version: "3.14"
       - run: uv tool run ruff@0.14.0 check .
       - run: uv tool run ruff@0.14.0 format --check .
-      # setup-uv legt bereits eine .venv an; ein eigenes `uv venv` bricht daran.
-      # `--with` laesst uv die Umgebung selbst verwalten.
-      - run: uv run --with pytest pytest -q
+      # exiftool ist keine Bequemlichkeit: die Haelfte der Foto-Tests schreibt
+      # und liest damit echte Dateien. Ohne es ueberspringt pytest sie, und die
+      # CI meldet gruen fuer eine Suite, die ihren Gegenstand nicht angefasst
+      # hat (LP-34: ein Beweis muss seinen Gegenstand enthalten).
+      - run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl
+      # `uv sync` INSTALLIERT die Pakete des Workspace samt ihrer
+      # Abhaengigkeiten. Der frueher hier stehende Aufruf `uv run --with pytest`
+      # holte nur pytest; `Pillow` fehlte, und jeder Lauf seit dem ersten Commit
+      # brach beim Import ab.
+      - run: uv sync --all-packages --dev
+      - run: uv run pytest -q
+      # Und der Riegel gegen das naechste stille Gruen: uebersprungene Tests
+      # sind kein Erfolg. Waere er von Anfang an dagewesen, haette die CI
+      # gesagt, dass sie die halbe Suite nicht anfasst.
+      - name: Kein Test wurde stillschweigend uebersprungen
+        run: |
+          set -euo pipefail
+          ausgabe=$(uv run pytest -q -rs 2>&1 | tail -40)
+          echo "$ausgabe"
+          if echo "$ausgabe" | grep -qE '[0-9]+ skipped'; then
+            echo "::error::Tests wurden uebersprungen - gruen bedeutet hier nicht geprueft"
+            exit 1
+          fi
 
   # NOTE ON THE MATRIX. An earlier draft ran three operating systems by three
   # Python versions. With no platform-dependent code in the repository, those
