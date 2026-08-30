@@ -182,16 +182,24 @@ def benenne_um(serien: Iterable[Serie]) -> int:
     und warum nur bei eindeutiger Lage --, entscheidet der Aufrufer; hier wird
     nur vollzogen.
 
-    Gibt zurueck, wie viele Dateien bewegt wurden. Was schon seinen Zielnamen
-    traegt, wird uebersprungen: ein zweiter Lauf darf nichts verketten.
+    Gibt die Abbildung ALT → NEU zurueck. **Sie ist keine Zugabe, sondern
+    notwendig:** wer Urteile oder Zuordnungen ueber Dateipfade fuehrt, haelt
+    nach dem Umbenennen ins Leere. Firsthand am Karwendel-Lauf: die Motive
+    landeten im Sidecar (vor der Umbenennung geschrieben) und fehlten im JPEG
+    (danach gesucht) -- 23 Panoramen mit halben Angaben.
+
+    Was schon seinen Zielnamen traegt, wird uebersprungen: ein zweiter Lauf darf
+    nichts verketten.
     """
-    bewegt = 0
+    bewegt: dict[Path, Path] = {}
     for s in serien:
         gesamt = len(s.aufnahmen)
         for pos, a in enumerate(s.aufnahmen, start=1):
             merkmale = {"typ": s.typ, "serie": s.nummer, "pos": pos, "gesamt": gesamt}
             for pfad in list(a.dateien.values()):
-                bewegt += _rechter_name(pfad, a, merkmale)
+                ziel = _rechter_name(pfad, a, merkmale)
+                if ziel is not None:
+                    bewegt[pfad] = ziel
     return bewegt
 
 
@@ -203,30 +211,34 @@ def nimm_zurueck(serien: Iterable[Serie]) -> int:
     Moeglich ist die Ruecknahme, weil der `std`-Name aus dem Stamm ableitbar
     ist; die Umbenennung traegt keine Information, die nur in ihr steht.
     """
-    zurueck = 0
+    zurueck: dict[Path, Path] = {}
     for s in serien:
         for a in s.aufnahmen:
             for pfad in list(a.dateien.values()):
-                zurueck += _rechter_name(pfad, a, {"typ": "std"})
+                ziel = _rechter_name(pfad, a, {"typ": "std"})
+                if ziel is not None:
+                    zurueck[pfad] = ziel
     return zurueck
 
 
-def _rechter_name(pfad: Path, a: Aufnahme, merkmale: dict[str, object]) -> int:
-    """Bringt EINE Datei und ihren Sidecar auf den Zielnamen. 0 oder mehr bewegt.
+def _rechter_name(pfad: Path, a: Aufnahme, merkmale: dict[str, object]) -> Path | None:
+    """Bringt EINE Datei und ihren Sidecar auf den Zielnamen.
+
+    Gibt den neuen Pfad zurueck, oder `None`, wenn nichts zu tun war.
 
     `os.rename` je Datei: auf demselben Volume atomar, und mehr braucht es
     nicht -- ein halber Vollzug ist am Namen ablesbar.
     """
     ziel = pfad.with_name(archiv_name(a, pfad.suffix, **merkmale))
     if ziel == pfad:
-        return 0
-    bewegt = 0
+        return None
+    bewegt = False
     if pfad.exists():
         os.rename(pfad, ziel)
         a.dateien[pfad.suffix] = ziel
-        bewegt += 1
+        bewegt = True
     begleiter = pfad.with_suffix(SIDECAR)
     if begleiter.exists():
         os.rename(begleiter, ziel.with_suffix(SIDECAR))
-        bewegt += 1
-    return bewegt
+        bewegt = True
+    return ziel if bewegt else None

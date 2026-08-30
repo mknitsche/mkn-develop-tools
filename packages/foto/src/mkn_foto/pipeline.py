@@ -433,7 +433,11 @@ def fahre(
         # Pfade, und `anreichern` schreibt danach in genau diese Dateien. Umgekehrt
         # laege die Anreicherung unter dem alten Namen und der Sidecar neben einer
         # Datei, die es nicht mehr gibt.
-        _vollziehe_serien(lauf)
+        # Der Vollzug liefert die Serien, die es beim Stichwortbau noch nicht
+        # gab: `serien_auf_kopien` entstand VOR dem Urteil. Ohne sie truege eine
+        # Datei den Namen `pan01-01v02` und das Stichwort `Technik|Einzelbild` --
+        # ein Widerspruch in derselben Datei, firsthand am Karwendel-Lauf.
+        serien_auf_kopien = serien_auf_kopien + _vollziehe_serien(lauf)
 
         lauf.angereichert = anreichern.schreibe(
             mit_ort,
@@ -660,9 +664,28 @@ def _vollziehe_serien(lauf: Lauf) -> list[Serie]:
             Serie(typ="pan", nummer=nummer, aufnahmen=gewaehlt, quelle="bild", sicher=True)
         )
 
-    if vollzogen:
-        schreiben.benenne_um(vollzogen)
-        lauf.serien.extend(vollzogen)
+    if not vollzogen:
+        return []
+
+    umbenannt = schreiben.benenne_um(vollzogen)
+    lauf.serien.extend(vollzogen)
+
+    # **Die Urteile muessen mitwandern.** `motivlauf.Ergebnis` fuehrt sie ueber
+    # DATEIPFADE; nach dem Umbenennen zeigen die alten Schluessel ins Leere, und
+    # `anreichern` findet fuer genau die benannten Panoramen kein Urteil mehr.
+    #
+    # Firsthand am Karwendel-Lauf: die Motive standen im Sidecar (den `_merke`
+    # VOR der Umbenennung geschrieben hatte) und fehlten im JPEG (das
+    # `anreichern` DANACH suchte). 23 Panoramen mit halben Angaben, und dem
+    # Ergebnis sieht man es nicht an -- die Datei ist da, sie ist nur leerer als
+    # ihr Nachbar.
+    if lauf.motive is not None:
+        for alt_pfad, neu_pfad in umbenannt.items():
+            if alt_pfad in lauf.motive.urteile:
+                lauf.motive.urteile[neu_pfad] = lauf.motive.urteile[alt_pfad]
+            if alt_pfad in lauf.motive.mitglieder:
+                vertreter = lauf.motive.mitglieder[alt_pfad]
+                lauf.motive.mitglieder[neu_pfad] = umbenannt.get(vertreter, vertreter)
     return vollzogen
 
 
