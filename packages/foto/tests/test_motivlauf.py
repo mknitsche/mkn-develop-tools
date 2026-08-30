@@ -63,6 +63,20 @@ def _bild(ordner: Path, name: str) -> Path:
     return p
 
 
+def _serien_antwort(serie, bilder, sicher=True, motive=("x",), belichtung="gut"):
+    """Eine Antwort auf die SERIEN-Frage (Design Stufe 3 § 4) -- anders als
+    `_antwort` traegt sie `serie` und `bilder`, nicht nur die Motiv-Felder."""
+    nutzlast = {
+        "serie": serie,
+        "bilder": list(bilder),
+        "sicher": sicher,
+        "motive": list(motive),
+        "beschreibung": "Ein Satz.",
+        "belichtung": belichtung,
+    }
+    return 200, json.dumps({"content": [{"text": json.dumps(nutzlast)}]}).encode()
+
+
 def test_jedes_bild_bekommt_sein_urteil(tmp_path):
     bilder = [_bild(tmp_path, f"b{i}.jpg") for i in range(3)]
     aufrufe = []
@@ -669,3 +683,325 @@ def test_ein_fehlgeschlagenes_merken_wird_gemeldet(tmp_path, caplog) -> None:
     assert any("nicht gemerkt" in r.getMessage() for r in caplog.records), (
         "ein fehlgeschlagenes Einbetten wurde nicht gemeldet"
     )
+
+
+# ---------------------------------------------------------------------------
+# Die Frage-Art (Design 2026-08-30 Stufe 3 § 4): ein Eintrag traegt kuenftig,
+# WELCHE Frage er stellt. `motiv` ist die bestehende Frage (auch fuer
+# Wiederholungs-Gruppen); `serie` ist die neue Frage nach Panorama /
+# Wiederholung / keine Serie -- sie ERSETZT den Motiv-Aufruf der Gruppe (§ 7).
+# ---------------------------------------------------------------------------
+
+
+def test_die_serien_frage_stellt_den_serien_prompt_statt_des_motiv_prompts(tmp_path):
+    mitglieder = [_bild(tmp_path, f"k{i}.jpg") for i in range(3)]
+    gesehen = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        gesehen.append(json.loads(koerper))
+        return _serien_antwort("panorama", [1, 2, 3])
+
+    ergebnis = motivlauf.fahre(
+        [(mitglieder[0], mitglieder, "serie")], _wahl(), transport=transport, schluessel="x"
+    )
+
+    assert len(gesehen) == 1, f"erwartet ein Aufruf, gezaehlt {len(gesehen)}"
+    text_teil = next(t for t in gesehen[0]["messages"][0]["content"] if t.get("type") == "text")
+    assert text_teil["text"] == bildurteil.serien_prompt(), (
+        "der Aufruf stellte nicht den Serien-Prompt"
+    )
+    urteil = ergebnis.fuer(mitglieder[0])
+    assert isinstance(urteil, bildurteil.Serienurteil), f"kein Serienurteil, sondern {urteil!r}"
+    assert urteil.serie == "panorama"
+    assert urteil.bilder == (1, 2, 3)
+
+
+def test_ohne_frage_art_wird_weiterhin_nach_dem_motiv_gefragt(tmp_path):
+    """Rueckwaertskompatibilitaet: `pipeline.py` baut seine Eintraege heute
+    noch als reine 2-Tupel -- ohne diesen Test wuerde die Serien-Verdrahtung
+    den bestehenden Aufrufer sofort brechen."""
+    bild = _bild(tmp_path, "zwei-tupel.jpg")
+    gesehen = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        gesehen.append(json.loads(koerper))
+        return _antwort(["Wald"])
+
+    ergebnis = motivlauf.fahre([(bild, None)], _wahl(), transport=transport, schluessel="x")
+
+    text_teil = next(t for t in gesehen[0]["messages"][0]["content"] if t.get("type") == "text")
+    assert text_teil["text"] == bildurteil.prompt(), "ein 2-Tupel fragte nicht nach dem Motiv"
+    assert isinstance(ergebnis.fuer(bild), bildurteil.Urteil)
+
+
+def test_serien_kontaktbogen_bricht_bei_einem_unlesbaren_mitglied_ab(tmp_path):
+    """Die Nummern im Prompt und die Bilder im Kontaktbogen muessen dieselbe
+    Reihenfolge haben (Design § 4): faellt ein Mitglied beim Bauen durch,
+    wuerde `kontaktbogen.baue` die folgenden Kacheln nach vorne ruecken --
+    Nummer 3 waere dann Mitglied 4, und die Antwort des Modells wuerde spaeter
+    dem FALSCHEN Bild zugeordnet. Besser gar kein Bogen als ein falsch
+    nummerierter."""
+    gut = [_bild(tmp_path, f"g{i}.jpg") for i in range(2)]
+    kaputt = tmp_path / "kaputt.jpg"
+    kaputt.write_bytes(b"kein bild")
+    gruppe = [gut[0], kaputt, gut[1]]
+
+    vorlage = motivlauf._bildvorlage(gruppe[0], gruppe, tmp_path / "ziel.jpg", frage="serie")
+
+    assert vorlage is None, "trotz Luecke in der Nummerierung entstand ein Kontaktbogen"
+
+
+def test_motiv_kontaktbogen_uebersteht_ein_unlesbares_mitglied(tmp_path):
+    """Untergrenze + Regression: fuer die bestehende Motiv-Frage bleibt das
+    grosszuegige Verhalten unveraendert -- dort referenziert keine Antwort
+    eine Bildnummer, die Luecke ist unschaedlich."""
+    gut = [_bild(tmp_path, f"m{i}.jpg") for i in range(2)]
+    kaputt = tmp_path / "kaputt-motiv.jpg"
+    kaputt.write_bytes(b"kein bild")
+    gruppe = [gut[0], kaputt, gut[1]]
+
+    vorlage = motivlauf._bildvorlage(gruppe[0], gruppe, tmp_path / "ziel-motiv.jpg")
+
+    assert vorlage is not None, "die Motiv-Frage darf bei einer Luecke weiterhin einen Bogen bauen"
+
+
+def test_serie_keine_markiert_den_vertreter_nicht_als_beurteilt(tmp_path):
+    """Regel-A-Sonderfall: `serie == "keine"` vererbt nicht, auch wenn das
+    Modell sicher ist (Design § 4). Wuerde der Vertreter trotzdem als
+    beurteilt gemerkt, faende `aus_baum` bei seinem spaeteren EIGENEN
+    Motiv-Urteil eine Marke aus der Serien-Frage vor -- und er bekaeme NIE ein
+    echtes Einzel-Urteil (Design § 4, Motiv-Pfad der Nicht-Erbenden)."""
+    mitglieder = [_bild(tmp_path, f"n{i}.jpg") for i in range(3)]
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        return _serien_antwort("keine", [1, 2, 3], sicher=True, motive=("Weg",))
+
+    motivlauf.fahre(
+        [(mitglieder[0], mitglieder, "serie")], _wahl(), transport=transport, schluessel="x"
+    )
+
+    zustand = motivlauf.aus_baum(mitglieder)
+    assert mitglieder[0] not in zustand.urteile, (
+        "der Vertreter gilt nach 'keine' faelschlich als beurteilt -- er bekaeme nie "
+        "ein eigenes Motiv-Urteil"
+    )
+
+
+def test_serie_panorama_markiert_den_vertreter_als_beurteilt(tmp_path):
+    """Untergrenze zum Test daneben: ohne diese Gegenprobe waere ein `_merke`,
+    das NIE aufgerufen wird, genauso gruen (LP-36)."""
+    mitglieder = [_bild(tmp_path, f"p{i}.jpg") for i in range(3)]
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        return _serien_antwort("panorama", [1, 2, 3], sicher=True, motive=("Kirche",))
+
+    motivlauf.fahre(
+        [(mitglieder[0], mitglieder, "serie")], _wahl(), transport=transport, schluessel="x"
+    )
+
+    zustand = motivlauf.aus_baum(mitglieder)
+    assert mitglieder[0] in zustand.urteile, (
+        "ein sicheres 'panorama'-Urteil wurde nicht gemerkt -- ein Abbruch danach "
+        "wuerde den bezahlten Aufruf verlieren"
+    )
+
+
+def test_serie_unsicher_markiert_den_vertreter_ebenfalls_nicht(tmp_path):
+    mitglieder = [_bild(tmp_path, f"u{i}.jpg") for i in range(2)]
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        return _serien_antwort("panorama", [1, 2], sicher=False, motive=("Berg",))
+
+    motivlauf.fahre(
+        [(mitglieder[0], mitglieder, "serie")], _wahl(), transport=transport, schluessel="x"
+    )
+
+    assert mitglieder[0] not in motivlauf.aus_baum(mitglieder).urteile, (
+        "ein unsicheres Serienurteil wurde trotzdem gemerkt"
+    )
+
+
+def test_serien_frage_wird_bei_wiederaufnahme_nicht_wiederholt(tmp_path):
+    mitglieder = [_bild(tmp_path, f"w{i}.jpg") for i in range(3)]
+    aufrufe = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        aufrufe.append(url)
+        return _serien_antwort("panorama", [1, 2, 3])
+
+    eintrag = [(mitglieder[0], mitglieder, "serie")]
+    erstes = motivlauf.fahre(eintrag, _wahl(), transport=transport, schluessel="x")
+    motivlauf.fahre(eintrag, _wahl(), transport=transport, schluessel="x", vorhandene=erstes)
+
+    assert len(aufrufe) == 1, (
+        f"der zweite Lauf hat die Serien-Frage erneut gestellt ({len(aufrufe)} Aufrufe)"
+    )
+
+
+def test_ein_fremdes_stichwort_im_sidecar_gilt_nicht_als_urteil(tmp_path) -> None:
+    """**Derselbe Fehler wie beim JPEG — im Zweig, der den RAW-Bestand traegt.**
+
+    Der Teilstring-Test wurde im eingebetteten Zweig repariert, im Sidecar-Zweig
+    nicht: dort las `aus_baum` weiter den XML-Text der ganzen Datei und suchte
+    `Motiv|` als Vorkommen. Ein fremdes Stichwort aus Capture One wie
+    `Themen|Motiv|Ideen` traf das ebenso.
+
+    Die Verhaeltnisse machen den Unterschied bitter: das JPEG-Loch betraf 65
+    Aufnahmen, dieses hier **1.227 von 1.293**. Und der Sidecar-Weg war sogar
+    schwaecher als der alte eingebettete — er traf `Motiv|` an JEDER Stelle der
+    Datei, auch in einer Beschreibung oder einem Kommentar.
+
+    Gefunden vom Critic, nachdem die Cross-Modell-Review die JPEG-Haelfte
+    gefunden hatte. Zweimal dieselbe Bewegung: eine Regel an einer Stelle
+    repariert, die zweite stehengelassen.
+    """
+    import subprocess as sp
+
+    roh = tmp_path / "r.RAF"
+    roh.write_bytes(b"roh")
+    sp.run(
+        [
+            "exiftool",
+            "-q",
+            "-o",
+            str(tmp_path / "r.xmp"),
+            "-XMP-lr:HierarchicalSubject+=Themen|Motiv|Ideen",
+            str(roh),
+        ],
+        capture_output=True,
+        check=False,
+    )
+    assert (tmp_path / "r.xmp").exists(), "Vorbedingung nicht hergestellt: kein Sidecar"
+
+    zustand = motivlauf.aus_baum([roh])
+
+    assert roh not in zustand.urteile, (
+        "ein fremdes Stichwort im Sidecar gilt als Urteil -- dieses RAW bekaeme nie eines"
+    )
+
+
+def test_ein_beurteiltes_raw_wird_weiterhin_erkannt(tmp_path) -> None:
+    """Die Untergrenze zur vorigen Zusicherung.
+
+    Ohne sie koennte `aus_baum` im Sidecar-Zweig gar nichts mehr erkennen und
+    saehe trotzdem korrekt aus -- der Test darueber waere gruen, und JEDES
+    bezahlte RAW-Urteil wuerde bei der naechsten Wiederaufnahme erneut gekauft.
+    """
+    import subprocess as sp
+
+    roh = tmp_path / "s.RAF"
+    roh.write_bytes(b"roh")
+    sp.run(
+        [
+            "exiftool",
+            "-q",
+            "-o",
+            str(tmp_path / "s.xmp"),
+            "-XMP-lr:HierarchicalSubject+=Motiv|Wald",
+            str(roh),
+        ],
+        capture_output=True,
+        check=False,
+    )
+
+    assert roh in motivlauf.aus_baum([roh]).urteile, (
+        "ein echtes Urteil im Sidecar wird nicht mehr erkannt"
+    )
+
+
+def _doppelt(bild: Path) -> int:
+    """Wie oft `Motiv|Bruecke` am Traeger dieses Bildes steht."""
+    import subprocess as sp
+
+    from mkn_foto import anreichern
+
+    ziel, _ = anreichern.traeger(bild)
+    return sp.run(
+        ["exiftool", "-s3", "-XMP-lr:HierarchicalSubject", str(ziel)],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout.count("Motiv|Bruecke")
+
+
+def test_ein_doppelt_genanntes_motiv_wird_auch_beim_merken_nur_einmal_geschrieben(
+    tmp_path,
+) -> None:
+    """**Die zweite Haelfte derselben Regel — und hier heilt sie nicht von selbst.**
+
+    `anreichern._argumente` laesst seit heute Nacht keine wiederholte Zuweisung
+    mehr hinaus. `_merke` baut seine Argumente aber selbst und lief nicht durch
+    dieselbe Behandlung: nennt das Modell ein Motiv zweimal, schreibt die
+    Abbruchsicherung es zweimal.
+
+    **Und es bleibt.** Im durchlaufenden Lauf raeumt `anreichern` es spaeter mit
+    (`-=` trifft alle Vorkommen). Im WIEDERAUFNAHME-Lauf nicht -- also genau in
+    dem Fall, fuer den `_merke` ueberhaupt existiert: `aus_baum` liefert
+    `Urteil(sicher=True, fehler="aus dem Baum")` OHNE Motive, `anreichern`
+    schreibt fuer diese Aufnahme also nie ein `Motiv|Bruecke`, und das `-=`
+    laeuft auf dem Wert nie. Die Dublette steht dauerhaft im Baum, den KT-1
+    ansieht. Der Modul-Docstring sagt "Ein Abbruch ist der Normalfall" -- damit
+    ist das nicht der Ausnahme-, sondern der Regelfall.
+
+    Gefunden vom Critic, in der Nachpruefung der Behebung seines eigenen
+    Befunds.
+    """
+    from PIL import Image
+
+    bild = tmp_path / "b.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+
+    motivlauf._merke(bild, bildurteil.Urteil(sicher=True, motive=("Bruecke", "Bruecke")))
+
+    assert _doppelt(bild) == 1, f"'Motiv|Bruecke' steht {_doppelt(bild)}x im JPEG"
+
+
+def test_der_raw_zweig_des_merkens_verdoppelt_ebenfalls_nicht(tmp_path) -> None:
+    """Dieselbe Zusicherung fuer den Zweig, der den RAW-Bestand traegt.
+
+    **Und zugleich die erste Testabdeckung dieses Zweigs ueberhaupt.** Bis heute
+    ergab `grep -c "RAF\\|NEF"` ueber dieser Datei **0**: ungeprueft war damit
+    der `-o`-Pfad, der die Abbruchsicherung von 1.227 der 1.293 Aufnahmen
+    traegt. Dass er funktioniert, stand nur im Protokoll eines Pruefers, nicht
+    in der Suite.
+    """
+    roh = tmp_path / "r.RAF"
+    roh.write_bytes(b"roh")
+
+    motivlauf._merke(roh, bildurteil.Urteil(sicher=True, motive=("Bruecke", "Bruecke")))
+
+    assert (tmp_path / "r.xmp").exists(), "der Sidecar wurde gar nicht angelegt"
+    assert _doppelt(roh) == 1, f"'Motiv|Bruecke' steht {_doppelt(roh)}x im Sidecar"
+
+
+def test_die_dublette_ueberlebt_die_wiederaufnahme_nicht(tmp_path) -> None:
+    """Der Weg, auf dem die Dublette dauerhaft wuerde -- als eigene Zusicherung.
+
+    Sie ist die eigentliche: die beiden Tests darueber pruefen den Schreibakt,
+    dieser prueft, dass der Schaden auch nach einem zweiten Lauf nicht dasteht.
+    Ohne ihn koennte man den Dedupe an einer Stelle einbauen und uebersehen,
+    dass die Wiederaufnahme ihn gar nicht erreicht.
+    """
+    from PIL import Image
+
+    bild = tmp_path / "w.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        return 200, json.dumps(
+            {"content": [{"text": '{"sicher": true, "motive": ["Bruecke", "Bruecke"]}'}]}
+        ).encode()
+
+    wahl = modelle.Wahl(anbieter="anthropic", modell="x")
+    motivlauf.fahre([(bild, None)], wahl, schluessel="k", transport=transport)
+
+    # Zweiter Lauf: das Urteil kommt aus dem Baum und traegt KEINE Motive mehr.
+    zweiter = motivlauf.fahre(
+        [(bild, None)],
+        wahl,
+        schluessel="k",
+        transport=transport,
+        vorhandene=motivlauf.aus_baum([bild]),
+    )
+    assert zweiter.aufrufe == 0, "die Wiederaufnahme hat erneut gefragt"
+    assert _doppelt(bild) == 1, f"nach der Wiederaufnahme steht es {_doppelt(bild)}x da"

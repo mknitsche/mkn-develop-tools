@@ -13,6 +13,7 @@ Die drei Zusicherungen, um die es hier wirklich geht:
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import os
 from datetime import datetime
@@ -213,3 +214,106 @@ def test_ein_zweiter_lauf_findet_die_schon_vorhandenen_kopien(tmp_path: Path) ->
     assert dict(zweit.kopien) == dict(erst.kopien), (
         "der zweite Lauf muss dieselben Zielpfade kennen wie der erste"
     )
+
+
+def _mit_dateien(tmp_path, stamm: str, endungen=(".RAF", ".JPG"), *, sidecar=True):
+    """Eine Aufnahme, die als `std` schon im Zielbaum liegt."""
+    from mkn_foto import namen
+
+    tag = tmp_path / "ziel"
+    tag.mkdir(parents=True, exist_ok=True)
+    a = _aufnahme(tmp_path, stamm, endungen=endungen)
+    dateien = {}
+    for e in endungen:
+        p = tag / namen.archiv_name(a, e)
+        p.write_bytes(b"inhalt")
+        dateien[e] = p
+    if sidecar:
+        next(iter(dateien.values())).with_suffix(".xmp").write_bytes(b"<x:xmpmeta/>")
+    return dataclasses.replace(a, dateien=dateien)
+
+
+def test_alle_dateien_einer_aufnahme_tragen_denselben_neuen_stamm(tmp_path):
+    """**KT-1s Direktive: das Paar ist die Einheit.**
+
+    *"die gepaarten bilder sind als paar zu behandeln - so wie es jede
+    bildbearbeitungssw macht"*. Beim Umbenennen heisst das: RAW, JPEG und
+    Sidecar wandern unmittelbar nacheinander auf denselben neuen Stamm. Bliebe
+    eine Haelfte zurueck, waere die Aufnahme im Baum zerrissen -- und genau das
+    sieht man einer Aufnahmezahl nicht an.
+    """
+    a = _mit_dateien(tmp_path, "DSCF3894")
+    serie = Serie(typ="pan", nummer=1, aufnahmen=(a,), quelle="bild", sicher=True)
+
+    schreiben.benenne_um([serie])
+
+    tag = tmp_path / "ziel"
+    staemme = {p.stem for p in tag.iterdir()}
+    assert len(staemme) == 1, f"die Dateien tragen verschiedene Staemme: {sorted(staemme)}"
+    assert "pan01-01v01" in staemme.pop()
+
+
+def test_der_sidecar_wandert_mit(tmp_path):
+    """Der Sidecar steht in keinem Inventar -- wer nur die Bilddateien umbenennt,
+    laesst die Anreicherung unter dem alten Namen zurueck, und Lightroom findet
+    sie nicht mehr. Dieselbe Regel wie beim Kopieren: RAW und Sidecar nie
+    getrennt bewegen."""
+    a = _mit_dateien(tmp_path, "DSCF3895")
+    serie = Serie(typ="pan", nummer=2, aufnahmen=(a,), quelle="bild", sicher=True)
+
+    schreiben.benenne_um([serie])
+
+    tag = tmp_path / "ziel"
+    sidecars = list(tag.glob("*.xmp"))
+    assert len(sidecars) == 1, f"erwartet genau ein Sidecar, war {[p.name for p in sidecars]}"
+    assert "pan02" in sidecars[0].name, f"der Sidecar blieb zurueck: {sidecars[0].name}"
+
+
+def test_ein_zweiter_lauf_benennt_nichts_doppelt(tmp_path):
+    """Ein Abbruch ist der Normalfall -- die Wiederaufnahme darf nicht
+    `pan01-01v01` zu `pan01-01v01_pan01...` verketten. `namen.stabiles_muster`
+    laesst den Typ-Abschnitt beim Wiederfinden bewusst offen; hier wird das
+    eingeloest."""
+    a = _mit_dateien(tmp_path, "DSCF3896")
+    serie = Serie(typ="pan", nummer=3, aufnahmen=(a,), quelle="bild", sicher=True)
+
+    schreiben.benenne_um([serie])
+    vorher = sorted(p.name for p in (tmp_path / "ziel").iterdir())
+    zweiter = schreiben.benenne_um([serie])
+    nachher = sorted(p.name for p in (tmp_path / "ziel").iterdir())
+
+    assert vorher == nachher, f"der zweite Lauf hat umbenannt:\n{vorher}\n{nachher}"
+    # **Der Zaehler ist hier die eigentliche Zusicherung.** Auf den Namen allein
+    # zu pruefen genuegt nicht: `os.rename(p, p)` ist ein No-Op, die Namen sind
+    # danach also auch ohne die Ziel-Pruefung unveraendert. Die Mutation "Pruefung
+    # entfernt" hat den Test in dieser Form ueberlebt -- verhaltensgleich bis auf
+    # den Rueckgabewert, und der wuerde Bewegungen melden, die nie stattfanden.
+    # Eine Zahl, die im Laufbericht steht und luegt, ist kein Detail (LP-40).
+    assert zweiter == 0, f"der zweite Lauf meldet {zweiter} Bewegungen statt 0"
+
+
+def test_die_umbenennung_ist_umkehrbar(tmp_path):
+    """Der `std`-Name ist aus dem Stamm ableitbar -- darauf beruht die
+    Ruecknahme, die das Design fuer ein widerrufenes Urteil verlangt: nicht mehr
+    gedeckte Namen gehen auf `std` zurueck."""
+    a = _mit_dateien(tmp_path, "DSCF3897")
+    serie = Serie(typ="pan", nummer=4, aufnahmen=(a,), quelle="bild", sicher=True)
+    schreiben.benenne_um([serie])
+
+    schreiben.nimm_zurueck([serie])
+
+    namen_jetzt = sorted(p.name for p in (tmp_path / "ziel").iterdir())
+    assert all("_std_" in n for n in namen_jetzt), f"nicht zurueckgenommen: {namen_jetzt}"
+
+
+def test_eine_gruppe_wird_positionsweise_durchnummeriert(tmp_path):
+    """`PPvGG` sagt, das wievielte von wie vielen -- die Angabe, an der KT-1
+    beim Zusammensetzen die Reihenfolge abliest."""
+    gruppe = tuple(_mit_dateien(tmp_path, f"DSCF39{n:02d}") for n in (10, 11, 12))
+    serie = Serie(typ="pan", nummer=5, aufnahmen=gruppe, quelle="bild", sicher=True)
+
+    schreiben.benenne_um([serie])
+
+    namen_jetzt = sorted(p.name for p in (tmp_path / "ziel").glob("*.RAF"))
+    marken = [n.split("_")[3] for n in namen_jetzt]
+    assert marken == ["pan05-01v03", "pan05-02v03", "pan05-03v03"], marken
