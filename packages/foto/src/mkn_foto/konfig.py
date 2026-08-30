@@ -61,6 +61,15 @@ class Konfig:
     Genau so ist es KT-1 am 2026-08-30 ergangen: sein Katalog enthielt 433
     Purple und 158 Blue, und er sah weisse Kaesten.
 
+    **Und die Uebersetzung ist nicht die, die man vermutet.** Erraten laesst
+    sich der Wert nicht: KT-1s deutsches Lightroom Classic schreibt fuer die
+    fuenfte Farbe **"Lila"**, nicht "Violett" -- obwohl die Oberflaeche sie
+    "Violett" nennt. Festgestellt wurde es, indem KT-1 sechs Bilder von Hand
+    einfaerbte und der Katalog danach `Rot, Gelb, Gruen, Blau, Lila` enthielt.
+
+    Merksatz: den Wert liefert das Programm, nicht die Vermutung. Wer ihn
+    braucht, faerbt EIN Bild von Hand ein und liest nach.
+
     Der Standard bleibt Englisch: es ist die Fallback-Sprache jedes
     Label-Sets. `photoshop:Urgency` ist davon unberuehrt -- die Zahl ist
     sprachunabhaengig, und Capture One liest sie."""

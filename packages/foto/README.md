@@ -82,11 +82,30 @@ success.
 | `urheber.email` | creator contact — the machine-readable field | omitted |
 | `urheber.website` | `CreatorWorkURL` | omitted |
 | `urheber.rechte_url` | `xmpRights:WebStatement` — your licence page | omitted |
+| `farben.serie` | colour label for "belongs to a series" | `Blue` |
+| `farben.unklar` | colour label for "unclear, please check" | `Purple` |
 | `urheber.nutzungsbedingungen` | `xmpRights:UsageTerms` — your terms in words | omitted |
 
 A file that exists but is **broken** is loud, with its own path in the message. A
 typo in your own configuration is the most common error there is, and if it
 passed as "no configuration", the tool would appear to run and write nothing.
+
+### The colour names belong to you, not to the tool
+
+Lightroom compares the string in `xmp:Label` against the names of **your**
+colour label set, and those are translated. A label whose name does not match
+shows up as an **empty white box** — the value is there, the colour is not.
+
+**And the translation is not the one you would guess.** A German Lightroom
+Classic writes **`Lila`** for the fifth colour, even though its own menu calls
+it *Violett*. Guessing costs an afternoon; measuring costs ten seconds:
+
+> Colour **one** photo by hand, press `Cmd+S`, then read the file back
+> (`exiftool -XMP:Label yourphoto.jpg`). Whatever it says is the value that
+> works — put it in `farben`.
+
+`photoshop:Urgency` is unaffected: the number is language-independent, and it
+is what Capture One reads.
 
 ### How rights are written, and why in that shape
 
