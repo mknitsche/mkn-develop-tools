@@ -219,7 +219,20 @@ def _kopf(wahl: modelle.Wahl, schluessel: str | None) -> dict[str, str]:
 PREIS_EIN = 4.63
 PREIS_AUS = 23.15
 """Opus, EUR je Million Tokens (Stand 2026-08). Nur fuer die Hochrechnung in der
-Fortschrittsmeldung -- die Abrechnung macht der Anbieter."""
+Fortschrittsmeldung -- die Abrechnung macht der Anbieter.
+
+**Die Zahl ist eine OBERGRENZE, kein Preis.** Sie ignoriert das Prompt-Caching:
+der Bildurteil-Prompt ist bei jedem Aufruf identisch, und der Anbieter
+berechnet wiederholte Eingaben deutlich guenstiger.
+
+Gemessen am 2026-08-30: der Lauf rechnete sich auf 14,24 USD hoch, KT-1s
+Guthaben sank im selben Zeitraum um 13,05 USD -- und darin steckte noch ein
+fremder Mail-Lauf. Die Schaetzung lag also um mindestens 12 Prozent zu hoch.
+
+Das ist die richtige Richtung fuer einen Schaetzwert (lieber zu teuer
+angekuendigt als zu billig), aber es gehoert gesagt statt verschwiegen.
+Genauer ginge es nur mit den `cache_read_input_tokens` aus der Antwort -- die
+werden bisher nicht ausgewertet."""
 
 SIDECAR = ".xmp"
 """Wohin ein Zwischenurteil geschrieben wird — dieselbe Endung wie in

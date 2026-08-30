@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -34,6 +35,7 @@ from mkn_foto import (
     inventar,
     konfig,
     mediathek,
+    messung,
     motivlauf,
     notizen,
     ort,
@@ -137,6 +139,7 @@ def anker_sammeln(
     modell: tuple[str, str] | None = None,
     schluessel: str | None = None,
     transport=None,
+    protokoll: messung.Protokoll | None = None,
 ) -> list[Anker]:
     """Fuehrt alle Ortsquellen zu EINER chronologischen Liste zusammen.
 
@@ -179,7 +182,7 @@ def anker_sammeln(
         # verhaelt sich trotzdem wie vorher -- neun von zwanzig Antworten
         # verwertet, elf weggeworfen. Genau diese Naht ist in dieser Nacht
         # viermal gerissen (geotag, motivlauf, melde, Gemini-Adresse).
-        urteile = _notizen_lesen(gelesen, modell, schluessel, transport)
+        urteile = _notizen_lesen(gelesen, modell, schluessel, transport, protokoll)
         gesammelt.extend(notizen.zu_ankern(gelesen, benannt, urteile=urteile))
 
     gesammelt.sort(key=lambda a: a.zeit)
@@ -191,6 +194,7 @@ def _notizen_lesen(
     modell: tuple[str, str] | None,
     schluessel: str | None,
     transport,
+    protokoll: messung.Protokoll | None = None,
 ) -> dict[str, object]:
     """Laesst jede Notiz vom Modell LESEN statt nach Stichworten absuchen.
 
@@ -222,11 +226,34 @@ def _notizen_lesen(
         # Antwort, die nicht falsch ist, sondern unmoeglich.
         nachbarn = tuple(x for x in namen[max(0, i - 2) : i + 3] if x != n.ordner)
         frage = notizurteil.prompt(" ".join(n.text.split()), ordner=n.ordner, nachbarn=nachbarn)
+        begonnen = time.monotonic()
         try:
             antwort = anfrage.sende(wahl.url(), wahl.baue_anfrage(frage), kopf, transport=transport)
         except anfrage.AnfrageFehler as exc:
             _LOG.warning("Notiz nicht gelesen: %s (%s)", n.ordner, exc)
+            if protokoll is not None:
+                # Ein Fehlschlag hat Zeit gekostet, und ein Lauf ohne seine
+                # Fehlschlaege sieht schneller aus, als er war.
+                protokoll.nimm(
+                    messung.Messwert(
+                        name=n.ordner,
+                        dauer_s=time.monotonic() - begonnen,
+                        art="notiz",
+                        fehler=str(exc),
+                    )
+                )
             continue
+        # Diese Anfragen kosten Geld und standen in keiner Messung. Aufgefallen
+        # ist es an KT-1s Kontostand: die Lauf-Zahl stimmte mit der Plattform
+        # auf 0,16 % ueberein -- bis auf rund 74.000 Tokens, und ein Teil davon
+        # war genau das hier. Die schlechteste Art von Luecke: sie faellt nicht
+        # auf, weil alles andere stimmt.
+        if protokoll is not None:
+            protokoll.nimm(
+                messung.Messwert.aus_antwort(
+                    n.ordner, antwort, dauer_s=time.monotonic() - begonnen, art="notiz"
+                )
+            )
         urteile[n.ordner] = notizurteil.aus_antwort(antwort)
 
     return urteile
@@ -237,6 +264,7 @@ def fahre(
     ziel: Path,
     *,
     anker: Sequence[Anker] = (),
+    anker_protokoll: messung.Protokoll | None = None,
     notiz_ordner: Path | None = None,
     entscheidungen: Path | None = None,
     schreiben_aktiv: bool = True,
@@ -325,6 +353,9 @@ def fahre(
         einstellungen = konfig.lade()
         modell = modell or einstellungen.modell
         if modell is not None:
+            # Die Anker-Anfragen (Notizen lesen) gehoeren in DIESELBE Rechnung:
+            # gemessen ist noch nicht ausgewiesen, und eine Zahl, die in keinem
+            # Bericht steht, hat die Luecke nur verschoben.
             lauf.motive = _bildanalyse(
                 mit_ort,
                 serien_auf_kopien,
@@ -335,6 +366,9 @@ def fahre(
                 melde_alle,
                 einstellungen.schluessel_datei,
             )
+            if anker_protokoll is not None:
+                for wert in anker_protokoll.werte:
+                    lauf.motive.messung.nimm(wert)
             for aufnahme, _ in mit_ort:
                 urteil = lauf.motive.fuer(_erstes_bild(aufnahme))
                 if urteil is None:

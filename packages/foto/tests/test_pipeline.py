@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from mkn_foto import anreichern, inventar, konfig, pipeline
+from mkn_foto import anreichern, inventar, konfig, messung, pipeline
 from mkn_foto.modell import Anker
 
 
@@ -921,3 +921,101 @@ def test_die_frage_nennt_die_nachbarsessions(tmp_path) -> None:
     assert len(fragen) == 2
     # Die Frage zur ZWEITEN Notiz muss die erste kennen.
     assert "2026-08-22_1210-1212" in fragen[1]
+
+
+def test_auch_die_notiz_anfragen_werden_gemessen(tmp_path, monkeypatch) -> None:
+    """**Die Luecke, die KT-1s Kontostand aufgedeckt hat.**
+
+    Am 2026-08-30 stimmte meine Lauf-Messung mit der Plattform auf 0,16 %
+    ueberein — bis auf rund 74.000 Tokens. Ein Teil davon waren die
+    Notiz-Anfragen: sie laufen VOR der Bildanalyse, in `anker_sammeln`, und
+    standen in keiner Messung.
+
+    Das ist die schlechteste Art von Messluecke: sie faellt nicht auf, weil
+    alles andere stimmt. Wer die Rechnung nur ueberschlaegt, findet sie nie —
+    KT-1 hat sie gefunden, indem er die Stundenwerte seiner Plattform neben
+    meine Zahl gelegt hat.
+    """
+    import json as _json
+
+    ordner = tmp_path / "antworten" / "2026-08-26_1541-1542"
+    ordner.mkdir(parents=True)
+    (ordner / "ort.md").write_text(
+        "# x\n\n## Ort\n\n\n## Gehoert zusammen mit\n\nSchon Zugspitze ganz oben\n", "utf-8"
+    )
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        return 200, _json.dumps(
+            {
+                "content": [{"type": "text", "text": '{"art": "kein_ort", "sicher": true}'}],
+                "usage": {"input_tokens": 900, "output_tokens": 40},
+            }
+        ).encode()
+
+    protokoll = messung.Protokoll()
+    pipeline.anker_sammeln(
+        notiz_ordner=ordner.parent,
+        modell=("anthropic", "test"),
+        schluessel="k",
+        transport=transport,
+        protokoll=protokoll,
+    )
+
+    assert protokoll.aufrufe == 1, "die Notiz-Anfrage wurde nicht gezaehlt"
+    assert protokoll.tokens_ein == 900
+    assert protokoll.tokens_aus == 40
+
+
+def test_der_lauf_weist_die_notiz_kosten_mit_aus(tmp_path, monkeypatch) -> None:
+    """Gemessen ist noch nicht ausgewiesen.
+
+    Die Notiz-Anfragen zu zaehlen nuetzt nichts, wenn ihre Zahl am Ende in
+    keinem Bericht steht — dann ist die Luecke nur verschoben. `fahre` nimmt
+    das Anker-Protokoll deshalb entgegen und fuehrt es mit der Bildanalyse
+    zusammen.
+    """
+    import json as _json
+    import shutil
+
+    if shutil.which("exiftool") is None:
+        import pytest as _p
+
+        _p.skip("exiftool nicht verfuegbar")
+
+    from PIL import Image
+
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    Image.new("RGB", (200, 150), (70, 90, 120)).save(quelle / "P0.JPG")
+    monkeypatch.setattr(
+        inventar.exif,
+        "lies",
+        lambda pfade: [{"EXIF:DateTimeOriginal": "2026:08:24 06:19:00", "EXIF:Model": "X-E5"}],
+    )
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        return 200, _json.dumps(
+            {
+                "content": [{"text": '{"sicher": false}'}],
+                "usage": {"input_tokens": 2000, "output_tokens": 100},
+            }
+        ).encode()
+
+    vorher = messung.Protokoll()
+    vorher.nimm(
+        messung.Messwert(name="notiz", dauer_s=1.0, art="notiz", tokens_ein=900, tokens_aus=40)
+    )
+
+    lauf = pipeline.fahre(
+        quelle,
+        tmp_path / "ziel",
+        schreiben_aktiv=True,
+        modell=("anthropic", "test"),
+        transport=transport,
+        anker_protokoll=vorher,
+        schluessel="k",
+    )
+
+    gesamt = lauf.motive.messung
+    assert gesamt.aufrufe == 2, "die Notiz-Anfrage fehlt in der Gesamtzahl"
+    assert gesamt.tokens_ein == 2900
