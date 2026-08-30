@@ -21,7 +21,7 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from mkn_foto.modell import Anker
@@ -81,7 +81,13 @@ def lies(wurzel: Path) -> list[Notiz]:
         gefunden.append(
             Notiz(
                 von=datetime.strptime(f"{tag} {von}", "%Y-%m-%d %H%M"),
-                bis=datetime.strptime(f"{tag} {bis}", "%Y-%m-%d %H%M"),
+                # Bis zum ENDE der Minute. Der Ordnername traegt Minuten, ein
+                # Spot Sekunden -- bei einer Einzelaufnahme um 18:41:23 und einem
+                # Ordner `1841-1841` ueberlappen die Fenster sonst nicht, und die
+                # Antwort geht verloren. Firsthand: fuenf von KT-1 beantwortete
+                # Sessions standen nach dem Lauf wieder auf der Frageliste --
+                # genau das, was er zwei Stunden zuvor beanstandet hatte.
+                bis=datetime.strptime(f"{tag} {bis}", "%Y-%m-%d %H%M") + timedelta(seconds=59),
                 text=text,
                 ordner=pfad.parent.name,
             )
