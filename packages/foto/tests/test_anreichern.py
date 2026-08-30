@@ -408,3 +408,49 @@ def test_handarbeit_im_sidecar_bleibt_stehen(tmp_path) -> None:
     hierarchisch = _lies(sidecar, "HierarchicalSubject").get("HierarchicalSubject", "")
     assert "Eigenes|Von Hand" in hierarchisch, f"Handarbeit geloescht: {hierarchisch}"
     assert "Motiv|Wald" in hierarchisch, f"eigenes Stichwort fehlt: {hierarchisch}"
+
+
+def test_ein_stichwort_mit_sonderzeichen_loescht_keine_handarbeit(tmp_path) -> None:
+    """**Charakterisierungstest: exiftool nimmt Werte woertlich.**
+
+    Ein Cross-Modell-Review meldete, `*` und `?` wuerden in `-TAG-=WERT` als
+    Platzhalter gelesen und `${...}` als Tag-Referenz -- ein modellgeneriertes
+    Stichwort mit diesen Zeichen loeschte beim `-=` dann MEHR als sich selbst,
+    und das Erste, was es traefe, waere KT-1s Handarbeit aus Capture One.
+
+    **Nachgeprueft trifft das nicht zu.** Alle drei werden woertlich genommen,
+    auch ein fuehrendes `-`; Platzhalter gelten bei exiftool fuer Tag-NAMEN,
+    nicht fuer Werte. Der daraufhin gebaute Schutzzweig war spekulativ und ist
+    wieder entfernt -- ein Review-Befund ist eine Frage, keine Bauanweisung.
+
+    Der Test bleibt, weil die Eigenschaft an einer Fremdabhaengigkeit haengt:
+    keine Mutation im eigenen Code macht ihn rot, eine kuenftige
+    exiftool-Version koennte es. Genau dafuer ist ein Charakterisierungstest da,
+    und der Docstring sagt es, statt eine Zusicherung ueber eigenen Code
+    vorzutaeuschen.
+    """
+    a = _aufnahme(tmp_path, "DSCF9003", (".RAF",))
+    sidecar = tmp_path / "DSCF9003.xmp"
+    subprocess.run(
+        [
+            "exiftool",
+            "-q",
+            "-o",
+            str(sidecar),
+            "-XMP-lr:HierarchicalSubject+=Eigenes|Von Hand",
+            str(a.dateien[".RAF"]),
+        ],
+        capture_output=True,
+        check=False,
+    )
+    assert sidecar.exists(), "Vorbedingung nicht hergestellt: kein Sidecar"
+
+    anreichern.schreibe([(a, ORT)], motive={id(a): ("Wald*", "${Model} Ding", "-kein-schalter")})
+
+    hierarchisch = _lies(sidecar, "HierarchicalSubject").get("HierarchicalSubject", "")
+    assert "Eigenes|Von Hand" in hierarchisch, (
+        f"ein Sonderzeichen im Stichwort hat fremde Eintraege geloescht: {hierarchisch}"
+    )
+    # Und die Werte selbst kommen woertlich an -- sonst prueft der Test nur,
+    # dass nichts passiert ist, und das waere ueber dem Nichts trivial wahr.
+    assert "Wald*" in hierarchisch, f"der Wert kam nicht woertlich an: {hierarchisch}"

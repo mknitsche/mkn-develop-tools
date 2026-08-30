@@ -235,13 +235,17 @@ angekuendigt als zu billig), aber es gehoert gesagt statt verschwiegen.
 Genauer ginge es nur mit den `cache_read_input_tokens` aus der Antwort -- die
 werden bisher nicht ausgewertet."""
 
-SIDECAR = ".xmp"
-"""Die Sidecar-Endung. Wohin ein Zwischenurteil GEHOERT, entscheidet dagegen
-`anreichern.traeger` -- eine Endung ist keine Regel.
+SIDECAR = anreichern.SIDECAR
+"""Die Sidecar-Endung -- ausgeliehen, nicht kopiert.
 
-Der Kommentar hier sagte frueher "dieselbe Datei wie in `anreichern`", und genau
-das stimmte nur fuer RAW. Bei einem JPEG bettet `anreichern` ein, waehrend hier
-danebengeschrieben wurde: dieselbe Aussage an zwei Stellen."""
+Wohin ein Zwischenurteil GEHOERT, entscheidet ohnehin `anreichern.traeger`; eine
+Endung ist keine Regel. Der Kommentar hier sagte frueher "dieselbe Datei wie in
+`anreichern`", und genau das stimmte nur fuer RAW -- bei einem JPEG bettet
+`anreichern` ein, waehrend hier danebengeschrieben wurde.
+
+Auch die blosse Konstante blieb danach doppelt: Lese- und Schreibzweig haetten
+bei einer Aenderung auf verschiedene Dateien gezeigt. Ein Modul, das eine Regel
+ausleiht, aber ihre Zeichenkette nachbaut, hat die Haelfte des Fehlers behalten."""
 
 MOTIV_MARKE = "Motiv|"
 """Woran ein bereits beurteiltes Bild zu erkennen ist. Der Baum IST der Zustand
@@ -282,13 +286,35 @@ def _merke(bild: Path, urteil: bildurteil.Urteil) -> None:
     else:
         befehl += ["-o", str(ziel), str(bild)]
     try:
-        subprocess.run(befehl, check=False, capture_output=True, timeout=30)
+        fertig = subprocess.run(befehl, check=False, capture_output=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as exc:
         _LOG.warning("Urteil nicht gemerkt: %s (%s)", bild.name, exc)
+        return
+    if fertig.returncode != 0:
+        # **Der Rueckgabewert MUSS gelesen werden.** Der Docstring oben sagt
+        # "kostet im schlimmsten Fall EINEN doppelten Aufruf" -- das stimmt nur
+        # fuer einen EINMALIGEN Fehlschlag. Kann ein Format grundsaetzlich nicht
+        # beschrieben werden (HEIC braucht exiftool >= 12.44 fuer XMP,
+        # schreibgeschuetzte Datei, defekte Datei), schlaegt es bei JEDEM Bild
+        # fehl und bei JEDEM Lauf erneut -- lautlos, weil die Marke fehlt und
+        # `aus_baum` das Bild folgerichtig fuer unbeurteilt haelt. Aus einem
+        # doppelten Aufruf wird so ein doppelter LAUF. Genau der Schaden, den
+        # dieses Modul verhindern soll.
+        _LOG.warning(
+            "Urteil nicht gemerkt: %s (exiftool %s: %s)",
+            bild.name,
+            fertig.returncode,
+            fertig.stderr.decode("utf-8", "replace").strip()[:200],
+        )
 
 
 def aus_baum(bilder: Sequence[Path]) -> Ergebnis:
-    """Liest den Stand eines frueheren Laufs aus den Sidecars.
+    """Liest den Stand eines frueheren Laufs -- eingebettet UND aus Sidecars.
+
+    Zwei Wege, weil die Traeger-Regel zwei kennt: ein JPEG traegt seine Marke in
+    sich, ein RAW im Sidecar daneben. Zusaetzlich wird auch bei einem JPEG der
+    Sidecar geprueft -- Baeume aus frueheren Laeufen tragen ihn dort, weil die
+    Regel damals nicht galt. Beim Lesen nachsichtig, beim Schreiben streng.
 
     Geprueft wird nur die ANWESENHEIT eines Motiv-Stichworts, nicht sein Inhalt:
     was einmal geschrieben wurde, ist beurteilt. Wer den Inhalt neu bewerten
@@ -336,19 +362,38 @@ def _mit_marke(bilder: Sequence[Path]) -> list[Path]:
     einen doppelten Modellaufruf. Die Gegenrichtung waere teurer -- ein Bild
     faelschlich fuer erledigt zu halten, hiesse, dass es NIE ein Urteil bekommt.
     """
+    gefunden: list[Path] = []
+    # In Haeppchen, nicht alles auf einmal. Zwei Gruende, und der zweite wiegt
+    # schwerer: 1.300 lange Pfade ergeben rund 200 KiB argv -- unter ARG_MAX,
+    # aber ohne Reserve. Vor allem aber wuerde EIN Fehlschlag den GANZEN Stapel
+    # als offen werten, und "offen" heisst hier: bis zu 1.300 bezahlte Urteile
+    # ein zweites Mal kaufen. So kostet ein Fehlschlag nur sein Haeppchen.
+    for anfang in range(0, len(bilder), _STAPEL):
+        gefunden.extend(_marken_stapel(bilder[anfang : anfang + _STAPEL]))
+    return gefunden
+
+
+_STAPEL = 200
+"""Wie viele Dateien EIN exiftool-Aufruf abfragt."""
+
+
+def _marken_stapel(bilder: Sequence[Path]) -> list[Path]:
     if not bilder:
         return []
     try:
         roh = subprocess.run(
             ["exiftool", "-q", "-json", "-XMP-lr:HierarchicalSubject", *[str(b) for b in bilder]],
             capture_output=True,
-            text=True,
             check=False,
             timeout=300,
-        ).stdout
+        ).stdout.decode("utf-8", "replace")
     except (OSError, subprocess.SubprocessError) as exc:
         _LOG.warning("eingebettete Marken nicht lesbar, gelten als offen (%s)", exc)
         return []
+    # Bewusst KEIN `text=True`: das dekodiert mit dem Locale-Encoding, und unter
+    # LC_ALL=C wirft ein Umlaut im Pfad einen UnicodeDecodeError -- der weder
+    # OSError noch SubprocessError ist und die Wiederaufnahme mitreisst, statt
+    # sie auf "offen" fallen zu lassen. exiftool liefert JSON in UTF-8.
     if not roh.strip():
         return []
     try:
@@ -358,6 +403,20 @@ def _mit_marke(bilder: Sequence[Path]) -> list[Path]:
         return []
     gefunden: list[Path] = []
     for e in eintraege:
-        if MOTIV_MARKE in str(e.get("HierarchicalSubject", "")):
+        if _traegt_marke(e.get("HierarchicalSubject")):
             gefunden.append(Path(e["SourceFile"]))
     return gefunden
+
+
+def _traegt_marke(wert: object) -> bool:
+    """Ob unter den Stichworten eines mehrwertigen Feldes eine Motiv-Marke ist.
+
+    Geprueft wird je EINTRAG auf seinen Anfang, nicht der zusammengesetzte Text
+    auf ein Vorkommen. Ein fremdes Stichwort aus Capture One wie
+    `Themen|Motiv|Ideen` enthaelt `Motiv|` als Teilstring; ein Substring-Test
+    haette das Bild fuer beurteilt gehalten, und es haette **nie** ein Urteil
+    bekommen -- die teurere der beiden Fehlrichtungen, wie der Kommentar an
+    `_mit_marke` selbst festhaelt.
+    """
+    werte = wert if isinstance(wert, list) else [wert]
+    return any(isinstance(w, str) and w.startswith(MOTIV_MARKE) for w in werte)

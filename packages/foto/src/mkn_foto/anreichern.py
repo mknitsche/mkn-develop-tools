@@ -119,6 +119,17 @@ def _setze(feld: str, wert: str) -> list[str]:
     Motiv-Marke waehrend des Laufs an, hier wurde dieselbe danach ein zweites
     Mal angehaengt. Gemessen am Lauf ueber die 42 Nuernberger Aufnahmen: 29 von
     42 Sidecars (69 %) trugen ihre Stichworte doppelt, die JPEGs einfach.
+
+    **Der Wert braucht keine Saeuberung, und das ist gemessen, nicht vermutet.**
+    Ein Cross-Modell-Review meldete, `*`, `?` und `${...}` wuerden im `-=`-Wert
+    als Platzhalter bzw. Tag-Referenz gelesen und loeschten dann mehr als sich
+    selbst -- also fremde Stichworte. Nachgeprueft trifft das nicht zu:
+    exiftool nimmt alle drei woertlich, auch ein fuehrendes `-`; Platzhalter
+    gelten dort fuer Tag-NAMEN, nicht fuer Werte. Der daraufhin gebaute
+    Schutzzweig war spekulativ und ist wieder entfernt (HC-7). Die Eigenschaft
+    haengt aber an einer Fremdabhaengigkeit und wird deshalb von einem
+    Charakterisierungstest festgehalten, damit eine kuenftige exiftool-Version
+    sie nicht still aendert.
     """
     return [f"-{feld}-={wert}", f"-{feld}+={wert}"]
 
@@ -170,13 +181,18 @@ def schreibe(
 
     for aufnahme, ort in eintraege:
         stichworte = stichworte_je_aufnahme.get(id(aufnahme), [])
-        for endung, pfad in aufnahme.dateien.items():
+        for pfad in aufnahme.dateien.values():
+            ziel, ist_eingebettet = traeger(pfad)
             argumente = _argumente(
                 ort,
                 stichworte,
                 beschreibung=beschreibungen.get(id(aufnahme)),
                 serienbild=id(aufnahme) in in_serie,
-                eingebettet=endung.upper() in EINGEBETTET,
+                # NICHT noch einmal selbst entscheiden: `traeger` oben hat die
+                # Frage bereits beantwortet. Eine zweite Fassung derselben Regel
+                # im selben Block ist genau der Fehler, den dieser Commit
+                # behebt -- nur eine Zeile weiter unten.
+                eingebettet=ist_eingebettet,
                 unklar_grund=unklar.get(id(aufnahme)),
                 urheber_angaben=urheber_angaben,
                 jahr=aufnahme.zeitpunkt.year if aufnahme.zeitpunkt else None,
@@ -185,7 +201,6 @@ def schreibe(
             )
             if not argumente:
                 continue
-            ziel, ist_eingebettet = traeger(pfad)
             if ist_eingebettet:
                 extra = ["-overwrite_original"]
                 zaehler = "eingebettet"
