@@ -1,0 +1,230 @@
+"""Der Laeufer: Vorschau, Modell, Urteil, Datei — ueber 1.293 Aufnahmen.
+
+**Die Wiederaufnahme laeuft ueber den BAUM selbst, nicht ueber ein Journal.**
+Wer schon ein `Motiv |`-Stichwort traegt, wird uebersprungen. Das ist kein
+Sparzwang, sondern HC-1: ein Journal waere ein zweiter Zustand neben dem
+Ergebnis, und die beiden driften, sobald ein Lauf abbricht — genau in dem
+Moment, in dem man sich auf die Wiederaufnahme verlassen muss.
+
+**Ein Abbruch ist der Normalfall, nicht die Ausnahme.** 630 Modellaufrufe dauern
+Stunden; dazwischen faellt das Netz aus, das Limit greift, der Deckel geht zu.
+Der Lauf muss danach dort weitermachen, wo er war — ohne dass jemand etwas
+aufraeumt.
+
+Alle Tests offline: der Transport ist injiziert, kein Netz, kein Schluessel.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from mkn_foto import kontaktbogen, motivlauf
+
+from mkn_kern import modelle
+
+pytest.importorskip("PIL")
+from PIL import Image
+
+
+def kontaktbogen_breite_einer_kachel() -> int:
+    """Eine Kachel plus Raender — alles darueber ist ein Bogen mit mehreren."""
+    return kontaktbogen.KACHEL_PX + 2 * kontaktbogen.RAND_PX
+
+
+def _wahl() -> modelle.Wahl:
+    return modelle.Wahl(anbieter="anthropic", modell="test-modell")
+
+
+def _antwort(motive, sicher=True, belichtung="gut"):
+    nutzlast = {
+        "sicher": sicher,
+        "motive": list(motive),
+        "beschreibung": "Ein Satz.",
+        "belichtung": belichtung,
+    }
+    return 200, json.dumps({"content": [{"text": json.dumps(nutzlast)}]}).encode()
+
+
+def _bild(ordner: Path, name: str) -> Path:
+    ordner.mkdir(parents=True, exist_ok=True)
+    p = ordner / name
+    Image.new("RGB", (300, 200), (120, 90, 60)).save(p)
+    return p
+
+
+def test_jedes_bild_bekommt_sein_urteil(tmp_path):
+    bilder = [_bild(tmp_path, f"b{i}.jpg") for i in range(3)]
+    aufrufe = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        aufrufe.append(url)
+        return _antwort(["Wald", "Nebel"])
+
+    ergebnis = motivlauf.fahre(
+        [(b, None) for b in bilder], _wahl(), transport=transport, schluessel="x"
+    )
+
+    assert len(aufrufe) == 3, f"erwartet drei Aufrufe, gezaehlt {len(aufrufe)}"
+    assert len(ergebnis.urteile) == 3
+    assert all(u.sicher for u in ergebnis.urteile.values())
+
+
+def test_eine_serie_kostet_genau_einen_aufruf(tmp_path):
+    """Der Grund, warum die Analyse bezahlbar bleibt: eine Serie ist EIN Motiv.
+    630 Aufrufe statt 1.293, rund 7 EUR statt 13."""
+    mitglieder = [_bild(tmp_path, f"s{i}.jpg") for i in range(5)]
+    aufrufe = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        aufrufe.append(json.loads(koerper))
+        return _antwort(["Panorama", "Bergkette"])
+
+    ergebnis = motivlauf.fahre(
+        [(mitglieder[0], mitglieder)], _wahl(), transport=transport, schluessel="x"
+    )
+
+    assert len(aufrufe) == 1, f"eine Serie kostete {len(aufrufe)} Aufrufe"
+    assert len(ergebnis.urteile) == 1
+    # Alle Mitglieder erben dasselbe Urteil.
+    assert ergebnis.fuer(mitglieder[3]) is ergebnis.fuer(mitglieder[0])
+
+    # Und es muss der KONTAKTBOGEN mitgehen, nicht bloss das erste Bild: sonst
+    # urteilt das Modell ueber eine Aufnahme und die Serie erbt es blind. Der
+    # Bogen ist breiter als eine Einzelkachel -- daran ist er zu erkennen.
+    import base64
+    import io
+
+    daten = aufrufe[0]["messages"][0]["content"]
+    bildteil = next(x for x in daten if x.get("type") == "image")
+    roh = base64.standard_b64decode(bildteil["source"]["data"])
+    with Image.open(io.BytesIO(roh)) as gesendet:
+        assert gesendet.width > kontaktbogen_breite_einer_kachel(), (
+            f"es ging ein Einzelbild mit ({gesendet.width} px breit), kein Kontaktbogen"
+        )
+
+
+def test_ein_zweiter_lauf_macht_keinen_einzigen_aufruf(tmp_path):
+    """Die Wiederaufnahme. Ein Abbruch nach 400 von 630 Aufrufen ist normal —
+    der zweite Lauf darf die 400 nicht noch einmal bezahlen."""
+    bilder = [_bild(tmp_path, f"w{i}.jpg") for i in range(3)]
+    aufrufe = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        aufrufe.append(url)
+        return _antwort(["Wald"])
+
+    eintraege = [(b, None) for b in bilder]
+    erstes = motivlauf.fahre(eintraege, _wahl(), transport=transport, schluessel="x")
+    erste_runde = len(aufrufe)
+
+    # Der Zustand des ersten Laufs geht in den zweiten -- er IST der Zustand,
+    # daneben gibt es keinen (HC-1). Die Pipeline baut ihn aus dem Baum.
+    motivlauf.fahre(eintraege, _wahl(), transport=transport, schluessel="x", vorhandene=erstes)
+
+    assert erste_runde == 3
+    assert len(aufrufe) == 3, (
+        f"der zweite Lauf hat {len(aufrufe) - erste_runde} Aufrufe wiederholt — "
+        "die Wiederaufnahme greift nicht"
+    )
+
+
+def test_ein_gescheiterter_aufruf_stoppt_den_lauf_nicht(tmp_path):
+    """Bei 630 Aufrufen ist ein Fehler normal. Er darf die anderen 629 nicht
+    mitnehmen — und er muss im Ergebnis stehen, nicht im Nichts."""
+    bilder = [_bild(tmp_path, f"f{i}.jpg") for i in range(3)]
+    zaehler = {"n": 0}
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        zaehler["n"] += 1
+        if zaehler["n"] == 2:
+            return 429, b'{"error":{"message":"rate limit"}}'
+        return _antwort(["Wald"])
+
+    ergebnis = motivlauf.fahre(
+        [(b, None) for b in bilder], _wahl(), transport=transport, schluessel="x"
+    )
+
+    assert len(ergebnis.urteile) == 2, "die gesunden Bilder fehlen"
+    assert len(ergebnis.fehler) == 1, f"der Fehler steht nirgends: {ergebnis.fehler}"
+    assert "rate limit" in ergebnis.fehler[0][1]
+
+
+def test_ohne_lesbare_vorschau_wird_kein_aufruf_gemacht(tmp_path):
+    """Ein Aufruf ohne Bild kostet Geld und liefert eine fluessige, vollstaendig
+    erfundene Antwort — das ist schlimmer als kein Aufruf."""
+    kaputt = tmp_path / "kaputt.jpg"
+    kaputt.write_bytes(b"kein bild")
+    aufrufe = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        aufrufe.append(url)
+        return _antwort(["irgendwas"])
+
+    ergebnis = motivlauf.fahre([(kaputt, None)], _wahl(), transport=transport, schluessel="x")
+
+    assert not aufrufe, "es wurde ohne Bild angefragt"
+    assert ergebnis.fehler, "der Grund fehlt im Ergebnis"
+
+
+def test_das_bild_geht_wirklich_mit(tmp_path):
+    """Untergrenze: ein stillschweigend weggelassenes Bild ergibt eine fluessige,
+    vollstaendig erfundene Antwort — und die sieht man ihr nicht an."""
+    bild = _bild(tmp_path, "mit.jpg")
+    gesehen = {}
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        gesehen["koerper"] = json.loads(koerper)
+        return _antwort(["Wald"])
+
+    motivlauf.fahre([(bild, None)], _wahl(), transport=transport, schluessel="x")
+
+    inhalt = gesehen["koerper"]["messages"][0]["content"]
+    bildteile = [t for t in inhalt if t.get("type") == "image"]
+    assert bildteile, f"kein Bild in der Anfrage: {[t.get('type') for t in inhalt]}"
+    assert bildteile[0]["source"]["data"], "das Bild ist leer"
+
+
+def test_der_zustand_laesst_sich_aus_dem_baum_lesen(tmp_path):
+    """Die Wiederaufnahme braucht keinen zweiten Zustand.
+
+    Wer schon ein `Motiv |`-Stichwort in seinem Sidecar traegt, ist beurteilt.
+    Ein Journal daneben waere ein zweiter Zustand ueber dieselbe Sache — und die
+    beiden driften, sobald ein Lauf abbricht, also genau dann, wenn man sich auf
+    die Wiederaufnahme verlassen muss (HC-1).
+    """
+    fertig = _bild(tmp_path, "fertig.jpg")
+    offen = _bild(tmp_path, "offen.jpg")
+    (tmp_path / "fertig.xmp").write_text(
+        "<x:xmpmeta><lr:hierarchicalSubject>Motiv|Wald</lr:hierarchicalSubject></x:xmpmeta>",
+        encoding="utf-8",
+    )
+
+    zustand = motivlauf.aus_baum([fertig, offen])
+
+    assert fertig in zustand.urteile, "das fertige Bild wird nicht erkannt"
+    assert offen not in zustand.urteile, "das offene Bild gilt faelschlich als fertig"
+
+
+def test_ein_sidecar_ohne_motiv_gilt_als_offen(tmp_path):
+    """Untergrenze zur Baum-Lesung: ein Sidecar ist nicht dasselbe wie ein
+    Urteil.
+
+    Nach V1 traegt JEDE Aufnahme einen Sidecar (Ort, Serie, Technik) — aber noch
+    kein Motiv. Wer die blosse Anwesenheit der Datei als „erledigt" liest,
+    ueberspringt den ganzen Bestand und macht null Aufrufe.
+    """
+    bild = _bild(tmp_path, "mit-sidecar.jpg")
+    (tmp_path / "mit-sidecar.xmp").write_text(
+        "<x:xmpmeta><lr:hierarchicalSubject>Technik|Einzelbild"
+        "</lr:hierarchicalSubject></x:xmpmeta>",
+        encoding="utf-8",
+    )
+
+    zustand = motivlauf.aus_baum([bild])
+
+    assert bild not in zustand.urteile, (
+        "ein Sidecar ohne Motiv-Stichwort gilt als beurteilt — dann macht der "
+        "Lauf ueber den ganzen Bestand keinen einzigen Aufruf"
+    )
