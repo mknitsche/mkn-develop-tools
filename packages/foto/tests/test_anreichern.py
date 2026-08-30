@@ -260,3 +260,34 @@ def test_jede_datei_nennt_den_stand_der_sie_geschrieben_hat(tmp_path, monkeypatc
     assert stand, "keine Angabe, welcher Stand die Datei geschrieben hat"
     assert mkn_foto.__version__ in stand[0]
     assert "mkn-foto" in stand[0]
+
+
+def test_neben_dem_sidecar_bleibt_keine_kopie_liegen(tmp_path) -> None:
+    """**KT-1s Verzeichnis, 2026-08-30: 1.228 Dateien Muell.**
+
+    Beim Schreiben in einen VORHANDENEN Sidecar fehlte `-overwrite_original` --
+    also legte exiftool jedes Mal eine `.xmp_original` daneben. Nach einem Lauf
+    ueber 1.234 Aufnahmen lagen 1.228 Sicherungskopien zwischen den Bildern.
+
+    Klein (2,5 MB), aber genau das, was KT-1 verboten hatte: *"und muelle nicht
+    den mac oder die 1tb hdd zu"*. Und schlimmer als ihre Groesse ist die
+    Verwirrung: wer den Ordner oeffnet, sieht doppelt so viele Dateien wie
+    Bilder.
+
+    Die Sicherungskopie ist hier auch sachlich ueberfluessig: der Zielbaum ist
+    selbst schon die Kopie, die Originale werden nie angefasst.
+    """
+    aufnahme = _aufnahme(tmp_path, "DSCF7", (".RAF",))
+    sidecar = tmp_path / "DSCF7.xmp"
+    sidecar.write_text(
+        '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/">'
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+        '<rdf:Description rdf:about=""/></rdf:RDF></x:xmpmeta><?xpacket end="w"?>',
+        encoding="utf-8",
+    )
+
+    anreichern.schreibe([(aufnahme, ORT)])
+
+    assert sidecar.exists(), "der vorhandene Sidecar muss ergaenzt werden"
+    uebrig = list(tmp_path.glob("*_original"))
+    assert not uebrig, f"Sicherungskopien liegen geblieben: {[p.name for p in uebrig]}"
