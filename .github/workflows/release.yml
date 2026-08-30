@@ -27,3 +27,14 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          # Ohne diese Zeile scheitert JEDER Release-PR an der DCO-Pruefung:
+          # release-please schreibt seinen Commit ohne `Signed-off-by`, und der
+          # Riegel in ci.yml verlangt ihn an jedem Commit. Der erste
+          # Release-PR (#22) hat es sofort gezeigt.
+          #
+          # Die Zeile ist kein Trick, um die Regel zu umgehen: der Commit
+          # enthaelt ausschliesslich Versionsnummern und Changelog-Eintraege,
+          # beides aus bereits abgezeichneten Commits erzeugt. Wer die
+          # Herkunft dieser Zeilen bezeugt, ist derselbe, der die Commits
+          # abgezeichnet hat.
+          signoff: "Matthias Nitsche <266421433+mknitsche@users.noreply.github.com>"
