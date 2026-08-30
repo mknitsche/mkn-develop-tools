@@ -22,6 +22,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   carrying the *exposure's* year, reachability in the creator-contact fields,
   and an explicit `xmpRights:Marked`.
 - Getting-started guide and a configuration reference in the package README.
+- `mkn-foto`: handwritten answers are now **read**, not transcribed. A model
+  interprets each note, so "the previous folder", "already the Zugspitze" and
+  "it's black, badly exposed" carry the meaning they obviously have. Measured
+  against 20 real notes: keyword matching recognised nine of them.
+- Every written file records **which build wrote it** (`xmp:CreatorTool`).
+  Without it, a tree assembled over several runs cannot be told apart, and the
+  only safe answer is to delete it and start over. That is exactly what
+  happened on 2026-08-30.
+- Automated versioning (release-please): versions move from the commits, not by
+  hand, and both places that carry a version stay in step.
 
 ### Fixed
 - `mkn-foto`: a second run over the same destination tree used to do nothing
