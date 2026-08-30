@@ -103,7 +103,7 @@ class Wahl:
     def _profil(self) -> _Anbieter:
         return ANBIETER[self.anbieter]
 
-    def schluessel(self) -> str | None:
+    def schluessel(self, *, ablage: Path | None = None) -> str | None:
         """Liest den Schluessel des GEWAEHLTEN Anbieters — Umgebung, dann Datei.
 
         **Die Software kennt den ORT, nicht den Schluessel** (KT-1s Konzept,
@@ -116,6 +116,11 @@ class Wahl:
         MEINT sie — sonst waere ein einmaliger Wechsel nicht moeglich, ohne eine
         Datei anzufassen.
 
+        ``ablage`` nennt den Ort direkt — so kann eine Konfigurationsdatei ihn
+        tragen, ohne dass der Anwender eine Umgebungsvariable setzen muss. Ohne
+        diesen Weg waere ein Konfigurationsfeld ``schluessel_datei`` ein Feld,
+        das Deckung behauptet und keine hat.
+
         ``None`` bei lokalen Anbietern — dort ist das kein Mangel, sondern der
         Normalfall.
         """
@@ -127,7 +132,11 @@ class Wahl:
         if wert:
             return wert
 
-        ablage = os.environ.get(SCHLUESSEL_DATEI_VARIABLE)
+        # Der Ort kann aus der Umgebung ODER vom Aufrufer kommen (etwa aus einer
+        # Konfigurationsdatei). Die Umgebung zuerst: wer sie setzt, MEINT sie --
+        # sonst waere ein einmaliger Wechsel ohne Dateiaenderung nicht moeglich.
+        genannt = os.environ.get(SCHLUESSEL_DATEI_VARIABLE)
+        ablage = Path(genannt) if genannt else ablage
         if ablage:
             aus_datei = self._aus_datei(Path(ablage))
             if aus_datei:
