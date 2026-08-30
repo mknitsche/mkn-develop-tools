@@ -290,3 +290,71 @@ def test_serien_und_einzelbilder_werden_getrennt_gemessen(tmp_path):
 
     arten = {w.art for w in ergebnis.messung.werte}
     assert arten == {"einzel", "serie"}, f"die Arten werden nicht getrennt: {arten}"
+
+
+def test_der_lauf_meldet_fortschritt(tmp_path):
+    """KT-1 vor dem Start: "zeit auch messen und auch fortschritt".
+
+    969 Aufrufe dauern Stunden. Ein Lauf ohne Zwischenmeldung ist ein blinder
+    Fleck, kein Fortschritt — man weiss nicht, ob er arbeitet, wo er steht und
+    wann er fertig ist.
+    """
+    bilder = [_bild(tmp_path, f"p{i}.jpg") for i in range(5)]
+    meldungen = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        status, roh = _antwort(["Wald"])
+        d = json.loads(roh)
+        d["usage"] = {"input_tokens": 2000, "output_tokens": 100}
+        return status, json.dumps(d).encode()
+
+    motivlauf.fahre(
+        [(b, None) for b in bilder],
+        _wahl(),
+        transport=transport,
+        schluessel="x",
+        melde=meldungen.append,
+        melde_alle=2,
+    )
+
+    assert meldungen, "keine einzige Fortschrittsmeldung"
+    # Jede Meldung nennt, wo der Lauf steht.
+    assert any("5" in m for m in meldungen), f"die Gesamtzahl fehlt: {meldungen}"
+
+
+def test_die_meldung_nennt_verbrauch_und_hochrechnung(tmp_path):
+    """Ohne beides ist "Bild 400 von 969" eine Zahl ohne Folge. Mit beidem
+    kann KT-1 entscheiden, ob er den Lauf weiterlaufen laesst."""
+    bilder = [_bild(tmp_path, f"h{i}.jpg") for i in range(4)]
+    meldungen = []
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        status, roh = _antwort(["Wald"])
+        d = json.loads(roh)
+        d["usage"] = {"input_tokens": 2000, "output_tokens": 100}
+        return status, json.dumps(d).encode()
+
+    motivlauf.fahre(
+        [(b, None) for b in bilder],
+        _wahl(),
+        transport=transport,
+        schluessel="x",
+        melde=meldungen.append,
+        melde_alle=2,
+    )
+
+    letzte = meldungen[-1]
+    assert "EUR" in letzte or "€" in letzte, f"kein Verbrauch in der Meldung: {letzte}"
+    assert "min" in letzte or "s" in letzte, f"keine Zeitangabe: {letzte}"
+
+
+def test_ohne_melde_funktion_laeuft_es_trotzdem(tmp_path):
+    """Untergrenze: die Meldung ist ein Zusatz, kein Fundament."""
+    bild = _bild(tmp_path, "still.jpg")
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        return _antwort(["Wald"])
+
+    ergebnis = motivlauf.fahre([(bild, None)], _wahl(), transport=transport, schluessel="x")
+
+    assert len(ergebnis.urteile) == 1

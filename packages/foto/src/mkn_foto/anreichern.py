@@ -57,6 +57,10 @@ die Rangfolge gesetzt. Sie ist auch sachlich richtig: die Serienzugehoerigkeit
 steht DREIFACH in der Datei (Ordner, Dateiname, Stichwort) — dort ist die Farbe
 nur Sichthilfe. Die Unklarheit steht sonst nirgends sichtbar."""
 
+MOTIV = "Motiv"
+"""Der Zweig fuer das, was IM Bild ist. Freies Vokabular (Spec Paragraf 6) --
+der Praefix sortiert, er schraenkt nicht ein."""
+
 PRUEFEN = "Pruefen"
 """Das Filterwort. Immer WORTGLEICH, sonst findet eine Suche nur einen Teil —
 und die Liste ist unvollstaendig, ohne dass man es sieht. Der Grund haengt
@@ -87,6 +91,7 @@ def schreibe(
     serien: Iterable[Serie] = (),
     beschreibungen: dict[int, str] | None = None,
     unklar: dict[int, str] | None = None,
+    motive: dict[int, tuple[str, ...]] | None = None,
 ) -> Ergebnis:
     """Schreibt Ort, Serie, Technik und Beschreibung an jede Aufnahme.
 
@@ -96,7 +101,13 @@ def schreibe(
     """
     beschreibungen = beschreibungen or {}
     unklar = unklar or {}
+    motive = motive or {}
     stichworte_je_aufnahme = _stichworte(eintraege, serien)
+    # Was das Modell gesehen hat, kommt als eigener Zweig dazu -- freies
+    # Vokabular, wie die Spec es verlangt (Paragraf 6: 'Motiv nimmt, was im
+    # Bild ist; der Zweig ist ein Praefix zum Sortieren, keine Schranke').
+    for kennung, worte in motive.items():
+        stichworte_je_aufnahme.setdefault(kennung, []).extend(f"{MOTIV}|{w}" for w in worte)
     in_serie = {id(a) for s in serien for a in s.aufnahmen}
     ergebnis = Ergebnis()
 
