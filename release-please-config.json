@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": false,
+  "plugins": ["linked-versions"],
+  "packages": {
+    "packages/foto": {
+      "release-type": "python",
+      "package-name": "mkn-foto",
+      "component": "foto",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["src/mkn_foto/__init__.py"]
+    },
+    "packages/kern": {
+      "release-type": "python",
+      "package-name": "mkn-kern",
+      "component": "kern",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": ["src/mkn_kern/__init__.py"]
+    }
+  }
+}
