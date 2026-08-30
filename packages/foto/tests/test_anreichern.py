@@ -227,4 +227,4 @@ def test_der_urheber_landet_an_jeder_datei(tmp_path: Path, monkeypatch) -> None:
     assert gerufen, "exiftool wurde gar nicht gerufen"
     assert "-XMP-dc:Creator=Erika Muster" in gerufen[0]
     # Das Aufnahmejahr, nicht das heutige.
-    assert "-XMP-dc:Rights=(C) 2019 Erika Muster" in gerufen[0]
+    assert "-XMP-dc:Rights=© 2019 Erika Muster" in gerufen[0]

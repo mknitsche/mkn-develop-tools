@@ -65,7 +65,7 @@ def test_das_copyright_traegt_das_aufnahmejahr(tmp_path: Path) -> None:
 
     args = wer.argumente(jahr=2019, eingebettet=False)
 
-    assert "-XMP-dc:Rights=(C) 2019 Erika Muster" in args
+    assert "-XMP-dc:Rights=© 2019 Erika Muster" in args
 
 
 def test_die_erreichbarkeit_steht_in_den_kontaktfeldern(tmp_path: Path) -> None:
@@ -98,3 +98,51 @@ def test_kaputtes_json_stuerzt_nicht_ab(tmp_path: Path) -> None:
     datei.write_text("{kein json", encoding="utf-8")
 
     assert urheber.lade(datei) is None
+
+
+def test_der_rechtevermerk_bleibt_kurz(tmp_path: Path) -> None:
+    """Der IPTC-Fachstandard, nicht Sparsamkeit.
+
+    Die Copyright Notice soll LESBAR bleiben: Zeichen, Jahr, Name. Die
+    Erreichbarkeit gehoert in die Creator-Contact-Felder, ausfuehrliche
+    Rechtssprache in `UsageTerms`. Ein vollgestopfter Vermerk ist fuer Menschen
+    muehsam und fuer Maschinen wertlos, weil keine Auswertung ihn zerlegt.
+
+    (Meine erste Fassung schrieb Ort und Mailadresse in denselben String. KT-1
+    fragte, wie es Fotografen halten -- und die Antwort war eine andere als
+    meine Annahme.)
+    """
+    wer = urheber.Urheber(name="Erika Muster", stadt="M", land="Germany", email="e@m.de")
+
+    args = wer.argumente(jahr=2019, eingebettet=False)
+
+    assert "-XMP-dc:Rights=© 2019 Erika Muster" in args
+    assert not [a for a in args if a.startswith("-XMP-dc:Rights") and "e@m.de" in a]
+
+
+def test_der_rechtestatus_wird_ausdruecklich_gesetzt(tmp_path: Path) -> None:
+    """`Marked` ist die Aussage "dieses Bild ist geschuetzt".
+
+    Ohne sie bleibt der Status formal UNBEKANNT, auch wenn ein Vermerk
+    danebensteht -- und genau dieses Feld werten Suchmaschinen aus.
+    """
+    args = urheber.Urheber(name="Erika Muster").argumente(jahr=2019, eingebettet=False)
+
+    assert "-XMP-xmpRights:Marked=True" in args
+
+
+def test_website_und_nutzungsbedingungen_kommen_aus_der_datei(tmp_path: Path) -> None:
+    """KT-1: *"auch ein punkt, den ein anwender vorgibt"*. Nichts davon steht
+    im Code -- auch nicht als Vorgabe."""
+    datei = tmp_path / "u.json"
+    datei.write_text(
+        '{"name": "E", "website": "https://x.de", "rechte_url": "https://x.de/r",'
+        ' "nutzungsbedingungen": "Keine Nutzung ohne Erlaubnis."}',
+        encoding="utf-8",
+    )
+
+    args = urheber.lade(datei).argumente(jahr=2019, eingebettet=False)
+
+    assert "-XMP-iptcCore:CreatorWorkURL=https://x.de" in args
+    assert "-XMP-xmpRights:WebStatement=https://x.de/r" in args
+    assert "-XMP-xmpRights:UsageTerms=Keine Nutzung ohne Erlaubnis." in args

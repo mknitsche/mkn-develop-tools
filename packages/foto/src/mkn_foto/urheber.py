@@ -43,6 +43,9 @@ class Urheber:
     stadt: str = ""
     land: str = ""
     email: str = ""
+    website: str = ""
+    rechte_url: str = ""
+    nutzungsbedingungen: str = ""
 
     def argumente(self, *, jahr: int | None, eingebettet: bool) -> list[str]:
         """Baut die exiftool-Argumente.
@@ -54,10 +57,12 @@ class Urheber:
         args = [f"-XMP-dc:Creator={self.name}", f"-EXIF:Artist={self.name}"]
 
         if jahr is not None:
-            # Bewusst "(C)" statt des Zeichens: exiftool nimmt beides, aber der
-            # Umweg ueber die Shell-Kodierung ist eine Fehlerquelle, die dem
-            # Vermerk nichts hinzufuegt.
-            vermerk = f"(C) {jahr} {self.name}"
+            # KURZ, und das ist der Fachstandard, nicht Sparsamkeit: der
+            # Vermerk soll lesbar bleiben. Erreichbarkeit gehoert in die
+            # Kontaktfelder, Rechtssprache in UsageTerms -- ein
+            # vollgestopfter Copyright-String ist fuer Menschen muehsam
+            # und fuer Maschinen wertlos, weil keine Auswertung ihn zerlegt.
+            vermerk = f"© {jahr} {self.name}"
             args += [f"-XMP-dc:Rights={vermerk}", f"-EXIF:Copyright={vermerk}"]
 
         if self.email:
@@ -66,13 +71,24 @@ class Urheber:
             args.append(f"-XMP-iptcCore:CreatorCity={self.stadt}")
         if self.land:
             args.append(f"-XMP-iptcCore:CreatorCountry={self.land}")
+        if self.website:
+            args.append(f"-XMP-iptcCore:CreatorWorkURL={self.website}")
+
+        # `Marked` ist die Aussage "dieses Bild ist geschuetzt" -- ohne sie
+        # bleibt der Rechtestatus formal UNBEKANNT, auch wenn ein Vermerk
+        # danebensteht. Suchmaschinen werten genau dieses Feld aus.
+        args.append("-XMP-xmpRights:Marked=True")
+        if self.rechte_url:
+            args.append(f"-XMP-xmpRights:WebStatement={self.rechte_url}")
+        if self.nutzungsbedingungen:
+            args.append(f"-XMP-xmpRights:UsageTerms={self.nutzungsbedingungen}")
 
         if eingebettet:
             # IIM traegt nur ein eingebettetes Format; im XMP-Sidecar meldet
             # exiftool dafuer "Nothing to write" -- dieselbe Grenze wie beim Ort.
             args.append(f"-IPTC:By-line={self.name}")
             if jahr is not None:
-                args.append(f"-IPTC:CopyrightNotice=(C) {jahr} {self.name}")
+                args.append(f"-IPTC:CopyrightNotice=© {jahr} {self.name}")
 
         return args
 
@@ -99,6 +115,9 @@ def lade(pfad: Path | None = None) -> Urheber | None:
     return Urheber(
         name=str(rohdaten["name"]),
         stadt=str(rohdaten.get("stadt", "")),
+        website=str(rohdaten.get("website", "")),
+        rechte_url=str(rohdaten.get("rechte_url", "")),
+        nutzungsbedingungen=str(rohdaten.get("nutzungsbedingungen", "")),
         land=str(rohdaten.get("land", "")),
         email=str(rohdaten.get("email", "")),
     )
