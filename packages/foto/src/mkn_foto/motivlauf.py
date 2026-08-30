@@ -54,18 +54,25 @@ Frage am Kontaktbogen: Panorama, Wiederholung oder keine Serie."""
 Eintrag = tuple[Path, Sequence[Path] | None] | tuple[Path, Sequence[Path] | None, Frage]
 
 
-def _entpackt(eintrag: Eintrag) -> tuple[Path, Sequence[Path] | None, Frage]:
-    """Ein Eintrag, immer als volles Tripel -- ob er die Frage nennt oder nicht.
+def _entpackt(eintrag: Eintrag) -> tuple[Path, Sequence[Path] | None, Frage, str]:
+    """Ein Eintrag, immer als volles Quadrupel -- was er nennt und was nicht.
 
     Rueckwaertskompatibilitaet ist hier kein Komfort, sondern Notwendigkeit:
-    `pipeline._bildanalyse` baut seine Eintraege als reine 2-Tupel und reicht
-    sie direkt an `fahre()` durch. Ein hartes 3-Tupel wuerde sie beim naechsten
-    Aufruf mit einem `ValueError` abreissen.
+    aeltere Aufrufer bauen reine 2-Tupel und reichen sie direkt durch. Ein hartes
+    Quadrupel wuerde sie beim naechsten Aufruf mit einem `ValueError` abreissen.
+
+    Der vierte Teil ist der MESSBEFUND: was die Deckungsmessung ueber diese
+    Gruppe schon weiss. Ohne ihn urteilt das Modell ueber Bilder, deren
+    Verschiebung gegeneinander bereits gemessen ist -- und liegt dann falsch,
+    ohne dass ihm etwas vorzuwerfen waere.
     """
-    if len(eintrag) == 3:
+    if len(eintrag) == 4:
         return eintrag  # type: ignore[return-value]
-    vertreter, gruppe = eintrag
-    return vertreter, gruppe, "motiv"
+    if len(eintrag) == 3:
+        vertreter, gruppe, frage = eintrag  # type: ignore[misc]
+        return vertreter, gruppe, frage, ""
+    vertreter, gruppe = eintrag  # type: ignore[misc]
+    return vertreter, gruppe, "motiv", ""
 
 
 @dataclass
@@ -111,7 +118,7 @@ def fahre(
     """
     ergebnis = vorhandene or Ergebnis()
     normiert = [_entpackt(e) for e in eintraege]
-    offen = sum(1 for v, _, _ in normiert if v not in ergebnis.urteile)
+    offen = sum(1 for v, _, _, _ in normiert if v not in ergebnis.urteile)
     getan = 0
     begonnen_gesamt = time.monotonic()
     kopf = _kopf(wahl, schluessel)
@@ -119,7 +126,7 @@ def fahre(
 
     with tempfile.TemporaryDirectory(prefix="mkn-foto-motiv-") as arbeitsraum:
         raum = Path(arbeitsraum)
-        for nummer, (vertreter, gruppe, frage) in enumerate(normiert):
+        for nummer, (vertreter, gruppe, frage, befund) in enumerate(normiert):
             for m in gruppe or ():
                 ergebnis.mitglieder[m] = vertreter
             if vertreter in ergebnis.urteile:
@@ -131,7 +138,9 @@ def fahre(
                 continue
 
             art = "serie" if gruppe and len(gruppe) > 1 else "einzel"
-            frage_text = bildurteil.serien_prompt() if frage == "serie" else bildurteil.prompt()
+            frage_text = (
+                bildurteil.serien_prompt(befund) if frage == "serie" else bildurteil.prompt()
+            )
             koerper = wahl.baue_anfrage(frage_text, bilder=[bild])
             begonnen = time.monotonic()
             try:

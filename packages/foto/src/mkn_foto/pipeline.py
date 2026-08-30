@@ -376,6 +376,7 @@ def fahre(
             lauf.motive = _bildanalyse(
                 mit_ort,
                 serien_auf_kopien,
+                lauf.gruppen,
                 modell,
                 schluessel,
                 transport,
@@ -386,6 +387,12 @@ def fahre(
             if anker_protokoll is not None:
                 for wert in anker_protokoll.werte:
                     lauf.motive.messung.nimm(wert)
+            in_kandidat = {
+                id(a)
+                for g in lauf.gruppen
+                if getattr(g, "klasse", "") == "kandidat"
+                for a in g.aufnahmen
+            }
             for aufnahme, _ in mit_ort:
                 urteil = lauf.motive.fuer(_erstes_bild(aufnahme))
                 if urteil is None:
@@ -394,7 +401,13 @@ def fahre(
                 if not schreibbar:
                     # Regel A: unsicher wird nicht geschrieben, sondern
                     # gekennzeichnet -- KT-1s Violett.
-                    unklar[id(aufnahme)] = "Motiv"
+                    #
+                    # Der GRUND unterscheidet die beiden Faelle, und er ist das,
+                    # wonach gefiltert wird: bei einer gemessenen Kandidaten-
+                    # Gruppe steht die Serienfrage offen, sonst die Motivfrage.
+                    # Beides violett, aber `Pruefen|Serie` sammelt genau die
+                    # Panorama-Vorschlaege, die KT-1 ansehen soll.
+                    unklar[id(aufnahme)] = "Serie" if id(aufnahme) in in_kandidat else "Motiv"
                     continue
                 if schreibbar.get("beschreibung"):
                     beschreibungen[id(aufnahme)] = schreibbar["beschreibung"]
@@ -415,6 +428,12 @@ def fahre(
                     # tat genau, was ihm gesagt wurde. Gefunden hat es KT-1, im
                     # Bildbetrachter.
                     unklar[id(aufnahme)] = "Belichtung"
+
+        # Vollzug VOR dem Anreichern: `benenne_um` gibt den Aufnahmen ihre neuen
+        # Pfade, und `anreichern` schreibt danach in genau diese Dateien. Umgekehrt
+        # laege die Anreicherung unter dem alten Namen und der Sidecar neben einer
+        # Datei, die es nicht mehr gibt.
+        _vollziehe_serien(lauf)
 
         lauf.angereichert = anreichern.schreibe(
             mit_ort,
@@ -551,7 +570,115 @@ def _fuer_anreicherung(
         if mitglieder:
             serien_auf_kopien.append(dataclasses.replace(s, aufnahmen=mitglieder))
 
+    # Die gemessenen Gruppen tragen ORIGINAL-Aufnahmen; angereichert und
+    # umbenannt wird aber die Kopie. Ohne diese Abbildung zeigte das Urteil auf
+    # Dateien im Quellbaum -- die nie angefasst werden duerfen.
+    lauf.gruppen = [
+        dataclasses.replace(
+            g,
+            aufnahmen=tuple(
+                kopie_je_original[id(a)] for a in g.aufnahmen if id(a) in kopie_je_original
+            ),
+        )
+        for g in lauf.gruppen
+    ]
+    lauf.gruppen = [g for g in lauf.gruppen if g.aufnahmen]
+
     return paare, serien_auf_kopien
+
+
+def _messbefund(gruppe) -> str:
+    """Was die Messung ueber diese Gruppe weiss — in Worten fuer das Modell.
+
+    **Ohne diesen Text sieht das Modell nur den Kontaktbogen** und urteilt ueber
+    Bilder, deren Verschiebung gegeneinander bereits gemessen ist. Firsthand am
+    2026-08-30: KT-1s Panorama von der Sebalduskirche besteht aus einem Schwenk
+    (36 % Versatz) und einer Wiederholung derselben Stelle. Auf dem blossen
+    Bogen sind zwei der drei Bilder fast gleich — das Modell nannte die Gruppe
+    folgerichtig `wiederholung`, mit `sicher: true`. Es hatte nicht unrecht;
+    ihm fehlte die Haelfte.
+
+    Der Schlusssatz ist kein Schmuck: die Messung kann eine Gehsequenz nicht von
+    einem Schwenk trennen (Design § 3a, gemessen). Das Modell darf ihre Zahlen
+    also nicht fuer eine Antwort halten, sondern nur fuer das, was sie sind —
+    eine Beobachtung ueber die Geometrie. Die Bedeutung sieht es selbst.
+    """
+    if not getattr(gruppe, "schritte", ()):
+        return ""
+    zeilen = ["Was die Deckungsmessung an diesen Bildern festgestellt hat:"]
+    for s in gruppe.schritte:
+        versatz = max(abs(s.deckung.dx), abs(s.deckung.dy))
+        richtung = "waagerecht" if abs(s.deckung.dx) >= abs(s.deckung.dy) else "senkrecht"
+        if s.art == "schwenk":
+            was = f"verschoben um {versatz:.0%} der Bildkante, {richtung}"
+        else:
+            was = f"fast derselbe Ausschnitt (nur {versatz:.0%} Versatz)"
+        zeilen.append(f"  Bild {s.von + 1} zu Bild {s.nach + 1}: {was}")
+    if getattr(gruppe, "reihen", ()) and len(gruppe.reihen) > 1:
+        zeilen.append(f"  Daraus geschaetzt: {len(gruppe.reihen)} Reihen ({gruppe.reihen}).")
+    zeilen.append(
+        "Diese Messung sagt nur, WIE die Bilder zueinander liegen -- nicht, ob "
+        "sie zusammengehoeren. Eine Bilderfolge beim Gehen sieht genauso aus wie "
+        "ein Schwenk. Das entscheidest du am Bild."
+    )
+    return "\n".join(zeilen)
+
+
+def _vollziehe_serien(lauf: Lauf) -> list[Serie]:
+    """Benennt die Gruppen um, die das Modell SICHER als Panorama bestaetigt hat.
+
+    **Regel A, hier an ihrer teuersten Stelle.** Ein Ort, der falsch ist, laesst
+    sich korrigieren; ein falscher DATEINAME ist nach dem Schreiben nicht mehr
+    als Vermutung erkennbar — er sieht aus wie eine Tatsache. Deshalb benennt
+    nur ein `sicher`-Urteil, und nur die Mitglieder, die das Modell in `bilder`
+    ausdruecklich nennt. Alles andere bleibt `std` und geht auf die Liste.
+
+    Die Nummern werden je Typ vergeben: `hdr` und `pan` zaehlen getrennt, sonst
+    truege eine Kamera-Reihe dieselbe Nummer wie ein Panorama.
+    """
+    if lauf.motive is None or not lauf.gruppen:
+        return []
+
+    vollzogen: list[Serie] = []
+    nummer = 0
+    for g in lauf.gruppen:
+        if g.klasse != "kandidat":
+            continue
+        urteil = lauf.motive.fuer(_erstes_bild(g.aufnahmen[0]))
+        if urteil is None or not getattr(urteil, "sicher", False):
+            continue
+        if getattr(urteil, "serie", None) != "panorama":
+            continue
+        gewaehlt = _mitglieder_laut_urteil(g, urteil)
+        if len(gewaehlt) < 2:
+            # Ein Panorama aus einem Bild gibt es nicht. Faellt die Auswahl des
+            # Modells darunter, ist das kein Vollzug, sondern ein Widerspruch —
+            # die Gruppe bleibt `std`.
+            continue
+        nummer += 1
+        vollzogen.append(
+            Serie(typ="pan", nummer=nummer, aufnahmen=gewaehlt, quelle="bild", sicher=True)
+        )
+
+    if vollzogen:
+        schreiben.benenne_um(vollzogen)
+        lauf.serien.extend(vollzogen)
+    return vollzogen
+
+
+def _mitglieder_laut_urteil(gruppe, urteil) -> tuple[Aufnahme, ...]:
+    """Die Mitglieder, die das Modell in `bilder` genannt hat — 1-basiert.
+
+    Nennt es nichts oder etwas Unmoegliches, gilt die ganze Gruppe: das ist der
+    Regelfall (`bilder` = alle) und zugleich die vorsichtige Lesart, denn eine
+    leere Auswahl wuerde unten an der Zwei-Bilder-Grenze ohnehin verworfen.
+    Nummern ausserhalb der Gruppe werden still uebergangen — sie koennen nur aus
+    einem Missverstaendnis stammen, und ein Absturz waere die teuerste Antwort
+    darauf.
+    """
+    roh = getattr(urteil, "bilder", ()) or ()
+    gewaehlt = tuple(gruppe.aufnahmen[n - 1] for n in roh if 1 <= n <= len(gruppe.aufnahmen))
+    return gewaehlt or tuple(gruppe.aufnahmen)
 
 
 def _vermesse_fenster(lauf: Lauf) -> list:
@@ -643,6 +770,7 @@ def _erstes_bild(aufnahme: Aufnahme) -> Path:
 def _bildanalyse(
     mit_ort,
     serien_auf_kopien,
+    gruppen,
     modell,
     schluessel,
     transport,
@@ -665,16 +793,35 @@ def _bildanalyse(
         for a in s.aufnahmen:
             in_serie[id(a)] = s
 
-    eintraege: list[tuple[Path, list[Path] | None]] = []
+    # Gemessene Gruppen zuerst: ein Kandidat geht mit der SERIEN-Frage hinaus,
+    # eine Wiederholung als Gruppe mit der Motiv-Frage. Beide ersetzen die
+    # Einzelaufrufe ihrer Mitglieder, statt zu ihnen hinzuzukommen -- daran
+    # haengt die Kostenrechnung des ganzen Verfahrens.
+    in_gruppe: dict[int, object] = {}
+    for g in gruppen or ():
+        if g.klasse == "einzeln":
+            continue
+        for a in g.aufnahmen:
+            in_gruppe[id(a)] = g
+
+    eintraege: list[tuple] = []
     erledigt: set[int] = set()
     for aufnahme, _ in mit_ort:
         if id(aufnahme) in erledigt:
             continue
         s = in_serie.get(id(aufnahme))
+        g = in_gruppe.get(id(aufnahme))
         if s is not None:
+            # Eine von der KAMERA bezeugte Reihe hat Vorrang: sie steht fest,
+            # und ueber sie muss niemand mehr urteilen.
             mitglieder = [_erstes_bild(m) for m in s.aufnahmen]
             eintraege.append((mitglieder[0], mitglieder))
             erledigt.update(id(m) for m in s.aufnahmen)
+        elif g is not None:
+            mitglieder = [_erstes_bild(m) for m in g.aufnahmen]
+            art = "serie" if g.klasse == "kandidat" else "motiv"
+            eintraege.append((mitglieder[0], mitglieder, art, _messbefund(g)))
+            erledigt.update(id(m) for m in g.aufnahmen)
         else:
             eintraege.append((_erstes_bild(aufnahme), None))
             erledigt.add(id(aufnahme))

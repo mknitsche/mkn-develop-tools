@@ -196,11 +196,23 @@ class Serienurteil:
         }
 
 
-def serien_prompt() -> str:
+def serien_prompt(messbefund: str = "") -> str:
     """Die Frage, ob eine Kandidaten-Gruppe ein Panorama, eine Wiederholung
     oder gar keine Serie ist (Design Stufe 3 § 4). Der Wortlaut ist aus dem
     Design uebernommen, nicht neu formuliert -- es ist zweimal gegengeprueft
     worden.
+
+    **`messbefund` traegt, was die Messung schon weiss.** Ohne ihn sieht das
+    Modell nur den Kontaktbogen -- und urteilt dann ueber Bilder, deren
+    Verschiebung gegeneinander bereits gemessen ist. Firsthand: KT-1s Panorama
+    von der Sebalduskirche besteht aus einem Schwenk (36 % Versatz) und einer
+    Wiederholung derselben Stelle; auf dem blossen Bogen sind zwei der drei
+    Bilder fast gleich, und das Modell nannte die Gruppe folgerichtig
+    "wiederholung". Es hatte nicht unrecht -- ihm fehlte die Haelfte.
+
+    Die Messung entscheidet weiterhin NICHT (sie kann eine Gehsequenz nicht von
+    einem Schwenk trennen, Design § 3a). Sie sagt dem Modell nur, was sie
+    gesehen hat, und das Modell sagt, was es bedeutet.
     """
     return (
         "Du siehst einen Kontaktbogen: nummerierte Aufnahmen, die kurz "
@@ -229,7 +241,7 @@ def serien_prompt() -> str:
         '  "belichtung"   einer von: ' + ", ".join(BELICHTUNG) + "\n"
         "\n"
         "Keine Ortsnamen raten -- der Ort ist bekannt und kommt aus anderer "
-        "Quelle."
+        "Quelle." + (f"\n\n{messbefund}" if messbefund else "")
     )
 
 
