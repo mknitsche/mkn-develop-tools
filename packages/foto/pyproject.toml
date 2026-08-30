@@ -6,6 +6,10 @@ requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
 authors = [{ name = "Matthias Nitsche" }]
 readme = "README.md"
+# Pillow: Vorschauen verkleinern und Kontaktboegen bauen (Spec Paragraf 4a/10).
+# Bewusst die einzige Laufzeit-Abhaengigkeit -- alles andere ist stdlib plus
+# exiftool, das ohnehin auf dem Rechner liegen muss.
+dependencies = ["Pillow>=10"]
 
 [build-system]
 requires = ["hatchling"]
