@@ -5,6 +5,14 @@ description = "Standalone tools by Matthias Nitsche - monorepo root (tooling onl
 requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
 
+[tool.uv.workspace]
+# Ohne diesen Block installiert `uv sync` die Pakete NICHT, und ihre
+# Abhaengigkeiten fehlen. Genau daran ist jeder CI-Lauf seit dem ersten Commit
+# gescheitert: `Pillow` steht korrekt in packages/foto/pyproject.toml, wurde
+# aber nie installiert, weil niemand das Paket installierte -- die Tests fanden
+# den Code ueber `pythonpath` und hielten das fuer ausreichend.
+members = ["packages/*"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
