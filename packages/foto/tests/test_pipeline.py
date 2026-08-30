@@ -663,3 +663,58 @@ def test_ohne_modell_laeuft_der_rest_weiter(tmp_path, monkeypatch):
     assert lauf.angereichert.sidecars > 0 or lauf.angereichert.eingebettet > 0, (
         "ohne Bildanalyse ist gar nichts geschrieben worden"
     )
+
+
+def test_die_pipeline_reicht_die_fortschrittsmeldung_durch(tmp_path, monkeypatch):
+    """Zum DRITTEN Mal dieselbe Klasse: gebaut, aber nicht durchgereicht.
+
+    `motivlauf` kennt `melde` und meldet zuverlaessig — die Pipeline nahm den
+    Parameter gar nicht erst an. Der erste Startversuch brach mit
+    `TypeError: fahre() got an unexpected keyword argument 'melde'` ab.
+
+    Vorher: `geotag` existierte und wurde nie gerufen. Davor: `motivlauf`
+    existierte und wurde nie gerufen. Ein Modul in der Modulliste ist noch kein
+    Aufruf im Ablauf — und ein Parameter im inneren Aufruf ist noch keiner im
+    aeusseren.
+    """
+    import json as _json
+    import shutil
+
+    if shutil.which("exiftool") is None:
+        import pytest as _p
+
+        _p.skip("exiftool nicht verfuegbar")
+
+    from PIL import Image
+
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    Image.new("RGB", (200, 150), (70, 90, 120)).save(quelle / "P0.JPG")
+    monkeypatch.setattr(
+        inventar.exif,
+        "lies",
+        lambda pfade: [{"EXIF:DateTimeOriginal": "2026:08:24 06:19:00", "EXIF:Model": "X-E5"}],
+    )
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        nutzlast = {"sicher": True, "motive": ["Wald"], "beschreibung": "x", "belichtung": "gut"}
+        return 200, _json.dumps(
+            {
+                "content": [{"text": _json.dumps(nutzlast)}],
+                "usage": {"input_tokens": 2000, "output_tokens": 100},
+            }
+        ).encode()
+
+    meldungen = []
+    pipeline.fahre(
+        quelle,
+        tmp_path / "ziel",
+        schreiben_aktiv=True,
+        modell=("anthropic", "test"),
+        schluessel="x",
+        transport=transport,
+        melde=meldungen.append,
+        melde_alle=1,
+    )
+
+    assert meldungen, "die Pipeline reicht die Fortschrittsmeldung nicht durch"

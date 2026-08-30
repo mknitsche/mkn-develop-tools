@@ -185,6 +185,8 @@ def fahre(
     modell: tuple[str, str] | None = None,
     schluessel: str | None = None,
     transport=None,
+    melde=None,
+    melde_alle: int = 25,
 ) -> Lauf:
     """Der ganze Weg: lesen, ordnen, verorten, schreiben, vorlegen.
 
@@ -259,7 +261,9 @@ def fahre(
         beschreibungen: dict[int, str] = {}
         unklar: dict[int, str] = {}
         if modell is not None:
-            lauf.motive = _bildanalyse(mit_ort, serien_auf_kopien, modell, schluessel, transport)
+            lauf.motive = _bildanalyse(
+                mit_ort, serien_auf_kopien, modell, schluessel, transport, melde, melde_alle
+            )
             for aufnahme, _ in mit_ort:
                 urteil = lauf.motive.fuer(_erstes_bild(aufnahme))
                 if urteil is None:
@@ -442,7 +446,9 @@ def _erstes_bild(aufnahme: Aufnahme) -> Path:
     return next(iter(aufnahme.dateien.values()))
 
 
-def _bildanalyse(mit_ort, serien_auf_kopien, modell, schluessel, transport) -> motivlauf.Ergebnis:
+def _bildanalyse(
+    mit_ort, serien_auf_kopien, modell, schluessel, transport, melde=None, melde_alle=25
+) -> motivlauf.Ergebnis:
     """Setzt die Eintraege fuer den Motivlauf zusammen: Serien als Gruppe,
     der Rest einzeln."""
     from mkn_kern import modelle
@@ -469,7 +475,13 @@ def _bildanalyse(mit_ort, serien_auf_kopien, modell, schluessel, transport) -> m
 
     vorhanden = motivlauf.aus_baum([e[0] for e in eintraege])
     return motivlauf.fahre(
-        eintraege, wahl, schluessel=schluessel, transport=transport, vorhandene=vorhanden
+        eintraege,
+        wahl,
+        schluessel=schluessel,
+        transport=transport,
+        vorhandene=vorhanden,
+        melde=melde,
+        melde_alle=melde_alle,
     )
 
 
