@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -67,6 +67,8 @@ def fahre(
     schluessel: str | None = None,
     transport: anfrage.Transport | None = None,
     vorhandene: Ergebnis | None = None,
+    melde: Callable[[str], None] | None = None,
+    melde_alle: int = 25,
 ) -> Ergebnis:
     """Holt fuer jeden Eintrag ein Bildurteil.
 
@@ -74,6 +76,9 @@ def fahre(
     wird nicht noch einmal angefragt.
     """
     ergebnis = vorhandene or Ergebnis()
+    offen = sum(1 for v, _ in eintraege if v not in ergebnis.urteile)
+    getan = 0
+    begonnen_gesamt = time.monotonic()
     kopf = _kopf(wahl, schluessel)
     ziel = modelle.ANBIETER[wahl.anbieter].basis_url
 
@@ -120,7 +125,31 @@ def fahre(
             )
             ergebnis.urteile[vertreter] = bildurteil.aus_antwort(antwort)
 
+            getan += 1
+            if melde is not None and (getan % melde_alle == 0 or getan == offen):
+                melde(_fortschritt(getan, offen, ergebnis, begonnen_gesamt))
+
     return ergebnis
+
+
+def _fortschritt(getan: int, offen: int, ergebnis: Ergebnis, begonnen: float) -> str:
+    """Wo der Lauf steht, was er bisher gekostet hat, wie lange es noch dauert.
+
+    "Bild 400 von 969" allein ist eine Zahl ohne Folge. Erst mit Verbrauch und
+    Hochrechnung kann jemand entscheiden, ob er den Lauf weiterlaufen laesst --
+    und genau das ist der Sinn einer Zwischenmeldung (KT-1: "zeit auch messen
+    und auch fortschritt").
+    """
+    vergangen = time.monotonic() - begonnen
+    je_stueck = vergangen / max(getan, 1)
+    rest_s = je_stueck * max(offen - getan, 0)
+    kosten = ergebnis.messung.kosten_eur(preis_ein=PREIS_EIN, preis_aus=PREIS_AUS)
+    return (
+        f"{getan}/{offen} · {vergangen / 60:.0f} min gelaufen, "
+        f"noch ~{rest_s / 60:.0f} min · "
+        f"{ergebnis.messung.tokens_ein:,} Tokens · {kosten:.2f} EUR"
+        + (f" · {len(ergebnis.fehler)} Fehler" if ergebnis.fehler else "")
+    ).replace(",", ".")
 
 
 def _bildvorlage(vertreter: Path, gruppe: Sequence[Path] | None, ziel: Path) -> Path | None:
@@ -156,6 +185,11 @@ def _kopf(wahl: modelle.Wahl, schluessel: str | None) -> dict[str, str]:
         return {"x-api-key": wert, "anthropic-version": "2023-06-01"}
     return {"authorization": f"Bearer {wert}"}
 
+
+PREIS_EIN = 4.63
+PREIS_AUS = 23.15
+"""Opus, EUR je Million Tokens (Stand 2026-08). Nur fuer die Hochrechnung in der
+Fortschrittsmeldung -- die Abrechnung macht der Anbieter."""
 
 MOTIV_MARKE = "Motiv|"
 """Woran ein bereits beurteiltes Bild zu erkennen ist. Der Baum IST der Zustand

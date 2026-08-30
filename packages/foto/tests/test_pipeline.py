@@ -554,3 +554,112 @@ def test_eine_beantwortete_einzelaufnahme_kommt_nicht_wieder(tmp_path, monkeypat
         f"Minuten- gegen Sekundengenauigkeit: {[(s.von, s.bis) for s, _ in lauf.offen]}"
     )
     assert len(lauf.beantwortet) == 1
+
+
+def test_die_motive_kommen_in_die_dateien(tmp_path, monkeypatch):
+    """Die Verdrahtung — und dieselbe Klasse, die gestern `geotag` betraf.
+
+    Ein Modul in der Modulliste ist noch kein Aufruf im Ablauf. `geotag`
+    existierte samt Tests und wurde nie gerufen; die Bilder trugen deshalb
+    Sammelkoordinaten. Hier ist es der Motivlauf: ohne diesen Test entstuende
+    ein Baum ohne ein einziges Motiv-Stichwort, und der Lauf meldete es
+    fehlerfrei.
+    """
+    import json as _json
+    import shutil
+
+    if shutil.which("exiftool") is None:
+        import pytest as _p
+
+        _p.skip("exiftool nicht verfuegbar")
+
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    felder = []
+    from PIL import Image
+
+    for i, sek in enumerate((0, 30)):
+        # Ein ECHTES JPEG: in eine Attrappe kann exiftool nicht schreiben, und
+        # dann entstehen null Sidecars -- der Test schluege aus dem falschen
+        # Grund an.
+        Image.new("RGB", (200, 150), (80 + i * 40, 100, 140)).save(quelle / f"M{i}.JPG")
+        felder.append(
+            {
+                "EXIF:DateTimeOriginal": f"2026:08:24 06:19:{sek:02d}",
+                "EXIF:Model": "X-E5",
+            }
+        )
+    monkeypatch.setattr(inventar.exif, "lies", lambda pfade: felder[: len(pfade)])
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        nutzlast = {
+            "sicher": True,
+            "motive": ["Sonnenaufgang", "Bergkette"],
+            "beschreibung": "Ein Satz zum Bild.",
+            "belichtung": "gut",
+        }
+        antwort = {
+            "content": [{"text": _json.dumps(nutzlast)}],
+            "usage": {"input_tokens": 2184, "output_tokens": 187},
+        }
+        return 200, _json.dumps(antwort).encode()
+
+    lauf = pipeline.fahre(
+        quelle,
+        tmp_path / "ziel",
+        schreiben_aktiv=True,
+        modell=("anthropic", "test-modell"),
+        schluessel="x",
+        transport=transport,
+    )
+
+    assert lauf.motive is not None, "der Motivlauf ist nicht verdrahtet"
+    assert lauf.motive.messung.aufrufe > 0, "es wurde nichts angefragt"
+
+    # JPEG traegt die Daten EINGEBETTET, keinen Sidecar (Spec Paragraf 10) --
+    # die erste Testfassung suchte nach *.xmp und fand zu Recht nichts.
+    import subprocess as _sp
+
+    bilder = sorted((tmp_path / "ziel" / "2026-08-24").glob("*.JPG"))
+    assert bilder, f"keine Bilder im Ziel: {list((tmp_path / 'ziel' / '2026-08-24').iterdir())}"
+    roh = _sp.run(
+        [
+            "exiftool",
+            "-json",
+            "-s",
+            "-Subject",
+            "-HierarchicalSubject",
+            "-Description",
+            str(bilder[0]),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    d = _json.loads(roh)[0]
+    alles = str(d)
+    assert "Motiv" in alles, f"kein Motiv-Stichwort in der Datei: {d}"
+    assert "Sonnenaufgang" in alles, f"das Stichwort des Modells fehlt: {d}"
+    assert "Ein Satz zum Bild." in alles, f"die Beschreibung fehlt: {d}"
+
+
+def test_ohne_modell_laeuft_der_rest_weiter(tmp_path, monkeypatch):
+    """Untergrenze: die Bildanalyse ist ein Zusatz, kein Fundament. Wer keinen
+    Schluessel hat, soll trotzdem Ort, Serie und Technik bekommen."""
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    from PIL import Image
+
+    Image.new("RGB", (200, 150), (90, 110, 130)).save(quelle / "N0.JPG")
+    monkeypatch.setattr(
+        inventar.exif,
+        "lies",
+        lambda pfade: [{"EXIF:DateTimeOriginal": "2026:08:24 06:19:00", "EXIF:Model": "X-E5"}],
+    )
+
+    lauf = pipeline.fahre(quelle, tmp_path / "ziel", schreiben_aktiv=True)
+
+    assert lauf.motive is None, "ohne Modellangabe darf nichts angefragt werden"
+    assert lauf.angereichert.sidecars > 0 or lauf.angereichert.eingebettet > 0, (
+        "ohne Bildanalyse ist gar nichts geschrieben worden"
+    )

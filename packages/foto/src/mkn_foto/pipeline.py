@@ -33,6 +33,7 @@ from mkn_foto import (
     gpx,
     inventar,
     mediathek,
+    motivlauf,
     notizen,
     ort,
     schreiben,
@@ -110,6 +111,10 @@ class Lauf:
     OFFEN hiess damals NICHT VERORTET — und das ist nicht dasselbe."""
     geschrieben: schreiben.Ergebnis | None = None
     angereichert: anreichern.Ergebnis | None = None
+    motive: motivlauf.Ergebnis | None = None
+    """Was das Modell in den Bildern gesehen hat. `None`, wenn kein Modell
+    angegeben war -- die Bildanalyse ist ein Zusatz, kein Fundament."""
+
     protokoll: Path | None = None
     entscheidungsdatei: Path | None = None
 
@@ -177,6 +182,9 @@ def fahre(
     notiz_ordner: Path | None = None,
     entscheidungen: Path | None = None,
     schreiben_aktiv: bool = True,
+    modell: tuple[str, str] | None = None,
+    schluessel: str | None = None,
+    transport=None,
 ) -> Lauf:
     """Der ganze Weg: lesen, ordnen, verorten, schreiben, vorlegen.
 
@@ -243,7 +251,37 @@ def fahre(
         # davon schon vorher vorhanden. Die ganze Ortsarbeit lag im
         # Arbeitsspeicher und war mit dem Prozessende weg.
         mit_ort, serien_auf_kopien = _fuer_anreicherung(lauf)
-        lauf.angereichert = anreichern.schreibe(mit_ort, serien=serien_auf_kopien)
+
+        # Die Bildanalyse VOR dem Anreichern: ihre Ergebnisse gehen in dieselben
+        # Dateien. Ein Modul in der Modulliste ist noch kein Aufruf im Ablauf --
+        # genau dieser Fehler liess gestern `geotag` unbenutzt, und die Bilder
+        # trugen Sammelkoordinaten statt eigener Positionen.
+        beschreibungen: dict[int, str] = {}
+        unklar: dict[int, str] = {}
+        if modell is not None:
+            lauf.motive = _bildanalyse(mit_ort, serien_auf_kopien, modell, schluessel, transport)
+            for aufnahme, _ in mit_ort:
+                urteil = lauf.motive.fuer(_erstes_bild(aufnahme))
+                if urteil is None:
+                    continue
+                schreibbar = urteil.zum_schreiben()
+                if not schreibbar:
+                    # Regel A: unsicher wird nicht geschrieben, sondern
+                    # gekennzeichnet -- KT-1s Violett.
+                    unklar[id(aufnahme)] = "Motiv"
+                    continue
+                if schreibbar.get("beschreibung"):
+                    beschreibungen[id(aufnahme)] = schreibbar["beschreibung"]
+                if schreibbar.get("belichtung") in ("unterbelichtet", "ueberbelichtet"):
+                    unklar[id(aufnahme)] = "Belichtung"
+
+        lauf.angereichert = anreichern.schreibe(
+            mit_ort,
+            serien=serien_auf_kopien,
+            beschreibungen=beschreibungen,
+            unklar=unklar,
+            motive=_motive_je_aufnahme(lauf, mit_ort),
+        )
 
     if entscheidungen is not None and lauf.offen:
         entscheidung.bereite_vor(lauf.offen, Path(entscheidungen))
@@ -394,3 +432,57 @@ def _session_ort(aufnahme: Aufnahme, lauf: Lauf) -> Ort | None:
         if any(a is aufnahme for a in s.aufnahmen):
             return lauf.orte.get(id(s))
     return None
+
+
+def _erstes_bild(aufnahme: Aufnahme) -> Path:
+    """Der Pfad, unter dem der Motivlauf diese Aufnahme kennt."""
+    for endung in (".NEF", ".RAF", ".JPG", ".JPEG"):
+        if endung in aufnahme.dateien:
+            return aufnahme.dateien[endung]
+    return next(iter(aufnahme.dateien.values()))
+
+
+def _bildanalyse(mit_ort, serien_auf_kopien, modell, schluessel, transport) -> motivlauf.Ergebnis:
+    """Setzt die Eintraege fuer den Motivlauf zusammen: Serien als Gruppe,
+    der Rest einzeln."""
+    from mkn_kern import modelle
+
+    wahl = modelle.Wahl(anbieter=modell[0], modell=modell[1])
+    in_serie: dict[int, Serie] = {}
+    for s in serien_auf_kopien:
+        for a in s.aufnahmen:
+            in_serie[id(a)] = s
+
+    eintraege: list[tuple[Path, list[Path] | None]] = []
+    erledigt: set[int] = set()
+    for aufnahme, _ in mit_ort:
+        if id(aufnahme) in erledigt:
+            continue
+        s = in_serie.get(id(aufnahme))
+        if s is not None:
+            mitglieder = [_erstes_bild(m) for m in s.aufnahmen]
+            eintraege.append((mitglieder[0], mitglieder))
+            erledigt.update(id(m) for m in s.aufnahmen)
+        else:
+            eintraege.append((_erstes_bild(aufnahme), None))
+            erledigt.add(id(aufnahme))
+
+    vorhanden = motivlauf.aus_baum([e[0] for e in eintraege])
+    return motivlauf.fahre(
+        eintraege, wahl, schluessel=schluessel, transport=transport, vorhandene=vorhanden
+    )
+
+
+def _motive_je_aufnahme(lauf: Lauf, mit_ort) -> dict[int, tuple[str, ...]]:
+    """Bildet jede Aufnahme auf die Motiv-Stichworte ihres Urteils ab."""
+    if lauf.motive is None:
+        return {}
+    zuordnung: dict[int, tuple[str, ...]] = {}
+    for aufnahme, _ in mit_ort:
+        urteil = lauf.motive.fuer(_erstes_bild(aufnahme))
+        if urteil is None:
+            continue
+        worte = urteil.zum_schreiben().get("motive")
+        if worte:
+            zuordnung[id(aufnahme)] = tuple(worte)
+    return zuordnung
