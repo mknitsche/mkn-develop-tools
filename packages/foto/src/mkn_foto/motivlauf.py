@@ -21,6 +21,7 @@ an, und sie landete sonst als Stichwort in einer Datei.
 from __future__ import annotations
 
 import logging
+import subprocess
 import tempfile
 import time
 from collections.abc import Callable, Sequence
@@ -123,7 +124,15 @@ def fahre(
                     vertreter.name, antwort, dauer_s=time.monotonic() - begonnen, art=art
                 )
             )
-            ergebnis.urteile[vertreter] = bildurteil.aus_antwort(antwort)
+            urteil = bildurteil.aus_antwort(antwort)
+            ergebnis.urteile[vertreter] = urteil
+            # SOFORT in den Baum, nicht erst am Ende. `aus_baum` liest genau
+            # von hier -- aber nur, wenn waehrend des Laufs geschrieben wird.
+            # Am 2026-08-30 wurde zweimal abgebrochen, und beide Male waren die
+            # bezahlten Urteile weg: 3,12 EUR und 200 Aufrufe beim zweiten Mal.
+            # Der Kommentar an MOTIV_MARKE sagt "Der Baum IST der Zustand"; das
+            # stimmt erst mit dieser Zeile.
+            _merke(vertreter, urteil)
 
             getan += 1
             if melde is not None and (getan % melde_alle == 0 or getan == offen):
@@ -212,10 +221,42 @@ PREIS_AUS = 23.15
 """Opus, EUR je Million Tokens (Stand 2026-08). Nur fuer die Hochrechnung in der
 Fortschrittsmeldung -- die Abrechnung macht der Anbieter."""
 
+SIDECAR = ".xmp"
+"""Wohin ein Zwischenurteil geschrieben wird — dieselbe Endung wie in
+`anreichern`, denn es ist dieselbe Datei."""
+
 MOTIV_MARKE = "Motiv|"
 """Woran ein bereits beurteiltes Bild zu erkennen ist. Der Baum IST der Zustand
 — ein Journal daneben waere ein zweiter, und die beiden driften genau dann,
 wenn ein Lauf abbricht (HC-1)."""
+
+
+def _merke(bild: Path, urteil: bildurteil.Urteil) -> None:
+    """Schreibt die Motiv-Stichworte sofort neben das Bild.
+
+    NUR die Marke, nicht das ganze Urteil: die eigentliche Anreicherung kommt
+    spaeter und schreibt alles (Ort, Serie, Beschreibung) in einem Zug. Hier
+    geht es allein darum, dass ein bezahlter Aufruf einen Abbruch ueberlebt --
+    und `aus_baum` erkennt einen beurteilten Vertreter an genau dieser Marke.
+
+    Ein Fehler beim Merken darf den Lauf nicht abreissen: er kostet im
+    schlimmsten Fall EINEN doppelten Aufruf, ein Abbruch kostet alle.
+    """
+    if not urteil.sicher or not urteil.motive:
+        # Ein unsicheres Urteil schreibt nichts -- Regel A. Es wird beim
+        # naechsten Lauf erneut gefragt, und das ist richtig so.
+        return
+    ziel = bild.with_suffix(SIDECAR)
+    args = [f"-XMP-lr:HierarchicalSubject+={MOTIV_MARKE}{w}" for w in urteil.motive]
+    befehl = ["exiftool", "-q", *args]
+    if ziel.exists():
+        befehl += ["-overwrite_original", str(ziel)]
+    else:
+        befehl += ["-o", str(ziel), str(bild)]
+    try:
+        subprocess.run(befehl, check=False, capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as exc:
+        _LOG.warning("Urteil nicht gemerkt: %s (%s)", bild.name, exc)
 
 
 def aus_baum(bilder: Sequence[Path]) -> Ergebnis:
