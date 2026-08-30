@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from mkn_foto.modell import Aufnahme, Ort, Serie
+from mkn_foto.urheber import Urheber
 
 SIDECAR = ".xmp"
 
@@ -92,6 +93,7 @@ def schreibe(
     beschreibungen: dict[int, str] | None = None,
     unklar: dict[int, str] | None = None,
     motive: dict[int, tuple[str, ...]] | None = None,
+    urheber_angaben: Urheber | None = None,
 ) -> Ergebnis:
     """Schreibt Ort, Serie, Technik und Beschreibung an jede Aufnahme.
 
@@ -121,6 +123,8 @@ def schreibe(
                 serienbild=id(aufnahme) in in_serie,
                 eingebettet=endung.upper() in EINGEBETTET,
                 unklar_grund=unklar.get(id(aufnahme)),
+                urheber_angaben=urheber_angaben,
+                jahr=aufnahme.zeitpunkt.year if aufnahme.zeitpunkt else None,
             )
             if not argumente:
                 continue
@@ -152,6 +156,8 @@ def _argumente(
     serienbild: bool = False,
     eingebettet: bool = False,
     unklar_grund: str | None = None,
+    urheber_angaben: Urheber | None = None,
+    jahr: int | None = None,
 ) -> list[str]:
     """Baut die exiftool-Argumente nach der Traeger-Tabelle der Spec § 6.
 
@@ -159,6 +165,11 @@ def _argumente(
     etwas Ungefaehres zu behaupten.
     """
     args: list[str] = []
+
+    if urheber_angaben is not None:
+        # Der Urheber steht an JEDER Datei, unabhaengig davon, ob Ort, Serie
+        # oder Motiv bekannt sind. Er haengt nicht am Erkenntnisstand.
+        args += urheber_angaben.argumente(jahr=jahr, eingebettet=eingebettet)
 
     if ort is not None:
         args += [

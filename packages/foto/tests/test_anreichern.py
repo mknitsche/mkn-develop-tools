@@ -24,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-from mkn_foto import anreichern
+from mkn_foto import anreichern, urheber
 from mkn_foto.modell import Aufnahme, Ort, Serie
 
 pytestmark = pytest.mark.skipif(
@@ -199,3 +199,32 @@ def test_serie_wird_zum_stichwort(tmp_path):
     assert "Serie|2026-08-24-pan01" in f.get("HierarchicalSubject", ""), (
         f"nicht hierarchisch oder ohne Datum: {f}"
     )
+
+
+def test_der_urheber_landet_an_jeder_datei(tmp_path: Path, monkeypatch) -> None:
+    """Die Verdrahtung, nicht das Modul.
+
+    Dreimal in einer Nacht hat genau diese Naht gehalten und trotzdem nichts
+    getan: `geotag` war gebaut und wurde nie gerufen, `motivlauf` ebenso, und
+    `melde` kam im aeusseren Aufruf nicht an. Ein Modul in der Modulliste ist
+    kein Aufruf im Ablauf — also wird hier der WEG geprueft, nicht das Ziel.
+    """
+    import dataclasses
+
+    aufnahme = dataclasses.replace(
+        _aufnahme(tmp_path, "DSC_1", (".RAF",)), zeitpunkt=datetime(2019, 5, 4, 12, 0)
+    )
+    gerufen: list[list[str]] = []
+    monkeypatch.setattr(
+        anreichern, "_ruf_exiftool", lambda args, ziel: gerufen.append(args) or True
+    )
+
+    anreichern.schreibe(
+        [(aufnahme, None)],
+        urheber_angaben=urheber.Urheber(name="Erika Muster", email="e@m.de"),
+    )
+
+    assert gerufen, "exiftool wurde gar nicht gerufen"
+    assert "-XMP-dc:Creator=Erika Muster" in gerufen[0]
+    # Das Aufnahmejahr, nicht das heutige.
+    assert "-XMP-dc:Rights=(C) 2019 Erika Muster" in gerufen[0]
