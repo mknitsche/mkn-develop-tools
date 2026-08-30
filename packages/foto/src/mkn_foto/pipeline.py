@@ -24,7 +24,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from mkn_foto import (
     anreichern,
@@ -78,13 +77,12 @@ def _in_kamerazeit_anker(a: Anker) -> Anker:
 def _in_kamerazeit(zeit: datetime) -> datetime:
     """Bringt jede Zeit auf die Form, in der eine Aufnahme ihre traegt.
 
-    Zonenlos bleibt zonenlos -- eine bereits umgerechnete Zeit noch einmal
-    anzufassen waere falsch, und `astimezone` auf einer naiven Zeit nimmt still
-    die Zone des Rechners an. Genau dieser stille Weg ist der teure.
+    **Eine Funktion, nicht zwei.** Diese hier hatte den Schutz gegen die
+    Zonenfalle, `gpx.in_kamerazeit` hatte ihn nicht -- zwei Fassungen derselben
+    Aufgabe, und der Fehler sass in der ungeschuetzten. Ein Kommentar, der eine
+    Falle beschreibt, schuetzt nur die Datei, in der er steht.
     """
-    if zeit.tzinfo is None:
-        return zeit
-    return zeit.astimezone(ZoneInfo(ZONE)).replace(tzinfo=None)
+    return gpx.in_kamerazeit(Anker(zeit=zeit, lat=0.0, lon=0.0, name=None), ZONE)
 
 
 @dataclass

@@ -11,7 +11,7 @@ und falsch ist.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from mkn_foto import gpx
@@ -109,3 +109,51 @@ def test_ein_punkt_ohne_zeit_wird_uebergangen_statt_zu_stuerzen(tmp_path, caplog
 
     assert track == []
     assert "ohne Zeit" in caplog.text
+
+
+def test_eine_zonenlose_zeit_bleibt_unveraendert(monkeypatch) -> None:
+    """**Der Fehler, den erst eine funktionierende CI gefunden hat.**
+
+    `astimezone()` auf einer ZONENLOSEN Zeit nimmt still die Zone des Rechners
+    an. In Europe/Berlin faellt das nicht auf, weil Quelle und Ziel dieselbe
+    Zone sind; auf einem Runner in UTC verschiebt sich jeder Anker um zwei
+    Stunden und findet seine Session nicht mehr. Drei Pipeline-Tests waren
+    deshalb hier gruen und dort rot -- und niemand hat es gesehen, weil die CI
+    seit dem ersten Commit an einer fehlenden Abhaengigkeit scheiterte.
+
+    Das Bittere: `pipeline._in_kamerazeit` schuetzt genau davor, mit einem
+    Kommentar, der den Fehler beschreibt. Zwei Funktionen fuer dieselbe
+    Aufgabe, eine mit Schutz, eine ohne.
+
+    **Die Bedingung wird HERGESTELLT, nicht vorausgesetzt** (LP-40): der Test
+    setzt die Zone selbst, sonst prueft er die Maschine und nicht den Code.
+    """
+    import os
+    import time
+
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    try:
+        zonenlos = datetime(2026, 8, 27, 10, 30, 0)
+        anker = gpx.Anker(zeit=zonenlos, lat=47.5, lon=11.4, name=None)
+
+        assert gpx.in_kamerazeit(anker) == zonenlos
+    finally:
+        os.environ.pop("TZ", None)
+        time.tzset()
+
+
+def test_eine_zonenbehaftete_zeit_wird_umgerechnet(monkeypatch) -> None:
+    """Der andere Fall bleibt, wie er war: eine UTC-Zeit wird in Kamerazeit
+    gebracht. Ohne diese Zusicherung koennte man den Fehler oben 'beheben',
+    indem man gar nicht mehr umrechnet."""
+    import time
+
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    anker = gpx.Anker(
+        zeit=datetime(2026, 8, 27, 8, 30, 0, tzinfo=UTC), lat=47.5, lon=11.4, name=None
+    )
+
+    # Sommerzeit: Berlin ist UTC+2.
+    assert gpx.in_kamerazeit(anker) == datetime(2026, 8, 27, 10, 30, 0)
