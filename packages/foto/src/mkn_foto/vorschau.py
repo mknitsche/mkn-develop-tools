@@ -40,6 +40,18 @@ der erste, sondern der GROESSTE — die Reihenfolge entscheidet nur bei Gleichst
 MIN_BYTES = 1000
 """Darunter ist es kein Bild, sondern ein Rest."""
 
+MAX_KANTE_PX = 1568
+"""Laengste Kante der Vorschau, die an das Modell geht.
+
+**Diese Zahl entscheidet ueber den Preis des ganzen Laufs.** Gemessen am
+2026-08-30: eine Nikon-Vorschau ist 8256x5504 Pixel — nach Anthropics Formel
+(Pixel/750) sind das 60.588 Bild-Tokens fuer EIN Bild. Bei 890 Einzelaufnahmen
+waeren das 54 Millionen Tokens allein an Bilddaten.
+
+1568 px ist das Mass, auf das Anthropic intern ohnehin verkleinert; was darueber
+hinausgeht, wird uebertragen und weggeworfen. Wer es vorher tut, zahlt fuer
+rund 2.185 statt 60.588 Tokens je Bild — Faktor 28."""
+
 
 def hole(quelle: Path, ziel: Path) -> Path | None:
     """Schreibt die groesste eingebettete Vorschau nach `ziel`.
@@ -62,6 +74,7 @@ def hole(quelle: Path, ziel: Path) -> Path | None:
         ).stdout
         ziel.write_bytes(roh)
         if ist_brauchbar(ziel):
+            verkleinere(ziel, ziel)
             _uebernimm_herkunft(quelle, ziel)
             return ziel
 
@@ -150,3 +163,25 @@ def _uebernimm_herkunft(quelle: Path, ziel: Path) -> None:
         capture_output=True,
         check=False,
     )
+
+
+def verkleinere(quelle: Path, ziel: Path, *, max_kante: int = MAX_KANTE_PX) -> Path:
+    """Bringt ein Bild auf Modellmass — und laesst kleine Bilder in Ruhe.
+
+    Ein Thumbnail hochzurechnen kostet Tokens und bringt kein einziges
+    Bildmerkmal dazu; `Image.thumbnail` vergroessert deshalb nie.
+
+    Das Seitenverhaeltnis bleibt: ein gequetschtes Bild waere auch klein, aber
+    das Modell saehe ein verzerrtes Motiv.
+    """
+    from PIL import Image
+
+    with Image.open(quelle) as bild:
+        if max(bild.width, bild.height) <= max_kante:
+            if quelle != ziel:
+                bild.save(ziel, quality=88)
+            return ziel
+        kopie = bild.convert("RGB")
+        kopie.thumbnail((max_kante, max_kante), Image.LANCZOS)
+        kopie.save(ziel, quality=88)
+    return ziel
