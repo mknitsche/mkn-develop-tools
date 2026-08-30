@@ -825,3 +825,99 @@ def test_die_pipeline_nimmt_modell_und_schluesselort_aus_der_konfiguration(
     assert gesehen.get("schluessel") == "sk-aus-der-konfig", (
         "Schluesselort kam nicht aus der Konfig"
     )
+
+
+def test_anker_sammeln_holt_die_urteile_zu_den_notizen(tmp_path, monkeypatch) -> None:
+    """Der WEG von der Notiz bis zum Anker — die vierte Naht dieser Nacht.
+
+    `notizurteil` kann Saetze lesen, `zu_ankern` kann Urteile verwerten. Wenn
+    dazwischen niemand das Modell FRAGT, bleibt beides folgenlos, und der Lauf
+    verhaelt sich wie zuvor: neun von zwanzig Antworten verwertet, elf
+    weggeworfen. Genau diese Klasse Fehler ist heute Nacht viermal aufgetreten
+    (geotag, motivlauf, melde, Gemini-Adresse).
+    """
+    import json as _json
+
+    ordner = tmp_path / "antworten" / "2026-08-26_1541-1542"
+    ordner.mkdir(parents=True)
+    (ordner / "ort.md").write_text(
+        "# 2026-08-26 15:41 bis 15:42\n\n## Ort\n\n\n## Gehoert zusammen mit\n\n"
+        "Schon Zugspitze ganz oben ... erste Bilder\n",
+        encoding="utf-8",
+    )
+
+    gefragt: list[str] = []
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        gefragt.append(url)
+        return 200, _json.dumps(
+            {
+                "content": [
+                    {"type": "thinking", "thinking": "", "signature": "x"},
+                    {
+                        "type": "text",
+                        "text": _json.dumps(
+                            {"art": "zuordnung", "ort": "Zugspitze", "sicher": True}
+                        ),
+                    },
+                ],
+                "usage": {"input_tokens": 100, "output_tokens": 20},
+            }
+        ).encode()
+
+    fp = [Anker(zeit=datetime(2026, 8, 26, 15, 0), lat=47.42, lon=10.98, name="Zugspitze")]
+
+    anker = pipeline.anker_sammeln(
+        notiz_ordner=ordner.parent,
+        weitere=fp,
+        modell=("anthropic", "test"),
+        schluessel="k",
+        transport=transport,
+    )
+
+    assert gefragt, "das Modell wurde nie gefragt"
+    aus_notiz = [a for a in anker if a.name == "Zugspitze" and a.zeit.hour == 15]
+    assert len(aus_notiz) >= 2, "die Notiz hat keinen eigenen Anker ergeben"
+
+
+def test_die_frage_nennt_die_nachbarsessions(tmp_path) -> None:
+    """Ohne Nachbarn kann "vorheriger Ordner" nicht aufgeloest werden.
+
+    Der Satz ist dann nicht schwer zu beantworten, sondern UNMOEGLICH: es gibt
+    keine Information, auf die er sich beziehen koennte. Wer nur den Satz
+    schickt, bekommt zwangslaeufig eine unbrauchbare Antwort und haelt das
+    Modell fuer schwach.
+    """
+    import json as _json
+
+    for name, satz in (
+        ("2026-08-22_1210-1212", "Lenggries im findpinguines"),
+        ("2026-08-22_1841-1841", "Gehört ebenfalls dazu - vorheriger Ordner"),
+    ):
+        d = tmp_path / "antworten" / name
+        d.mkdir(parents=True)
+        (d / "ort.md").write_text(
+            f"# x\n\n## Ort\n\n\n## Gehoert zusammen mit\n\n{satz}\n", "utf-8"
+        )
+
+    fragen: list[str] = []
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        fragen.append(_json.loads(koerper)["messages"][0]["content"][0]["text"])
+        return 200, _json.dumps(
+            {
+                "content": [{"type": "text", "text": '{"art": "kein_ort", "sicher": true}'}],
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }
+        ).encode()
+
+    pipeline.anker_sammeln(
+        notiz_ordner=tmp_path / "antworten",
+        modell=("anthropic", "test"),
+        schluessel="k",
+        transport=transport,
+    )
+
+    assert len(fragen) == 2
+    # Die Frage zur ZWEITEN Notiz muss die erste kennen.
+    assert "2026-08-22_1210-1212" in fragen[1]

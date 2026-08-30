@@ -189,3 +189,96 @@ def test_derselbe_ortsname_zweimal_ist_nicht_mehrdeutig(tmp_path):
 
     assert len(zugeordnet) == 1, f"der Ort machte sich selbst mehrdeutig: {zugeordnet}"
     assert zugeordnet[0].name == "Lenggries"
+
+
+def _n(ordner: str, text: str) -> notizen.Notiz:
+    from datetime import datetime
+
+    tag, fenster = ordner.split("_")
+    von, bis = fenster.split("-")
+    return notizen.Notiz(
+        von=datetime.strptime(f"{tag} {von}", "%Y-%m-%d %H%M"),
+        bis=datetime.strptime(f"{tag} {bis}", "%Y-%m-%d %H%M"),
+        text=text,
+        ordner=ordner,
+    )
+
+
+def test_ein_urteil_ersetzt_die_wortsuche() -> None:
+    """ "Schon Zugspitze ganz oben" -- kein `footprint` im Text, und trotzdem
+    eine klare Zuordnung. Die Wortsuche warf sie weg; ein gelesenes Urteil
+    nicht."""
+    from mkn_foto.notizurteil import Urteil
+
+    fp = [Anker(zeit=datetime(2026, 8, 26, 15, 0), lat=47.42, lon=10.98, name="Zugspitze")]
+    n = _n("2026-08-26_1541-1542", "Schon Zugspitze ganz oben ... erste Bilder")
+
+    anker = notizen.zu_ankern(
+        [n], fp, urteile={n.ordner: Urteil(sicher=True, ort="Zugspitze", art="zuordnung")}
+    )
+
+    assert len(anker) == 1
+    assert anker[0].name == "Zugspitze"
+
+
+def test_ein_bezug_erbt_den_ort_der_nachbarsession() -> None:
+    """ "Gehoert ebenfalls dazu - vorheriger Ordner" ist eine vollstaendige
+    Auskunft. Bisher verfiel sie: die Wortsuche fand keinen Namen, weil keiner
+    dasteht -- er steht nebenan."""
+    from mkn_foto.notizurteil import Urteil
+
+    fp = [Anker(zeit=datetime(2026, 8, 22, 12, 0), lat=49.45, lon=11.08, name="Lenggries")]
+    erste = _n("2026-08-22_1210-1212", "Lenggries im findpinguines")
+    zweite = _n("2026-08-22_1841-1841", "Gehört ebenfalls dazu - vorheriger Ordner")
+
+    anker = notizen.zu_ankern(
+        [erste, zweite],
+        fp,
+        urteile={
+            erste.ordner: Urteil(sicher=True, ort="Lenggries", art="zuordnung"),
+            zweite.ordner: Urteil(sicher=True, art="bezug", bezug="vorheriger"),
+        },
+    )
+
+    assert len(anker) == 2, "der Bezug muss einen eigenen Anker ergeben"
+    assert {a.name for a in anker} == {"Lenggries"}
+    # Jeder Anker liegt in SEINER Session -- sonst beantwortet er die falsche.
+    assert anker[1].zeit.hour == 18
+
+
+def test_eine_vermutung_wird_nicht_zum_anker() -> None:
+    """Regel A: "von Grainau unten Eibsee DENKE ICH" wird vorgelegt, nicht
+    geschrieben."""
+    from mkn_foto.notizurteil import Urteil
+
+    fp = [Anker(zeit=datetime(2026, 8, 25, 19, 0), lat=47.47, lon=11.02, name="Grainau")]
+    n = _n("2026-08-25_1914-1958", "von Grainau unten Eibsee denke ich")
+
+    anker = notizen.zu_ankern(
+        [n], fp, urteile={n.ordner: Urteil(sicher=False, ort="Grainau", art="vermutung")}
+    )
+
+    assert anker == []
+
+
+def test_eine_unsichere_zuordnung_wird_nicht_geschrieben() -> None:
+    """Regel A trennt SICHER von der Art, nicht die Art allein.
+
+    Aufgefallen durch eine hohle Mutation: der Vermutungs-Test wurde von der
+    Art-Pruefung gefangen, nicht von der Sicherheitspruefung. Haette jemand die
+    Sicherheitspruefung entfernt, waere alles gruen geblieben -- und ein Ort,
+    den das Modell selbst anzweifelt, waere in KT-1s Bilder gewandert.
+    """
+    from mkn_foto.notizurteil import Urteil
+
+    fp = [Anker(zeit=datetime(2026, 8, 25, 19, 0), lat=47.47, lon=11.02, name="Grainau")]
+    n = _n("2026-08-25_1914-1958", "irgendwas mit Grainau")
+
+    anker = notizen.zu_ankern(
+        [n],
+        fp,
+        # Als ZUORDNUNG gelesen, aber das Modell traut sich nicht.
+        urteile={n.ordner: Urteil(sicher=False, ort="Grainau", art="zuordnung")},
+    )
+
+    assert anker == []
