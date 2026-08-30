@@ -114,6 +114,15 @@ def _text(antwort: dict[str, Any]) -> str:
         return "".join(t.get("text", "") for t in inhalt if isinstance(t, dict))
     if isinstance(inhalt, str):
         return inhalt
+    # Gemini-Form. Sie fehlte, und das fiel nicht auf, weil ihr Fehlen wie
+    # eine ehrliche "unsicher"-Antwort aussieht: kein Text, also kein Urteil.
+    # Der erste echte Gemini-Lauf meldete `sicher=False` und keine Motive --
+    # das Modell hatte vier genannt.
+    kandidaten = antwort.get("candidates")
+    if isinstance(kandidaten, list) and kandidaten:
+        teile = (kandidaten[0].get("content") or {}).get("parts") or []
+        return "".join(t.get("text", "") for t in teile if isinstance(t, dict))
+
     # OpenAI-Form
     wahlen = antwort.get("choices")
     if isinstance(wahlen, list) and wahlen:

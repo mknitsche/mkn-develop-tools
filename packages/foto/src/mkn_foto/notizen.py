@@ -95,12 +95,27 @@ def lies(wurzel: Path) -> list[Notiz]:
     return gefunden
 
 
-def zu_ankern(gelesen: Sequence[Notiz], footprints: Sequence[Anker]) -> list[Anker]:
+def zu_ankern(
+    gelesen: Sequence[Notiz],
+    footprints: Sequence[Anker],
+    *,
+    urteile: dict[str, object] | None = None,
+) -> list[Anker]:
     """Macht aus Notizen Anker, wo ein Ortsname einen Wegpunkt findet.
 
     Die ZEIT kommt aus dem Ordner, nicht aus dem Wegpunkt: der Anker muss in der
     Session liegen, die er beantwortet — sonst beantwortet er die Nachbarsession
     mit. Genommen wird die Mitte des Fensters.
+
+    **`urteile` loest die Wortsuche ab** (KT-1, 2026-08-30: *"meine antworten
+    wurden nicht intelligent interpretiert, sondern 1:1 uebernommen ... das ist
+    doch bloedsinn"*). Liegt zu einer Notiz ein gelesenes Urteil vor, entscheidet
+    es — sonst greift die alte Stichwortsuche weiter, damit ein Lauf ohne Modell
+    nicht schlechter wird als vorher.
+
+    Gemessen an KT-1s 20 echten Notizen: die Wortsuche erkannte neun und warf
+    "Schon Zugspitze ganz oben", "also Stubaier Gletscher", "zu Hause" und jedes
+    "vorheriger Ordner" weg. Das gelesene Urteil erkennt sie.
     """
     # Nach NAMEN entdoppeln: zwei Wegpunkte mit demselben Namen sind derselbe
     # Ort, keine Alternative -- sonst waere jede Notiz mehrdeutig, sobald ein Ort
@@ -112,12 +127,38 @@ def zu_ankern(gelesen: Sequence[Notiz], footprints: Sequence[Anker]) -> list[Ank
         if f.name and f.name not in je_name:
             je_name[f.name] = f
     benannt = sorted(je_name.values(), key=lambda f: len(f.name or ""), reverse=True)
+    urteile = urteile or {}
     anker: list[Anker] = []
-    for n in gelesen:
+    # Was eine frueher beantwortete Session ergeben hat -- fuer "vorheriger
+    # Ordner". Die Notizen kommen in zeitlicher Reihenfolge, also steht der
+    # Bezugspunkt schon fest, wenn der Verweis darauf gelesen wird.
+    zuletzt: Anker | None = None
+
+    for n in sorted(gelesen, key=lambda x: x.von):
         klein = n.text.lower()
-        if not any(w in klein for w in _BELEG):
-            # Der Name allein ist eine Erwaehnung, keine Zuordnung. Siehe _BELEG.
+        urteil = urteile.get(n.ordner)
+
+        if urteil is not None:
+            gesucht = _aus_urteil(urteil, zuletzt)
+            if gesucht is None:
+                continue
+            if isinstance(gesucht, Anker):
+                # Ein Bezug erbt den Ort, aber nie die Zeit: der Anker muss in
+                # SEINER Session liegen, sonst beantwortet er die falsche.
+                zuletzt = Anker(
+                    zeit=n.von + (n.bis - n.von) / 2,
+                    lat=gesucht.lat,
+                    lon=gesucht.lon,
+                    name=gesucht.name,
+                )
+                anker.append(zuletzt)
+                continue
+            klein = gesucht.lower()
+        elif not any(w in klein for w in _BELEG):
+            # Ohne Urteil bleibt es bei der Stichwortsuche: der Name allein ist
+            # eine Erwaehnung, keine Zuordnung. Siehe _BELEG.
             continue
+
         treffer = [f for f in benannt if (f.name or "").lower() in klein]
         # Ein Name, der in einem laengeren steckt ("Kochel" in "Kochel am See"),
         # ist DERSELBE Treffer, keine Alternative -- sonst waere jeder Text mit
@@ -135,15 +176,40 @@ def zu_ankern(gelesen: Sequence[Notiz], footprints: Sequence[Anker]) -> list[Ank
             # ist ein Grund zu fragen, nicht zu raten.
             continue
         passend = echte[0]
-        anker.append(
-            Anker(
-                zeit=n.von + (n.bis - n.von) / 2,
-                lat=passend.lat,
-                lon=passend.lon,
-                name=passend.name,
-            )
+        zuletzt = Anker(
+            zeit=n.von + (n.bis - n.von) / 2,
+            lat=passend.lat,
+            lon=passend.lon,
+            name=passend.name,
         )
+        anker.append(zuletzt)
     return anker
+
+
+def _aus_urteil(urteil: object, zuletzt: Anker | None) -> str | Anker | None:
+    """Was ein gelesenes Urteil zur Ortssuche beitraegt.
+
+    Drei Ausgaenge, und die Unterscheidung ist der ganze Punkt:
+
+      `Anker`  der Bezug ist aufgeloest — derselbe Ort wie die Session davor
+      `str`    ein Ortsname, mit dem in den Wegpunkten gesucht wird
+      `None`   nichts zu holen: Vermutung, kein Ort, oder zu verwerfen
+
+    **Regel A** (Spec Paragraf 10a): nur was der Mensch SICHER genannt hat, wird
+    zum Anker. Eine Vermutung bleibt im Protokoll und geht nicht in die Datei --
+    genau die Regel, deren Fehlen frueher drei falsche Anker erzeugt hat.
+    """
+    if not getattr(urteil, "sicher", False):
+        return None
+
+    art = getattr(urteil, "art", "")
+    if art == "bezug":
+        return zuletzt
+    if art != "zuordnung":
+        return None
+
+    ort = (getattr(urteil, "ort", "") or "").strip()
+    return ort or None
 
 
 def _antwort(inhalt: str) -> str:

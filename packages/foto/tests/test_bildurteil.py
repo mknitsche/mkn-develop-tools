@@ -162,3 +162,50 @@ def test_ein_fremder_belichtungswert_wird_zu_unklar():
     )
 
     assert u.belichtung == "unklar", f"ein fremder Wert kam durch: {u.belichtung!r}"
+
+
+def test_geminis_antwortform_wird_gelesen() -> None:
+    """Der Anbieter, der die Schnittstelle ehrlich prueft.
+
+    **Firsthand, 2026-08-30.** Der Gemini-Lauf gegen die echte API meldete
+    `sicher=False` und KEINE Motive -- das Modell hatte in Wahrheit vier
+    genannt und das Bild korrekt als unterbelichtet beschrieben. Gelesen wurde
+    nichts davon: `_text` kannte `content`, `choices` und `message`, aber nicht
+    Googles `candidates`.
+
+    Das sieht nach einer ehrlichen "unsicher"-Antwort aus und ist in Wahrheit
+    Blindheit. Genau das meinte KT-1 mit dem zweiten Anbieter: was nur bei EINEM
+    laeuft, hat die Schnittstelle nicht verstanden, sondern eine Eigenheit.
+    """
+    antwort = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {"text": '{"sicher": true, "motive": ["Wald"], "belichtung": "gut"}'}
+                    ],
+                    "role": "model",
+                }
+            }
+        ],
+        "usageMetadata": {"promptTokenCount": 10, "candidatesTokenCount": 5},
+    }
+
+    urteil = bildurteil.aus_antwort(antwort)
+
+    assert urteil.sicher is True
+    assert urteil.motive == ("Wald",)
+
+
+def test_ein_denkblock_verdeckt_die_antwort_nicht() -> None:
+    """Opus 5 liefert `thinking` UND `text`. Wer blind den ersten Block nimmt,
+    liest die Signatur des Denkens statt der Antwort -- und haelt eine
+    einwandfreie Auskunft fuer unlesbar."""
+    antwort = {
+        "content": [
+            {"type": "thinking", "thinking": "", "signature": "CAIS..."},
+            {"type": "text", "text": '{"sicher": true, "motive": ["Berg"]}'},
+        ]
+    }
+
+    assert bildurteil.aus_antwort(antwort).motive == ("Berg",)

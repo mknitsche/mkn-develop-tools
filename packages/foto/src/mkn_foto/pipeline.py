@@ -19,6 +19,7 @@ beim Zusammenstecken schief und nirgends sonst:
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -42,6 +43,8 @@ from mkn_foto import (
     spots,
 )
 from mkn_foto.modell import Anker, Aufnahme, Ort, Serie, Spot
+
+_LOG = logging.getLogger(__name__)
 
 ZONE = "Europe/Berlin"
 """Die Zone, in der die Kameras standen. Wie in `gpx`: aufgeloest ueber die
@@ -133,6 +136,9 @@ def anker_sammeln(
     notiz_ordner: Path | None = None,
     weitere: Sequence[Anker] = (),
     bereinigen: bool = True,
+    modell: tuple[str, str] | None = None,
+    schluessel: str | None = None,
+    transport=None,
 ) -> list[Anker]:
     """Fuehrt alle Ortsquellen zu EINER chronologischen Liste zusammen.
 
@@ -169,10 +175,63 @@ def anker_sammeln(
         # in einer Notiz wird erst durch den Footprint zur Koordinate. Deshalb
         # steht sie NACH den beiden anderen.
         benannt = [a for a in gesammelt if a.name]
-        gesammelt.extend(notizen.zu_ankern(notizen.lies(Path(notiz_ordner)), benannt))
+        gelesen = notizen.lies(Path(notiz_ordner))
+        # Und HIER wird das Modell gefragt. Ohne diesen Aufruf koennen
+        # `notizurteil` und `zu_ankern` beide alles richtig machen und der Lauf
+        # verhaelt sich trotzdem wie vorher -- neun von zwanzig Antworten
+        # verwertet, elf weggeworfen. Genau diese Naht ist in dieser Nacht
+        # viermal gerissen (geotag, motivlauf, melde, Gemini-Adresse).
+        urteile = _notizen_lesen(gelesen, modell, schluessel, transport)
+        gesammelt.extend(notizen.zu_ankern(gelesen, benannt, urteile=urteile))
 
     gesammelt.sort(key=lambda a: a.zeit)
     return ort.verwirf_widerlegte(gesammelt) if bereinigen else gesammelt
+
+
+def _notizen_lesen(
+    gelesen: Sequence[notizen.Notiz],
+    modell: tuple[str, str] | None,
+    schluessel: str | None,
+    transport,
+) -> dict[str, object]:
+    """Laesst jede Notiz vom Modell LESEN statt nach Stichworten absuchen.
+
+    Ohne Modell bleibt die Zuordnung leer; `zu_ankern` faellt dann auf die alte
+    Stichwortsuche zurueck, damit ein Lauf ohne Modell nicht schlechter wird als
+    vorher.
+
+    Ein Fehler bei EINER Notiz nimmt die anderen nicht mit: bei zwanzig
+    Antworten ist eine unlesbare normal, und ein Abbruch waere die teuerste
+    denkbare Antwort darauf.
+    """
+    if modell is None or not gelesen:
+        return {}
+
+    from mkn_foto import notizurteil
+    from mkn_kern import anfrage, modelle
+
+    wahl = modelle.Wahl(anbieter=modell[0], modell=modell[1])
+    if schluessel is None:
+        schluessel = wahl.schluessel(ablage=konfig.lade().schluessel_datei)
+    kopf = motivlauf._kopf(wahl, schluessel)
+    reihe = sorted(gelesen, key=lambda n: n.von)
+    namen = tuple(n.ordner for n in reihe)
+
+    urteile: dict[str, object] = {}
+    for i, n in enumerate(reihe):
+        # Die Nachbarn gehoeren zur Frage: ohne sie kann "vorheriger Ordner"
+        # nicht aufgeloest werden. Wer nur den Satz schickt, bekommt eine
+        # Antwort, die nicht falsch ist, sondern unmoeglich.
+        nachbarn = tuple(x for x in namen[max(0, i - 2) : i + 3] if x != n.ordner)
+        frage = notizurteil.prompt(" ".join(n.text.split()), ordner=n.ordner, nachbarn=nachbarn)
+        try:
+            antwort = anfrage.sende(wahl.url(), wahl.baue_anfrage(frage), kopf, transport=transport)
+        except anfrage.AnfrageFehler as exc:
+            _LOG.warning("Notiz nicht gelesen: %s (%s)", n.ordner, exc)
+            continue
+        urteile[n.ordner] = notizurteil.aus_antwort(antwort)
+
+    return urteile
 
 
 def fahre(
