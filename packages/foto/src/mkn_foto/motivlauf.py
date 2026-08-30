@@ -22,11 +22,12 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mkn_foto import bildurteil, kontaktbogen, vorschau
+from mkn_foto import bildurteil, kontaktbogen, messung, vorschau
 from mkn_kern import anfrage, modelle
 
 _LOG = logging.getLogger(__name__)
@@ -47,6 +48,11 @@ class Ergebnis:
 
     fehler: list[tuple[Path, str]] = field(default_factory=list)
     aufrufe: int = 0
+
+    messung: messung.Protokoll = field(default_factory=messung.Protokoll)
+    """Tokens, Dauer und Kosten je Aufruf. Die Zahlen liefert die API frei Haus
+    -- sie wegzuwerfen und hinterher zu schaetzen waere die teuerste Art, an
+    Daten zu kommen, die man schon hatte (KT-1 vor dem ersten Lauf)."""
 
     def fuer(self, bild: Path) -> bildurteil.Urteil | None:
         """Das Urteil zu diesem Bild — auch, wenn es Mitglied einer Serie ist."""
@@ -84,17 +90,34 @@ def fahre(
                 ergebnis.fehler.append((vertreter, "keine lesbare Vorschau"))
                 continue
 
+            art = "serie" if gruppe and len(gruppe) > 1 else "einzel"
             koerper = wahl.baue_anfrage(bildurteil.prompt(), bilder=[bild])
+            begonnen = time.monotonic()
             try:
                 antwort = anfrage.sende(ziel, koerper, kopf, transport=transport)
             except anfrage.AnfrageFehler as exc:
-                # Ein Fehler darf die anderen 629 nicht mitnehmen -- aber er muss
-                # im Ergebnis stehen, nicht im Nichts.
+                # Ein Fehler darf die anderen nicht mitnehmen -- aber er muss im
+                # Ergebnis stehen, nicht im Nichts. Und er wird GEMESSEN: er hat
+                # Zeit gekostet, und ein Lauf ohne seine Fehlschlaege sieht
+                # schneller aus, als er war.
                 _LOG.warning("Bildurteil fehlgeschlagen: %s (%s)", vertreter.name, exc)
                 ergebnis.fehler.append((vertreter, str(exc)))
+                ergebnis.messung.nimm(
+                    messung.Messwert(
+                        name=vertreter.name,
+                        dauer_s=time.monotonic() - begonnen,
+                        art=art,
+                        fehler=str(exc),
+                    )
+                )
                 continue
 
             ergebnis.aufrufe += 1
+            ergebnis.messung.nimm(
+                messung.Messwert.aus_antwort(
+                    vertreter.name, antwort, dauer_s=time.monotonic() - begonnen, art=art
+                )
+            )
             ergebnis.urteile[vertreter] = bildurteil.aus_antwort(antwort)
 
     return ergebnis

@@ -228,3 +228,65 @@ def test_ein_sidecar_ohne_motiv_gilt_als_offen(tmp_path):
         "ein Sidecar ohne Motiv-Stichwort gilt als beurteilt — dann macht der "
         "Lauf ueber den ganzen Bestand keinen einzigen Aufruf"
     )
+
+
+def test_der_lauf_misst_jeden_aufruf(tmp_path):
+    """KT-1s Frage vor dem Start: „nicht dass wir durchlaufen und uns dann
+    messwerte token pro aktion, pro bild usw fehlen".
+
+    Die Zahlen liefert die API frei Haus; sie wegzuwerfen und hinterher zu
+    schaetzen waere die teuerste Art, an Daten zu kommen, die man schon hatte.
+    """
+    bilder = [_bild(tmp_path, f"m{i}.jpg") for i in range(2)]
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        status, roh = _antwort(["Wald"])
+        d = json.loads(roh)
+        d["usage"] = {"input_tokens": 2184, "output_tokens": 187}
+        return status, json.dumps(d).encode()
+
+    ergebnis = motivlauf.fahre(
+        [(b, None) for b in bilder], _wahl(), transport=transport, schluessel="x"
+    )
+
+    assert ergebnis.messung.aufrufe == 2
+    assert ergebnis.messung.tokens_ein == 2 * 2184, (
+        f"Tokens nicht erfasst: {ergebnis.messung.tokens_ein}"
+    )
+    assert ergebnis.messung.tokens_aus == 2 * 187
+    assert ergebnis.messung.dauer_s > 0, "die Dauer wurde nicht gemessen"
+
+
+def test_auch_ein_gescheiterter_aufruf_wird_gemessen(tmp_path):
+    """Gerade der ist interessant: er hat Zeit gekostet. Wer nur die gelungenen
+    misst, sieht einen Lauf, der schneller war, als er wirklich war."""
+    bild = _bild(tmp_path, "f.jpg")
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        return 429, b'{"error":{"message":"rate limit"}}'
+
+    ergebnis = motivlauf.fahre([(bild, None)], _wahl(), transport=transport, schluessel="x")
+
+    assert ergebnis.messung.aufrufe == 1, "der Fehlschlag fehlt in der Messung"
+    assert ergebnis.messung.gescheitert == 1
+
+
+def test_serien_und_einzelbilder_werden_getrennt_gemessen(tmp_path):
+    """Sie kosten verschieden viel, und der Unterschied ist der Grund fuer den
+    Kontaktbogen. Ohne die Trennung laesst sich nicht pruefen, ob er sich
+    gelohnt hat."""
+    einzeln = _bild(tmp_path, "e.jpg")
+    serie = [_bild(tmp_path, f"s{i}.jpg") for i in range(3)]
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        status, roh = _antwort(["Wald"])
+        d = json.loads(roh)
+        d["usage"] = {"input_tokens": 2000, "output_tokens": 100}
+        return status, json.dumps(d).encode()
+
+    ergebnis = motivlauf.fahre(
+        [(einzeln, None), (serie[0], serie)], _wahl(), transport=transport, schluessel="x"
+    )
+
+    arten = {w.art for w in ergebnis.messung.werte}
+    assert arten == {"einzel", "serie"}, f"die Arten werden nicht getrennt: {arten}"
