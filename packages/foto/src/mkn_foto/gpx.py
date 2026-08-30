@@ -42,7 +42,24 @@ def in_kamerazeit(p: Anker, zone: str = _STANDARDZONE) -> datetime:
 
     Das Ergebnis ist direkt mit `Aufnahme.zeitpunkt` vergleichbar — der ist
     zonenlos, so wie die Zeit im EXIF steht.
+
+    **Zonenlos bleibt zonenlos.** `astimezone()` nimmt auf einer zonenlosen
+    Zeit still die Zone des RECHNERS an. In Europe/Berlin faellt das nie auf,
+    weil Quelle und Ziel dieselbe Zone sind; auf einem Runner in UTC verschiebt
+    sich jeder Anker um zwei Stunden und findet seine Session nicht mehr.
+
+    Genau so ist es am 2026-08-30 passiert: drei Pipeline-Tests waren auf der
+    Entwicklermaschine gruen und in der CI rot -- und ueber Wochen hat es
+    niemand gesehen, weil die CI seit dem ersten Commit an einer fehlenden
+    Abhaengigkeit scheiterte und die Suite nie erreichte.
+
+    Fuer ein veroeffentlichtes Werkzeug ist das kein Schoenheitsfehler: derselbe
+    Bildbestand haette in einer anderen Zeitzone andere Orte bekommen.
     """
+    if p.zeit.tzinfo is None:
+        # Schon umgerechnet (oder von vornherein Kamerazeit) -- ein zweites Mal
+        # anzufassen waere falsch.
+        return p.zeit
     return p.zeit.astimezone(ZoneInfo(zone)).replace(tzinfo=None)
 
 
