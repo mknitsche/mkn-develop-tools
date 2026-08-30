@@ -44,6 +44,24 @@ URGENCY = 3
 """Dieselbe Farbe in der aelteren Notation, die Capture One tatsaechlich liest.
 An KT-1s Capture One 16.8.5 abgelesen: 3 ist blau (1 rot, 2 gruen, 7 gelb)."""
 
+FARBE_UNKLAR = "Purple"
+URGENCY_UNKLAR = 5
+"""Violett — in der Spec die einzige bewusst unbelegte Farbe, seit dem
+2026-08-30 die Kennzeichnung von Unklarheit (KT-1: *"immer wenn etwas unklar
+oder fehlerhaft identifiziert ist, bekommt es ein stichwort und diese farbe —
+ein stichwort kann ich zwar filtern, aber die farbe zeigt es gleich"*).
+
+**Violett schlaegt Blau.** Ein Bild traegt nur EINE Farbe; eine unklare Aufnahme
+in einer Serie kann nicht beides sein. KT-1 hat den Konflikt selbst gefunden und
+die Rangfolge gesetzt. Sie ist auch sachlich richtig: die Serienzugehoerigkeit
+steht DREIFACH in der Datei (Ordner, Dateiname, Stichwort) — dort ist die Farbe
+nur Sichthilfe. Die Unklarheit steht sonst nirgends sichtbar."""
+
+PRUEFEN = "Pruefen"
+"""Das Filterwort. Immer WORTGLEICH, sonst findet eine Suche nur einen Teil —
+und die Liste ist unvollstaendig, ohne dass man es sieht. Der Grund haengt
+hierarchisch darunter: `Pruefen|Ort`, `Pruefen|Belichtung`."""
+
 EINGEBETTET = frozenset({".JPG", ".JPEG", ".HEIC"})
 """Formate mit eigener Metadaten-Konvention. Alles andere bekommt einen Sidecar."""
 
@@ -68,6 +86,7 @@ def schreibe(
     *,
     serien: Iterable[Serie] = (),
     beschreibungen: dict[int, str] | None = None,
+    unklar: dict[int, str] | None = None,
 ) -> Ergebnis:
     """Schreibt Ort, Serie, Technik und Beschreibung an jede Aufnahme.
 
@@ -76,6 +95,7 @@ def schreibe(
     wird sie ab V2 vom Modell, der Pfad steht schon hier.
     """
     beschreibungen = beschreibungen or {}
+    unklar = unklar or {}
     stichworte_je_aufnahme = _stichworte(eintraege, serien)
     in_serie = {id(a) for s in serien for a in s.aufnahmen}
     ergebnis = Ergebnis()
@@ -89,6 +109,7 @@ def schreibe(
                 beschreibung=beschreibungen.get(id(aufnahme)),
                 serienbild=id(aufnahme) in in_serie,
                 eingebettet=endung.upper() in EINGEBETTET,
+                unklar_grund=unklar.get(id(aufnahme)),
             )
             if not argumente:
                 continue
@@ -119,6 +140,7 @@ def _argumente(
     beschreibung: str | None = None,
     serienbild: bool = False,
     eingebettet: bool = False,
+    unklar_grund: str | None = None,
 ) -> list[str]:
     """Baut die exiftool-Argumente nach der Traeger-Tabelle der Spec § 6.
 
@@ -151,7 +173,21 @@ def _argumente(
                 # exiftool "Nothing to write" -- firsthand geprueft 2026-08-30.
                 args.append(f"-IPTC:Sub-location={ort.name}")
 
-    if serienbild:
+    if unklar_grund:
+        # Violett schlaegt Blau: ein Bild traegt nur eine Farbe, und die
+        # Unklarheit ist die Information, die sonst nirgends sichtbar steht.
+        args += [f"-XMP:Label={FARBE_UNKLAR}", f"-XMP-photoshop:Urgency={URGENCY_UNKLAR}"]
+        if eingebettet:
+            args.append(f"-IPTC:Urgency={URGENCY_UNKLAR}")
+        # Das Filterwort und der Grund darunter -- beide, weil das eine filtert
+        # und das andere erklaert.
+        args += [
+            f"-XMP-dc:Subject+={PRUEFEN}",
+            f"-XMP-lr:HierarchicalSubject+={PRUEFEN}",
+            f"-XMP-dc:Subject+={unklar_grund}",
+            f"-XMP-lr:HierarchicalSubject+={PRUEFEN}|{unklar_grund}",
+        ]
+    elif serienbild:
         # ZWEIMAL, und das ist keine Vorsicht: Capture One liest `xmp:Label`
         # nicht, sondern die aeltere Notation `photoshop:Urgency`. Dort ist 3
         # die blaue -- an KT-1s Capture One 16.8.5 abgelesen. Wer nur `Label`
