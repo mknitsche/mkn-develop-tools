@@ -129,3 +129,28 @@ def test_ohne_ein_einziges_lesbares_bild_entsteht_kein_bogen(tmp_path):
     kaputt.write_bytes(b"kein bild")
 
     assert kontaktbogen.baue([kaputt], tmp_path / "bogen.jpg") is None
+
+
+def test_auch_der_bogen_bleibt_auf_modellmass(tmp_path) -> None:
+    """Der dritte Weg, auf dem ein Bild hinausgeht.
+
+    Einzelbild und JPEG waren nach dem Fix auf Modellmass -- der Bogen aus
+    zwanzig Kacheln wurde 2024x1620 und lag damit darueber. Der Anbieter
+    skaliert dann selbst; das kostet nichts, aber seine Skalierung ist
+    schlechter als eine gerechnete, und die Kacheln werden unnoetig unscharf.
+
+    Aufgefallen nur, weil die Fix-Liste gegen das SYSTEM abgehakt wurde und
+    nicht gegen die eigene Fertigmeldung (LP-33).
+    """
+    from mkn_foto import vorschau
+    from PIL import Image
+
+    bilder = []
+    for i in range(kontaktbogen.MAX_KACHELN):
+        p = tmp_path / f"b{i}.jpg"
+        Image.new("RGB", (1568, 1045), (i * 10, 60, 90)).save(p)
+        bilder.append(p)
+
+    bogen = kontaktbogen.baue(bilder, tmp_path / "bogen.jpg")
+
+    assert max(Image.open(bogen).size) <= vorschau.MAX_KANTE_PX

@@ -341,3 +341,30 @@ def test_die_umgebung_schlaegt_den_uebergebenen_ort(tmp_path, monkeypatch) -> No
     datei.write_text('{"anthropic": "sk-aus-der-konfig"}', encoding="utf-8")
 
     assert modelle.waehle("anthropic", "x").schluessel(ablage=datei) == "sk-aus-der-umgebung"
+
+
+def test_gemini_braucht_modell_und_verb_in_der_url() -> None:
+    """Nicht jeder Anbieter hat EINEN Endpunkt.
+
+    **Firsthand, 2026-08-30.** Der Gemini-Zweig war gebaut, hatte Tests und
+    bekam gegen die echte API sofort `404`: die Adresse endete auf `/models`.
+    Google verlangt `/models/<modell>:generateContent` -- das Modell steht bei
+    ihnen im PFAD, nicht im Rumpf.
+
+    Es ist die vierte Instanz derselben Klasse in einer Nacht: gebaut, gruen,
+    und gegen die Wirklichkeit ungeprueft. Ein gefaelschter Transport beweist,
+    dass der Code den Rumpf richtig baut -- ueber die ADRESSE sagt er nichts,
+    weil er sie nie anwaehlt.
+    """
+    ziel = modelle.waehle("gemini", "gemini-2.5-flash").url()
+
+    assert ziel.endswith("/models/gemini-2.5-flash:generateContent")
+
+
+def test_anbieter_mit_einem_endpunkt_bleiben_unveraendert() -> None:
+    """Anthropic, Moonshot und Ollama sprechen EINE Adresse fuer alle Modelle;
+    das Modell steht dort im Rumpf. Wer allen dasselbe Schema aufzwingt,
+    repariert einen und bricht drei."""
+    for anbieter in ("anthropic", "moonshot", "ollama"):
+        wahl = modelle.waehle(anbieter, "irgendeins")
+        assert wahl.url() == modelle.ANBIETER[anbieter].basis_url, anbieter

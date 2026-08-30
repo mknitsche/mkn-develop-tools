@@ -27,6 +27,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from mkn_foto import vorschau
+
 _LOG = logging.getLogger(__name__)
 
 MAX_KACHELN = 20
@@ -100,6 +102,13 @@ def baue(
             # benennen.
             zeichner.rectangle([x, y, x + 34, y + 22], fill=(0, 0, 0))
             zeichner.text((x + 6, y + 5), str(nummer), fill=(255, 255, 255))
+
+    # Auch der fertige Bogen bleibt auf Modellmass. Zwanzig Kacheln ergeben
+    # 2024x1620 -- darueber skaliert der Anbieter selbst, und seine Skalierung
+    # ist schlechter als eine gerechnete: die Kacheln werden unnoetig unscharf,
+    # und genau ihre Details soll das Modell ja beurteilen.
+    if max(bogen.width, bogen.height) > vorschau.MAX_KANTE_PX:
+        bogen.thumbnail((vorschau.MAX_KANTE_PX, vorschau.MAX_KANTE_PX), Image.LANCZOS)
 
     ziel.parent.mkdir(parents=True, exist_ok=True)
     bogen.save(ziel, quality=85)
