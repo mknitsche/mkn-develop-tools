@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from mkn_foto import inventar, pipeline
+from mkn_foto import anreichern, inventar, pipeline, urheber
 from mkn_foto.modell import Anker
 
 
@@ -718,3 +718,45 @@ def test_die_pipeline_reicht_die_fortschrittsmeldung_durch(tmp_path, monkeypatch
     )
 
     assert meldungen, "die Pipeline reicht die Fortschrittsmeldung nicht durch"
+
+
+def test_die_pipeline_laedt_den_urheber_und_reicht_ihn_durch(tmp_path, monkeypatch) -> None:
+    """Der WEG von aussen nach innen — dritte Naht derselben Klasse.
+
+    Das Modul kann geladen und die Anreicherung kann den Parameter annehmen,
+    und trotzdem steht kein Name in den Bildern, wenn die Pipeline dazwischen
+    nicht lädt. Genau das ist heute Nacht dreimal passiert.
+    """
+    datei = tmp_path / "urheber.json"
+    datei.write_text('{"name": "Erika Muster", "email": "e@m.de"}', encoding="utf-8")
+    monkeypatch.setenv(urheber.DATEI_VARIABLE, str(datei))
+
+    gesehen: dict[str, object] = {}
+    monkeypatch.setattr(
+        pipeline.anreichern,
+        "schreibe",
+        lambda eintraege, **kw: gesehen.update(kw) or anreichern.Ergebnis(),
+    )
+
+    import shutil
+
+    if shutil.which("exiftool") is None:
+        import pytest as _p
+
+        _p.skip("exiftool nicht verfuegbar")
+
+    from PIL import Image
+
+    quelle = tmp_path / "kamera"
+    quelle.mkdir()
+    Image.new("RGB", (60, 40), (10, 20, 30)).save(quelle / "P0.JPG")
+    monkeypatch.setattr(
+        inventar.exif,
+        "lies",
+        lambda pfade: [{"EXIF:DateTimeOriginal": "2019:05:04 12:00:00", "EXIF:Model": "X-E5"}],
+    )
+
+    pipeline.fahre(quelle, tmp_path / "ziel", schreiben_aktiv=True)
+
+    assert gesehen.get("urheber_angaben") is not None, "Urheber kam nie an"
+    assert gesehen["urheber_angaben"].name == "Erika Muster"

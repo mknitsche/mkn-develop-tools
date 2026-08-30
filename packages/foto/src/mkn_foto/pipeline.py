@@ -39,6 +39,7 @@ from mkn_foto import (
     schreiben,
     serien,
     spots,
+    urheber,
 )
 from mkn_foto.modell import Anker, Aufnahme, Ort, Serie, Spot
 
@@ -285,6 +286,10 @@ def fahre(
             beschreibungen=beschreibungen,
             unklar=unklar,
             motive=_motive_je_aufnahme(lauf, mit_ort),
+            # Wer die Bilder gemacht hat, steht in der Datei des Anwenders --
+            # nie im Code dieses oeffentlichen Pakets. Fehlt sie, wird kein
+            # Urheber geschrieben; das ist ein gueltiger Zustand.
+            urheber_angaben=urheber.lade(),
         )
 
     if entscheidungen is not None and lauf.offen:
