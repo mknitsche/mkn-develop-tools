@@ -38,3 +38,13 @@ repos:
         entry: scripts/check-commit-message.sh
         language: script
         stages: [commit-msg]
+
+      # Die DCO-Zeile wird von der CI geprueft -- aber erst im Pull Request,
+      # also lange nachdem die Commits geschrieben sind. Sieben PRs einer Nacht
+      # waren deshalb rot, korrigierbar nur noch durch Umschreiben der
+      # Historie. Hier steht sie, bevor der Commit existiert.
+      - id: signoff
+        name: Signed-off-by (DCO)
+        entry: scripts/signoff.sh
+        language: script
+        stages: [commit-msg]
