@@ -14,6 +14,12 @@ name: release
 on:
   push:
     branches: [main]
+  # Von Hand ausloesbar. Gebraucht, sobald ein bestehender Release-PR
+  # neu gebaut werden muss, ohne dass sich am Inhalt etwas aendert -- etwa
+  # nachdem die Workflow-Konfiguration selbst korrigiert wurde. Ohne diesen
+  # Ausloeser bleibt der alte PR stehen, und die Korrektur wirkt erst beim
+  # naechsten Feature-Commit.
+  workflow_dispatch:
 
 permissions:
   contents: write
