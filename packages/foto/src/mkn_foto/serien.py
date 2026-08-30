@@ -124,14 +124,43 @@ def _zu_serien(gruppen: list[list[Aufnahme]], *, typ: str, sicher: bool) -> list
 
 # --- Stufe 2: Kandidaten --------------------------------------------------
 
-_KANDIDAT_MAX_LUECKE_S = 10.0
-_KANDIDAT_MIN_LAENGE = 4
+_FENSTER_MAX_LUECKE_S = 60.0
+"""Wie lange eine Pause sein darf, ohne das Fenster zu schneiden.
+
+**Das ist die einzige IRREVERSIBLE Stelle der ganzen Kette** — und darum eine
+Abwaegung, kein Messwert. Ein zu enges Fenster zerreisst eine Reihe, BEVOR
+irgendjemand misst; der Fehler ist danach unsichtbar, weil die Bilder nie
+zusammen betrachtet wurden. Ein zu weites kostet Messsekunden und
+schlimmstenfalls Cent-Betraege am Modell.
+
+Beide belegten Panoramen laegen auch im alten 10-s-Fenster (Prueffall 5/7 s,
+Poster-Raster 15 Bilder in 25 s). Aber ein Stativ-Umbau zwischen zwei Zeilen
+eines Rasters ist real, und dort waere der Schaden nicht mehr gutzumachen."""
+
+_KANDIDAT_MIN_LAENGE = 2
+"""Die kleinste Gruppe, die ein Fenster bildet.
+
+**Die Mindestlaenge ist kein Entscheider mehr.** Sie war es, und sie hat KT-1s
+Panorama verworfen: `DSCF3894`-`3896` entstand als Gruppe voellig korrekt
+(Brennweite und Blende konstant, Luecken 5 s und 7 s, davor 442 s und dahinter
+187 s Trennung) und fiel einzig an der Zahl 4 durch.
+
+Die Auswahl uebernimmt jetzt die Deckungsmessung, die ohnehin Schwenk von
+Wiederholung trennt. Was die 4 an Schutz leistete, leisten Deckungs-Schwelle und
+Regel A. KT-1 woertlich: *"ggf. sind 2 bilder bereits der anfang des
+panoramas"*."""
 
 # Was konstant bleiben MUSS. Die Belichtungszeit steht bewusst NICHT hier:
 # bei Zeitautomatik misst die Kamera jedes Bild neu, und ein Kriterium
 # "alles konstant" verpasst genau die Panoramen — firsthand gemessen an einer
 # Reihe mit f/8 und 34 mm konstant, waehrend die Zeit von 1/300 auf 1/240 lief.
-_MERKMALE = ("EXIF:FocalLength", "EXIF:FNumber")
+#
+# `Orientation` kam dazu: ein Wechsel zwischen Quer- und Hochformat ist eine
+# neue Bildabsicht, und er hat eine zweite, technische Folge -- gemischte Achsen
+# machen jede Richtungsaussage der Messung wertlos. Firsthand schneidet das
+# Merkmal in der Fotorunde zwei Fenster korrekt: [3881 | 3882, 3883] und
+# [3891, 3892 | 3893].
+_MERKMALE = ("EXIF:FocalLength", "EXIF:FNumber", "EXIF:Orientation")
 
 
 def kandidaten(aufnahmen: Sequence[Aufnahme], schon_erkannt: Sequence[Serie]) -> list[Serie]:
@@ -156,7 +185,7 @@ def kandidaten(aufnahmen: Sequence[Aufnahme], schon_erkannt: Sequence[Serie]) ->
             continue
         neu = (
             vorige is None
-            or (a.zeitpunkt - vorige.zeitpunkt).total_seconds() > _KANDIDAT_MAX_LUECKE_S
+            or (a.zeitpunkt - vorige.zeitpunkt).total_seconds() > _FENSTER_MAX_LUECKE_S
             or a.kamera != vorige.kamera
             or any(_weicht_ab(a, vorige, merkmal) for merkmal in _MERKMALE)
         )

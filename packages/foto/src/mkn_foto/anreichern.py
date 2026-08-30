@@ -37,6 +37,26 @@ from mkn_foto.urheber import Urheber
 
 SIDECAR = ".xmp"
 
+ZWEI_SCHREIBER = """\
+**In dieselben Dateien schreiben ZWEI Stellen: `anreichern.schreibe` und
+`motivlauf._merke`. Jede Regel ueber den Dateiinhalt muss BEIDE erreichen.**
+
+Dreimal in einer Nacht ist genau das misslungen, jedes Mal in derselben Form --
+eine Regel an einer Stelle eingebaut, die zweite stehengelassen:
+
+1. die Traeger-Regel (Sidecar gegen eingebettet): in `schreibe` richtig, in
+   `_merke` nicht -- 71 ueberzaehlige Dateien;
+2. die Marken-Pruefung (Anfang statt Teilstring): im eingebetteten Zweig
+   repariert, im Sidecar-Zweig nicht -- 1.227 Aufnahmen haetten nie ein Urteil
+   bekommen;
+3. der Dedupe (`ohne_wiederholung`): in `_argumente` eingebaut, in `_merke`
+   nicht -- und dort heilt der Schaden nicht, weil die Wiederaufnahme ein Urteil
+   ohne Motive liefert.
+
+Deshalb sind `setze` und `ohne_wiederholung` oeffentlich: sie sind gemeinsames
+Gut beider Schreiber, kein Innenleben dieses Moduls. Wer eine neue Regel ueber
+Datei-Inhalte einbaut, sucht zuerst die zweite Stelle."""
+
 WERKZEUG = "mkn-foto"
 """Was in `xmp:CreatorTool` steht — zusammen mit der Version.
 
@@ -106,13 +126,28 @@ def traeger(pfad: Path) -> tuple[Path, bool]:
     return pfad.with_suffix(SIDECAR), False
 
 
-def _setze(feld: str, wert: str) -> list[str]:
+def setze(feld: str, wert: str) -> list[str]:
     """Ein Listenwert, der genau EINMAL dasteht -- auch beim zweiten Lauf.
 
-    `-=` vor `+=`: exiftool arbeitet die Argumente der Reihe nach ab, entfernt
-    also ein vorhandenes Vorkommen und legt es genau einmal neu an. Fremde Werte
-    im selben Feld bleiben unberuehrt -- dort steht KT-1s Handarbeit aus Capture
-    One, und die darf kein Lauf loeschen. Firsthand geprueft, nicht angenommen.
+    `-=` und `+=` zusammen: exiftool wendet die Loeschung vor der Neuanlage an,
+    das Ergebnis traegt den Wert genau einmal, und ein `-=` raeumt dabei ALLE
+    vorhandenen Vorkommen ab -- der Aufruf heilt einen bestehenden Doppelbestand
+    also mit. Fremde Werte im selben Feld bleiben unberuehrt; dort steht KT-1s
+    Handarbeit aus Capture One, und die darf kein Lauf loeschen.
+
+    **Die Argument-REIHENFOLGE ist dabei ohne Wirkung**, und das ist eine
+    Korrektur: eine fruehere Fassung dieses Docstrings behauptete, exiftool
+    arbeite die Argumente der Reihe nach ab -- mit Firsthand-Siegel. Ein Critic
+    hat die Gegenprobe gefahren, die ich nicht gefahren hatte: die Mutation
+    "Reihenfolge vertauscht" ueberlebte die Suite, weil beide Reihenfolgen
+    Zeichen fuer Zeichen dasselbe liefern (mit Vorbestand, ohne, im zweiten
+    Lauf). Das Verhalten stimmte, die Erklaerung nicht. Eine begruendete
+    Vermutung mit Messsiegel ist schlimmer als eine offene Frage, weil niemand
+    sie mehr nachprueft.
+
+    Nicht abgedeckt: die Loeschung ist gross-/kleinschreibungsempfindlich. Ein
+    vorhandenes `motiv|wald` und ein neues `Motiv|Wald` stehen danach
+    nebeneinander.
 
     Ohne das entstand die Verdopplung, die KT-1s Direktive verletzte (*"alle
     inhalte muessen bei jpeg und raw gleich sein"*): `motivlauf._merke` legt die
@@ -293,10 +328,10 @@ def _argumente(
         # Das Filterwort und der Grund darunter -- beide, weil das eine filtert
         # und das andere erklaert.
         args += (
-            _setze("XMP-dc:Subject", PRUEFEN)
-            + _setze("XMP-lr:HierarchicalSubject", PRUEFEN)
-            + _setze("XMP-dc:Subject", unklar_grund)
-            + _setze("XMP-lr:HierarchicalSubject", f"{PRUEFEN}|{unklar_grund}")
+            setze("XMP-dc:Subject", PRUEFEN)
+            + setze("XMP-lr:HierarchicalSubject", PRUEFEN)
+            + setze("XMP-dc:Subject", unklar_grund)
+            + setze("XMP-lr:HierarchicalSubject", f"{PRUEFEN}|{unklar_grund}")
         )
     elif serienbild:
         # ZWEIMAL, und das ist keine Vorsicht: Capture One liest `xmp:Label`
@@ -314,10 +349,41 @@ def _argumente(
         args.append(f"-XMP-dc:Description={beschreibung}")
 
     for wort in stichworte:
-        args += _setze("XMP-dc:Subject", wort.split("|")[-1])
-        args += _setze("XMP-lr:HierarchicalSubject", wort)
+        args += setze("XMP-dc:Subject", wort.split("|")[-1])
+        args += setze("XMP-lr:HierarchicalSubject", wort)
 
-    return args
+    return ohne_wiederholung(args)
+
+
+def ohne_wiederholung(args: list[str]) -> list[str]:
+    """Dasselbe Argument zweimal ist einmal zu viel.
+
+    **`_setze` macht ein Stichwort idempotent gegenueber einem VORBESTAND, nicht
+    innerhalb eines Aufrufs.** Steht dasselbe Feld-Wert-Paar zweimal in
+    derselben exiftool-Zeile, entstehen zwei Kopien -- und der Schaden heilt
+    nicht von selbst, ein zweiter Lauf laesst sie stehen.
+
+    Erreichbar auf zwei Wegen, beide gemessen: ein Vision-Modell nennt ein Motiv
+    doppelt (die Kette dedupliziert an keiner Station), oder zwei verschiedene
+    Zweige liefern dasselbe BLATT fuer `dc:Subject` -- `Technik|Einzelbild` und
+    ein Motiv `Einzelbild` ergeben beide `Einzelbild`, ganz ohne doppelte
+    Eingabe.
+
+    Damit haette ausgerechnet der Fix, der KT-1s doppelte Stichworte beheben
+    soll, sie auf einem anderen Weg weiter erzeugt. Gefunden vom Critic.
+
+    Die Reihenfolge bleibt erhalten (`dict.fromkeys`), damit Argumentlisten
+    stabil und Diffs reproduzierbar sind -- **nicht, weil sie bei exiftool etwas
+    bewirkte.** Genau das behauptete die erste Fassung dieses Absatzes, woertlich
+    dieselbe Aussage, die `setze` zwanzig Zeilen darueber gerade korrigiert
+    hatte. Der Critic hat sie mit einer Mutation erledigt: `sorted(set(args))`
+    zerstoert die Reihenfolge vollstaendig, und die Suite bleibt gruen.
+
+    Die widerlegte Begruendung war beim Umschreiben eine Funktion weiter
+    gewandert. Das ist der Grund, warum sie hier ausdruecklich steht statt
+    stillschweigend ersetzt zu werden.
+    """
+    return list(dict.fromkeys(args))
 
 
 EINZELN = "Technik|Einzelbild"

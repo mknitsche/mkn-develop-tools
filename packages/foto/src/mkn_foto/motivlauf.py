@@ -16,6 +16,12 @@ rund 630 und 1.293 Aufrufen — etwa 7 statt 13 Euro (Spec § 10a).
 **Ohne Bild wird nicht angefragt.** Ein Aufruf ohne Bild kostet dasselbe und
 liefert eine fluessige, vollstaendig erfundene Antwort. Die sieht man ihr nicht
 an, und sie landete sonst als Stichwort in einer Datei.
+
+**Ein Eintrag stellt eine von ZWEI Fragen** (Design 2026-08-30 Stufe 3 § 4):
+die bestehende Motiv-Frage, oder -- fuer Panorama-Kandidaten -- die Frage, ob
+eine Gruppe ein Panorama, eine Wiederholung oder gar keine Serie ist. Die
+Serien-Frage ERSETZT dabei den Motiv-Aufruf der Gruppe, statt zu ihm
+hinzuzukommen (§ 7): daran haengt die Kostenrechnung des ganzen Designs.
 """
 
 from __future__ import annotations
@@ -28,22 +34,48 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from mkn_foto import anreichern, bildurteil, kontaktbogen, messung, vorschau
 from mkn_kern import anfrage, modelle
 
 _LOG = logging.getLogger(__name__)
 
-#: (Vertreter, Mitglieder) — `None` als Mitglieder heisst Einzelbild.
-Eintrag = tuple[Path, Sequence[Path] | None]
+Frage = Literal["motiv", "serie"]
+"""Welche Frage ein Eintrag stellt (Design Stufe 3 § 4). `motiv` ist die
+bestehende Frage nach Stichworten/Beschreibung/Belichtung -- auch fuer
+Wiederholungs-Gruppen, die ein gemeinsames Motiv erben. `serie` ist die neue
+Frage am Kontaktbogen: Panorama, Wiederholung oder keine Serie."""
+
+#: (Vertreter, Mitglieder, Frage) — `None` als Mitglieder heisst Einzelbild.
+#: Die Frage ist OPTIONAL: ein 2-Tupel fragt wie bisher nach dem Motiv --
+#: `pipeline.py` baut seine Eintraege heute noch so, und die Verdrahtung der
+#: Serien-Frage in die Pipeline ist ein eigener Schritt.
+Eintrag = tuple[Path, Sequence[Path] | None] | tuple[Path, Sequence[Path] | None, Frage]
+
+
+def _entpackt(eintrag: Eintrag) -> tuple[Path, Sequence[Path] | None, Frage]:
+    """Ein Eintrag, immer als volles Tripel -- ob er die Frage nennt oder nicht.
+
+    Rueckwaertskompatibilitaet ist hier kein Komfort, sondern Notwendigkeit:
+    `pipeline._bildanalyse` baut seine Eintraege als reine 2-Tupel und reicht
+    sie direkt an `fahre()` durch. Ein hartes 3-Tupel wuerde sie beim naechsten
+    Aufruf mit einem `ValueError` abreissen.
+    """
+    if len(eintrag) == 3:
+        return eintrag  # type: ignore[return-value]
+    vertreter, gruppe = eintrag
+    return vertreter, gruppe, "motiv"
 
 
 @dataclass
 class Ergebnis:
     """Was der Lauf gesehen hat. Zahlen und Gruende, keine Behauptungen."""
 
-    urteile: dict[Path, bildurteil.Urteil] = field(default_factory=dict)
-    """Je VERTRETER ein Urteil. Mitglieder finden es ueber `fuer()`."""
+    urteile: dict[Path, bildurteil.Urteil | bildurteil.Serienurteil] = field(default_factory=dict)
+    """Je VERTRETER ein Urteil. Mitglieder finden es ueber `fuer()`. Ein
+    Vertreter mit der Serien-Frage traegt ein `Serienurteil`, alle anderen ein
+    `Urteil` -- beide kennen `.sicher` und `.motive`, was hier reicht."""
 
     mitglieder: dict[Path, Path] = field(default_factory=dict, repr=False)
     """Mitglied -> Vertreter."""
@@ -56,7 +88,7 @@ class Ergebnis:
     -- sie wegzuwerfen und hinterher zu schaetzen waere die teuerste Art, an
     Daten zu kommen, die man schon hatte (KT-1 vor dem ersten Lauf)."""
 
-    def fuer(self, bild: Path) -> bildurteil.Urteil | None:
+    def fuer(self, bild: Path) -> bildurteil.Urteil | bildurteil.Serienurteil | None:
         """Das Urteil zu diesem Bild — auch, wenn es Mitglied einer Serie ist."""
         vertreter = self.mitglieder.get(bild, bild)
         return self.urteile.get(vertreter)
@@ -78,7 +110,8 @@ def fahre(
     wird nicht noch einmal angefragt.
     """
     ergebnis = vorhandene or Ergebnis()
-    offen = sum(1 for v, _ in eintraege if v not in ergebnis.urteile)
+    normiert = [_entpackt(e) for e in eintraege]
+    offen = sum(1 for v, _, _ in normiert if v not in ergebnis.urteile)
     getan = 0
     begonnen_gesamt = time.monotonic()
     kopf = _kopf(wahl, schluessel)
@@ -86,19 +119,20 @@ def fahre(
 
     with tempfile.TemporaryDirectory(prefix="mkn-foto-motiv-") as arbeitsraum:
         raum = Path(arbeitsraum)
-        for nummer, (vertreter, gruppe) in enumerate(eintraege):
+        for nummer, (vertreter, gruppe, frage) in enumerate(normiert):
             for m in gruppe or ():
                 ergebnis.mitglieder[m] = vertreter
             if vertreter in ergebnis.urteile:
                 continue  # schon beurteilt -- die Wiederaufnahme
 
-            bild = _bildvorlage(vertreter, gruppe, raum / f"{nummer:05d}.jpg")
+            bild = _bildvorlage(vertreter, gruppe, raum / f"{nummer:05d}.jpg", frage=frage)
             if bild is None:
                 ergebnis.fehler.append((vertreter, "keine lesbare Vorschau"))
                 continue
 
             art = "serie" if gruppe and len(gruppe) > 1 else "einzel"
-            koerper = wahl.baue_anfrage(bildurteil.prompt(), bilder=[bild])
+            frage_text = bildurteil.serien_prompt() if frage == "serie" else bildurteil.prompt()
+            koerper = wahl.baue_anfrage(frage_text, bilder=[bild])
             begonnen = time.monotonic()
             try:
                 antwort = anfrage.sende(ziel, koerper, kopf, transport=transport)
@@ -125,7 +159,11 @@ def fahre(
                     vertreter.name, antwort, dauer_s=time.monotonic() - begonnen, art=art
                 )
             )
-            urteil = bildurteil.aus_antwort(antwort)
+            urteil = (
+                bildurteil.serie_aus_antwort(antwort)
+                if frage == "serie"
+                else bildurteil.aus_antwort(antwort)
+            )
             ergebnis.urteile[vertreter] = urteil
             # SOFORT in den Baum, nicht erst am Ende. `aus_baum` liest genau
             # von hier -- aber nur, wenn waehrend des Laufs geschrieben wird.
@@ -133,7 +171,18 @@ def fahre(
             # bezahlten Urteile weg: 3,12 EUR und 200 Aufrufe beim zweiten Mal.
             # Der Kommentar an MOTIV_MARKE sagt "Der Baum IST der Zustand"; das
             # stimmt erst mit dieser Zeile.
-            _merke(vertreter, urteil)
+            #
+            # Bei der Serien-Frage gilt ein Sonderfall (Design § 4): `keine`
+            # vererbt NICHT, auch wenn das Modell sicher ist -- die Mitglieder
+            # bekommen spaeter ein EIGENES Motiv-Urteil (Motiv-Pfad der
+            # Nicht-Erbenden). Wuerde der Vertreter hier trotzdem gemerkt,
+            # faende `aus_baum` bei genau diesem spaeteren Einzel-Aufruf eine
+            # Marke aus der Serien-Frage vor und haelt ihn faelschlich fuer
+            # beurteilt -- er bekaeme NIE ein echtes Motiv-Urteil. `_merke`
+            # selbst kennt diesen Fall nicht (sie ist tabu); der Aufrufer hier
+            # entscheidet, WANN sie greift.
+            if frage != "serie" or urteil.serie != "keine":
+                _merke(vertreter, urteil)
 
             getan += 1
             if melde is not None and (getan % melde_alle == 0 or getan == offen):
@@ -162,14 +211,33 @@ def _fortschritt(getan: int, offen: int, ergebnis: Ergebnis, begonnen: float) ->
     ).replace(",", ".")
 
 
-def _bildvorlage(vertreter: Path, gruppe: Sequence[Path] | None, ziel: Path) -> Path | None:
-    """Kontaktbogen fuer eine Serie, sonst die Vorschau des Einzelbildes."""
+def _bildvorlage(
+    vertreter: Path, gruppe: Sequence[Path] | None, ziel: Path, *, frage: Frage = "motiv"
+) -> Path | None:
+    """Kontaktbogen fuer eine Serie, sonst die Vorschau des Einzelbildes.
+
+    **Bei der Serien-Frage muss die Nummerierung stimmen** (Design Stufe 3
+    § 4): das Modell antwortet mit Nummern, und `Serienurteil.bilder` bezieht
+    sich auf die POSITION im Kontaktbogen. Faellt beim Bauen ein Mitglied durch
+    (`_als_bild` liefert `None`), wuerde die alte Fassung die folgenden
+    Kacheln stillschweigend nach vorne ruecken -- Nummer 3 waere dann
+    Mitglied 4, und ein spaeterer Vollzug wuerde die FALSCHE Aufnahme
+    benennen. Deshalb: fehlt bei der Serien-Frage EIN Mitglied, entsteht
+    ueberhaupt kein Bogen -- besser kein Urteil als eines mit falscher
+    Zuordnung.
+
+    Die Motiv-Frage bleibt grosszuegig wie bisher: dort referenziert keine
+    Antwort eine Bildnummer, die Luecke ist dort unschaedlich.
+    """
     if gruppe and len(gruppe) > 1:
         vorschauen = []
         for i, m in enumerate(gruppe):
             v = _als_bild(m, ziel.with_name(f"{ziel.stem}-{i:03d}.jpg"))
-            if v is not None:
-                vorschauen.append(v)
+            if v is None:
+                if frage == "serie":
+                    return None
+                continue
+            vorschauen.append(v)
         if not vorschauen:
             return None
         return kontaktbogen.baue(vorschauen, ziel)
@@ -275,11 +343,21 @@ def _merke(bild: Path, urteil: bildurteil.Urteil) -> None:
     # einbettet. Bei 65 JPEG ohne RAW im Bestand waren das 65 ueberzaehlige
     # Dateien und, schlimmer, dieselbe Aussage an zwei Stellen.
     ziel, eingebettet = anreichern.traeger(bild)
-    args = []
+    # DIESELBE Behandlung wie in `anreichern.schreibe` -- beide Funktionen
+    # oeffentlich, damit die Regel nicht nur eine der beiden Schreibstellen
+    # erreicht (siehe `anreichern.ZWEI_SCHREIBER`). `setze` macht das Stichwort
+    # idempotent gegenueber einem Vorbestand, `ohne_wiederholung` gegen ein
+    # doppelt genanntes Motiv im selben Aufruf.
+    #
+    # Der Dedupe ist hier NICHT entbehrlich, obwohl `anreichern` spaeter
+    # ohnehin schreibt: im durchlaufenden Lauf raeumte es die Dublette mit, im
+    # WIEDERAUFNAHME-Lauf nicht -- `aus_baum` liefert ein Urteil ohne Motive,
+    # also laeuft dort nie ein `-=` auf diesen Wert. Genau der Fall, fuer den
+    # diese Funktion existiert.
+    args: list[str] = []
     for w in urteil.motive:
-        # Idempotent wie in `anreichern`: ein zweiter Lauf ueber dieselbe Datei
-        # darf das Stichwort nicht verdoppeln.
-        args += anreichern._setze("XMP-lr:HierarchicalSubject", f"{MOTIV_MARKE}{w}")
+        args += anreichern.setze("XMP-lr:HierarchicalSubject", f"{MOTIV_MARKE}{w}")
+    args = anreichern.ohne_wiederholung(args)
     befehl = ["exiftool", "-q", *args]
     if eingebettet or ziel.exists():
         befehl += ["-overwrite_original", str(ziel)]
@@ -311,10 +389,11 @@ def _merke(bild: Path, urteil: bildurteil.Urteil) -> None:
 def aus_baum(bilder: Sequence[Path]) -> Ergebnis:
     """Liest den Stand eines frueheren Laufs -- eingebettet UND aus Sidecars.
 
-    Zwei Wege, weil die Traeger-Regel zwei kennt: ein JPEG traegt seine Marke in
-    sich, ein RAW im Sidecar daneben. Zusaetzlich wird auch bei einem JPEG der
-    Sidecar geprueft -- Baeume aus frueheren Laeufen tragen ihn dort, weil die
-    Regel damals nicht galt. Beim Lesen nachsichtig, beim Schreiben streng.
+    Zwei ORTE, aber EINE Leseregel: beide gehen durch denselben Stapelaufruf und
+    dieselbe Marken-Pruefung. Ein JPEG traegt seine Marke in sich, ein RAW im
+    Sidecar daneben; zusaetzlich wird auch bei einem JPEG der Sidecar geprueft,
+    weil Baeume aus frueheren Laeufen ihn dort tragen. Beim Lesen nachsichtig,
+    beim Schreiben streng.
 
     Geprueft wird nur die ANWESENHEIT eines Motiv-Stichworts, nicht sein Inhalt:
     was einmal geschrieben wurde, ist beurteilt. Wer den Inhalt neu bewerten
@@ -322,35 +401,36 @@ def aus_baum(bilder: Sequence[Path]) -> Ergebnis:
     bleiben.
     """
     ergebnis = Ergebnis()
-    eingebettete: list[Path] = []
+    # Beide Traeger werden GLEICH gelesen: ueber exiftool, im Stapel, mit
+    # derselben Marken-Regel. Die fruehere Fassung las den Sidecar als XML-TEXT
+    # und suchte darin `Motiv|` als Vorkommen -- ein fremdes Stichwort aus
+    # Capture One wie `Themen|Motiv|Ideen` traf das ebenso, und das Bild bekam
+    # nie ein Urteil. Der eingebettete Zweig war dagegen schon repariert; der
+    # Sidecar-Zweig traegt aber 1.227 von 1.293 Aufnahmen.
+    #
+    # exiftool liest `.xmp` genauso wie ein JPEG, also braucht es dafuer keinen
+    # zweiten Weg -- und genau darum geht es: eine Regel, eine Stelle.
+    traeger_je_bild: dict[Path, list[Path]] = {}
     for bild in bilder:
         ziel, eingebettet = anreichern.traeger(bild)
+        moegliche = []
         if eingebettet and ziel.exists():
-            # Ein JPEG traegt seine Marke IN sich. Sie mit `read_text` zu suchen
-            # hiesse, bis zu 20 MB Bilddaten je Datei zu lesen -- ueber den
-            # Bestand rund 26 GB. Solche Dateien werden gesammelt und in EINEM
-            # exiftool-Aufruf gefragt.
-            eingebettete.append(ziel)
+            moegliche.append(ziel)
         # **Beim Lesen nachsichtig, beim Schreiben streng.** Auch ein JPEG wird
         # zusaetzlich auf einen Sidecar geprueft: Baeume aus frueheren Laeufen
-        # tragen dort ihre Marke, weil die Traeger-Regel damals nicht galt.
-        # Wer sie ignoriert, laesst einen Wiederaufnahme-Lauf jedes bezahlte
-        # Urteil erneut kaufen -- teurer als der Fehler, den die Regel behebt.
+        # tragen dort ihre Marke, weil die Traeger-Regel damals nicht galt. Wer
+        # sie ignoriert, laesst einen Wiederaufnahme-Lauf jedes bezahlte Urteil
+        # erneut kaufen.
         seite = bild.with_suffix(SIDECAR)
-        if not seite.exists():
-            continue
-        try:
-            inhalt = seite.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            _LOG.warning("Sidecar unlesbar, gilt als offen: %s (%s)", seite.name, exc)
-            continue
-        if MOTIV_MARKE in inhalt:
-            # Der genaue Inhalt steht in der Datei; hier zaehlt nur "erledigt".
-            ergebnis.urteile[bild] = bildurteil.Urteil(sicher=True, fehler="aus dem Baum")
+        if seite.exists() and seite not in moegliche:
+            moegliche.append(seite)
+        if moegliche:
+            traeger_je_bild[bild] = moegliche
 
-    marken = set(_mit_marke(eingebettete))
-    for bild in bilder:
-        if bild in marken:
+    mit_marke = set(_mit_marke([t for ts in traeger_je_bild.values() for t in ts]))
+    for bild, moegliche in traeger_je_bild.items():
+        if any(t in mit_marke for t in moegliche):
+            # Der genaue Inhalt steht in der Datei; hier zaehlt nur "erledigt".
             ergebnis.urteile[bild] = bildurteil.Urteil(sicher=True, fehler="aus dem Baum")
     return ergebnis
 

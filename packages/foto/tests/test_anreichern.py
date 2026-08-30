@@ -454,3 +454,53 @@ def test_ein_stichwort_mit_sonderzeichen_loescht_keine_handarbeit(tmp_path) -> N
     # Und die Werte selbst kommen woertlich an -- sonst prueft der Test nur,
     # dass nichts passiert ist, und das waere ueber dem Nichts trivial wahr.
     assert "Wald*" in hierarchisch, f"der Wert kam nicht woertlich an: {hierarchisch}"
+
+
+def test_ein_doppelt_genanntes_motiv_steht_einmal_da(tmp_path) -> None:
+    """**Die Zusicherung von `_setze` hielt ueber Laeufe, nicht innerhalb eines.**
+
+    `-=` vor `+=` macht ein Stichwort idempotent gegenueber einem VORBESTAND.
+    Steht dasselbe Feld-Wert-Paar aber zweimal in DEMSELBEN exiftool-Aufruf,
+    entstehen zwei Kopien -- und die Reihenfolge der Argumente aendert daran
+    nichts (am Werkzeug gemessen).
+
+    Erreichbar ist das ueber ein Vision-Modell, das ein Motiv wiederholt: die
+    Kette dedupliziert an keiner Station (`bildurteil.aus_antwort`,
+    `Urteil.zum_schreiben`, `pipeline._motive_je_aufnahme`, `_argumente`). Der
+    Schaden heilt auch nicht von selbst -- ein zweiter Lauf laesst die Dubletten
+    stehen. Damit erzeugt genau der Fix, der KT-1s doppelte Stichworte beheben
+    sollte, sie auf einem anderen Weg weiter.
+
+    Zweiter Weg zur selben Wurzel, ganz ohne doppelte Eingabe: `wort.split("|")`
+    zieht das Blatt, und zwei verschiedene Zweige koennen dasselbe Blatt haben
+    (`Technik|Einzelbild` und ein Motiv `Einzelbild`).
+
+    Gefunden vom Critic.
+    """
+    a = _aufnahme(tmp_path, "DSCF9004", (".RAF",))
+
+    anreichern.schreibe([(a, ORT)], motive={id(a): ("Bruecke", "Bruecke")})
+
+    sidecar = tmp_path / "DSCF9004.xmp"
+    hierarchisch = _lies(sidecar, "HierarchicalSubject").get("HierarchicalSubject", "")
+    treffer = hierarchisch.count("Motiv|Bruecke")
+    assert treffer == 1, f"'Motiv|Bruecke' steht {treffer}x drin: {hierarchisch}"
+
+
+def test_zwei_zweige_mit_gleichem_blatt_kollidieren_nicht(tmp_path) -> None:
+    """Der zweite Weg zur selben Wurzel -- ohne doppelte Eingabe.
+
+    `XMP-dc:Subject` bekommt das BLATT eines hierarchischen Stichworts
+    (`wort.split("|")[-1]`). Ein Motiv `Einzelbild` und der Technik-Zweig
+    `Technik|Einzelbild` liefern damit beide `Einzelbild` -- zweimal derselbe
+    Wert in einem Aufruf, also dieselbe Verdopplung wie oben, ohne dass das
+    Modell irgendetwas wiederholt haette.
+    """
+    a = _aufnahme(tmp_path, "DSCF9005", (".RAF",))
+
+    anreichern.schreibe([(a, ORT)], motive={id(a): ("Einzelbild",)})
+
+    sidecar = tmp_path / "DSCF9005.xmp"
+    flach = _lies(sidecar, "Subject").get("Subject", "")
+    treffer = flach.count("Einzelbild")
+    assert treffer == 1, f"'Einzelbild' steht {treffer}x in Subject: {flach}"

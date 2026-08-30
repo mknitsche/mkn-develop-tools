@@ -159,3 +159,74 @@ def _pruefe_platz(aufnahmen: Sequence[Aufnahme], ziel_wurzel: Path) -> None:
             f"{int(noetig * _SICHERHEIT)} Byte fuer {len(aufnahmen)} Aufnahmen. "
             "Abbruch vor der ersten Kopie — ein halber Baum ist schlimmer als keiner."
         )
+
+
+def benenne_um(serien: Iterable[Serie]) -> int:
+    """Vollzieht ein bestaetigtes Serien-Urteil im Baum: `std` wird `panNN-PPvGG`.
+
+    **Die Einheit ist die AUFNAHME, nicht die Datei** (KT-1s Direktive: *"die
+    gepaarten bilder sind als paar zu behandeln"*). Alle Dateien einer Aufnahme
+    -- RAW, JPEG und der `.xmp`-Sidecar -- wandern unmittelbar nacheinander auf
+    denselben neuen Stamm, ohne andere Arbeit dazwischen. Bliebe eine Haelfte
+    zurueck, waere die Aufnahme im Baum zerrissen, und einer Aufnahmezahl sieht
+    man das nicht an.
+
+    **Der Sidecar wandert mit, obwohl er in keinem Inventar steht.** Wer nur die
+    Bilddateien umbenennt, laesst die gesamte Anreicherung unter dem alten Namen
+    zurueck -- Lightroom findet sie dann nicht mehr. Dieselbe Regel wie beim
+    Kopieren: RAW und Sidecar nie getrennt bewegen.
+
+    **Gruppen-Atomaritaet gibt es bewusst nicht.** Ein Absturz mitten in einer
+    Gruppe hinterlaesst einen LESBAREN Zustand, denn der `pan`-Abschnitt kodiert
+    Typ, Serie, Position und Gesamtzahl. Wie daraus vervollstaendigt wird --
+    und warum nur bei eindeutiger Lage --, entscheidet der Aufrufer; hier wird
+    nur vollzogen.
+
+    Gibt zurueck, wie viele Dateien bewegt wurden. Was schon seinen Zielnamen
+    traegt, wird uebersprungen: ein zweiter Lauf darf nichts verketten.
+    """
+    bewegt = 0
+    for s in serien:
+        gesamt = len(s.aufnahmen)
+        for pos, a in enumerate(s.aufnahmen, start=1):
+            merkmale = {"typ": s.typ, "serie": s.nummer, "pos": pos, "gesamt": gesamt}
+            for pfad in list(a.dateien.values()):
+                bewegt += _rechter_name(pfad, a, merkmale)
+    return bewegt
+
+
+def nimm_zurueck(serien: Iterable[Serie]) -> int:
+    """Macht eine Umbenennung rueckgaengig: `panNN-PPvGG` wird wieder `std`.
+
+    Gebraucht, wenn ein Serien-Urteil bei der Wiederaufnahme nicht mehr gedeckt
+    ist -- ein Serien-Name im Baum gilt nur zusammen mit einem sicheren Urteil.
+    Moeglich ist die Ruecknahme, weil der `std`-Name aus dem Stamm ableitbar
+    ist; die Umbenennung traegt keine Information, die nur in ihr steht.
+    """
+    zurueck = 0
+    for s in serien:
+        for a in s.aufnahmen:
+            for pfad in list(a.dateien.values()):
+                zurueck += _rechter_name(pfad, a, {"typ": "std"})
+    return zurueck
+
+
+def _rechter_name(pfad: Path, a: Aufnahme, merkmale: dict[str, object]) -> int:
+    """Bringt EINE Datei und ihren Sidecar auf den Zielnamen. 0 oder mehr bewegt.
+
+    `os.rename` je Datei: auf demselben Volume atomar, und mehr braucht es
+    nicht -- ein halber Vollzug ist am Namen ablesbar.
+    """
+    ziel = pfad.with_name(archiv_name(a, pfad.suffix, **merkmale))
+    if ziel == pfad:
+        return 0
+    bewegt = 0
+    if pfad.exists():
+        os.rename(pfad, ziel)
+        a.dateien[pfad.suffix] = ziel
+        bewegt += 1
+    begleiter = pfad.with_suffix(SIDECAR)
+    if begleiter.exists():
+        os.rename(begleiter, ziel.with_suffix(SIDECAR))
+        bewegt += 1
+    return bewegt

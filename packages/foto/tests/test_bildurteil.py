@@ -209,3 +209,200 @@ def test_ein_denkblock_verdeckt_die_antwort_nicht() -> None:
     }
 
     assert bildurteil.aus_antwort(antwort).motive == ("Berg",)
+
+
+# ---------------------------------------------------------------------------
+# Serienurteil (Design 2026-08-30 Stufe 3 § 4) -- die ZWEITE Frage: ist eine
+# Kandidaten-Gruppe ein Panorama, eine Wiederholung oder gar keine Serie. Der
+# Aufruf ERSETZT den Motiv-Aufruf der Gruppe, statt zu ihm hinzuzukommen (§ 7)
+# -- deshalb traegt das Urteil dieselben Motiv-Felder wie `Urteil`.
+#
+# Regel A gilt unveraendert (nur `sicher` schreibt) -- mit einem Sonderfall:
+# `serie == "keine"` vererbt NICHT, auch wenn das Modell sicher ist (die
+# Mitglieder gehoeren nicht zusammen, ein Sammel-Motiv waere je Bild falsch).
+# ---------------------------------------------------------------------------
+
+
+def _antwort_roh(text: str) -> dict:
+    return {"content": [{"type": "text", "text": text}]}
+
+
+SERIE_PANORAMA = _antwort(
+    {
+        "serie": "panorama",
+        "bilder": [1, 2, 3],
+        "sicher": True,
+        "motive": ["Kirche", "Turm"],
+        "beschreibung": "Schwenk ueber die Kirche.",
+        "belichtung": "gut",
+    }
+)
+
+
+def test_ein_sicheres_serienurteil_liefert_serie_und_bilder():
+    u = bildurteil.serie_aus_antwort(SERIE_PANORAMA)
+
+    assert u.sicher is True
+    assert u.serie == "panorama"
+    assert u.bilder == (1, 2, 3)
+    assert u.motive == ("Kirche", "Turm")
+
+
+def test_serie_regel_a_unsicher_liefert_nichts_zum_schreiben():
+    u = bildurteil.serie_aus_antwort(
+        _antwort({"serie": "panorama", "bilder": [1, 2], "sicher": False, "motive": ["x"]})
+    )
+
+    assert u.zum_schreiben() == {}, f"unsicher schreibt trotzdem: {u.zum_schreiben()}"
+
+
+def test_serie_keine_vererbt_auch_sicher_nichts():
+    """Der Sonderfall aus Design § 4: die Mitglieder gehoeren nicht zusammen --
+    ein Sammel-Motiv ueber eine Gehsequenz waere je Bild falsch."""
+    u = bildurteil.serie_aus_antwort(
+        _antwort(
+            {
+                "serie": "keine",
+                "bilder": [1, 2, 3],
+                "sicher": True,
+                "motive": ["Wald", "Weg"],
+                "beschreibung": "Spaziergang.",
+            }
+        )
+    )
+
+    assert u.sicher is True, "das Urteil selbst ist sicher -- nur die Vererbung entfaellt"
+    assert u.zum_schreiben() == {}, f"'keine' vererbt trotzdem: {u.zum_schreiben()}"
+
+
+def test_serie_wiederholung_sicher_vererbt_die_motive():
+    u = bildurteil.serie_aus_antwort(
+        _antwort(
+            {
+                "serie": "wiederholung",
+                "bilder": [1, 2],
+                "sicher": True,
+                "motive": ["Portal"],
+                "beschreibung": "Zwei Anlaeufe desselben Portals.",
+                "belichtung": "gut",
+            }
+        )
+    )
+
+    d = u.zum_schreiben()
+    assert d.get("motive") == ("Portal",)
+    assert d.get("beschreibung")
+
+
+def test_teilmengen_urteil_traegt_nur_die_genannten_nummern():
+    """`bilder` = [2..5] von 6 -- Bild 1 und 6 fallen (an anderer Stelle, in
+    `schreiben.py`) auf `std` zurueck. Hier wird nur geprueft, dass das URTEIL
+    selbst die Teilmenge exakt traegt."""
+    u = bildurteil.serie_aus_antwort(
+        _antwort({"serie": "panorama", "bilder": [2, 3, 4, 5], "sicher": True, "motive": ["x"]})
+    )
+
+    assert u.bilder == (2, 3, 4, 5)
+    assert 1 not in u.bilder
+    assert 6 not in u.bilder
+
+
+def test_serie_bilder_ignoriert_nicht_ganzzahlige_werte():
+    """`bool` ist in Python ein `int` (`isinstance(True, int)` ist wahr) --
+    ohne Schutz rutscht `true`/`false` unbemerkt als 1/0 durch."""
+    u = bildurteil.serie_aus_antwort(
+        _antwort({"serie": "panorama", "bilder": [1, True, "2", 3.5, 4], "sicher": True})
+    )
+
+    assert u.bilder == (1, 4), f"fremde Werte wurden nicht ausgefiltert: {u.bilder}"
+
+
+def test_eine_kaputte_serienantwort_wirft_nicht_sondern_gilt_als_unsicher():
+    u = bildurteil.serie_aus_antwort(_antwort_roh("kein json"))
+
+    assert u.sicher is False
+    assert u.zum_schreiben() == {}
+    assert u.fehler, "der Grund muss erhalten bleiben"
+
+
+def test_eine_leere_serienantwort_gilt_als_unsicher():
+    """Auf `.fehler` pruefen, nicht nur auf `.sicher`: eine leere Antwort ergibt
+    `d.get("serie") == ""`, und der SPAETERE Vokabular-Test wuerde `sicher`
+    ebenfalls auf `False` ziehen -- ohne den fehler-Text bliebe der fruehe
+    Kurzschluss fuer die leere Antwort ungeprueft (LP-40: eine Mutation, die
+    nichts aendert, ist selbst ein Befund)."""
+    u = bildurteil.serie_aus_antwort({})
+
+    assert u.sicher is False
+    assert "leer" in u.fehler.lower(), f"der Grund nennt nicht die leere Antwort: {u.fehler!r}"
+
+
+def test_ein_serienurteil_ohne_json_objekt_gilt_als_unsicher():
+    """Fremdformatig: eine JSON-Liste statt eines Objekts."""
+    u = bildurteil.serie_aus_antwort(_antwort_roh("[1, 2, 3]"))
+
+    assert u.sicher is False
+    assert "Objekt" in u.fehler, f"der Grund nennt die Form nicht: {u.fehler!r}"
+
+
+def test_ein_unbekannter_serie_wert_gilt_als_unsicher():
+    """Fremdformatig: `serie` ausserhalb des Vokabulars. Regel A darf einem
+    Wert nicht glauben, den sie nicht kennt -- auch wenn `sicher: true`
+    danebensteht."""
+    u = bildurteil.serie_aus_antwort(
+        _antwort({"serie": "collage", "bilder": [1, 2], "sicher": True, "motive": ["x"]})
+    )
+
+    assert u.sicher is False, "ein unbekannter serie-Wert darf nicht als sicher gelten"
+    assert u.zum_schreiben() == {}
+    assert u.fehler
+
+
+def test_der_serien_prompt_verlangt_serie_bilder_und_sicherheitsangabe():
+    p = bildurteil.serien_prompt()
+
+    for feld in ("serie", "bilder", "sicher", "motive", "beschreibung", "belichtung"):
+        assert f'"{feld}"' in p, f"das Feld {feld} fehlt im Serien-Prompt:\n{p}"
+    for wert in bildurteil.SERIE_WERTE:
+        assert wert in p, f"der Wert {wert} fehlt im Serien-Prompt"
+    assert "zweifel" in p.lower(), "der Prompt sagt nicht, was im Zweifel gilt"
+    assert "json" in p.lower()
+
+
+def test_der_serien_prompt_stellt_zwei_fragen_statt_einer():
+    """Der Aufruf ERSETZT den Motiv-Aufruf der Gruppe, statt zu ihm
+    hinzuzukommen -- daran haengt die Kostenrechnung des Designs (§ 7)."""
+    p = bildurteil.serien_prompt()
+
+    assert p != bildurteil.prompt()
+    assert "kontaktbogen" in p.lower() or "nummeriert" in p.lower(), (
+        "der Prompt sagt dem Modell nicht, dass es einen Kontaktbogen sieht"
+    )
+
+
+def test_serie_geminis_antwortform_wird_gelesen():
+    """`_text` wird wiederverwendet, nicht nachgebaut -- die Gemini-Form fehlte
+    dort einmal genau an dieser Stelle und sah wie eine ehrliche
+    'unsicher'-Antwort aus."""
+    antwort = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": (
+                                '{"serie": "panorama", "bilder": [1, 2], '
+                                '"sicher": true, "motive": ["Berg"]}'
+                            )
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    u = bildurteil.serie_aus_antwort(antwort)
+
+    assert u.sicher is True
+    assert u.serie == "panorama"
+    assert u.bilder == (1, 2)
