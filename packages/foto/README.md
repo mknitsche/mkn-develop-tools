@@ -168,6 +168,31 @@ prompt arrive together. That is why series are presented as a **contact sheet** 
 several frames rendered into one picture. It is not a convenience; it is what
 makes a local model able to answer the question at all.
 
+### Your own notes are read, not transcribed
+
+Where the track says nothing, the tool asks you — a small folder per unanswered
+session, a few frames, and a file to write in. **Write anywhere in that file.**
+
+What you write is then *read*, not pattern-matched:
+
+| You wrote | It understands |
+|---|---|
+| "already the Zugspitze, first frames" | a place: Zugspitze |
+| "belongs with the previous folder" | the same place as the session before |
+| "somewhere near Mehrwald, I think" | a **guess** — offered back, never written |
+| "spontaneous, middle of nowhere" | honestly no place; nothing is invented |
+| "it's black, badly exposed" | an exposure flag, and the frame is marked |
+| "the time looks wrong to me here" | a doubt about the timestamp, kept for you |
+
+The earlier version searched for keywords. Measured against 20 real notes it
+recognised **nine** and discarded the rest — including every "previous folder",
+every place named without the magic word, and the exposure remark. A word search
+cannot tell "belongs to Grainau" from "on the way back *from* Grainau"; the
+difference is in the intent of the sentence, not in its letters.
+
+**A guess is never written.** It comes back on the list instead. A missing hint
+costs nothing; a wrong place costs trust in every other one.
+
 ### The cheapest step is the one that asks no model
 
 Most series answer themselves. A camera records that it shot an exposure
