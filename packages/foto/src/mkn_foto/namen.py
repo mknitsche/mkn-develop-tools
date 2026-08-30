@@ -86,3 +86,21 @@ def ist_schon_da(ziel_tag: Path, a: Aufnahme) -> bool:
     return any(
         next(ziel_tag.glob(stabiles_muster(a, endung)), None) is not None for endung in a.dateien
     )
+
+
+def vorhandene_kopien(ziel_tag: Path, a: Aufnahme) -> dict[str, Path]:
+    """Die Zielpfade einer Aufnahme, die bereits im Zielordner liegt.
+
+    Gegenstueck zu `ist_schon_da`: jene Funktion beantwortet OB, diese WO. Die
+    Trennung ist nicht kosmetisch -- wer nur das Ob kennt, kann eine vorhandene
+    Datei zaehlen, aber nicht anreichern.
+
+    Gesucht wird mit demselben offenen Muster: der Typ-Abschnitt bleibt frei,
+    weil genau dort eine Korrektur von Hand steht.
+    """
+    gefunden: dict[str, Path] = {}
+    for endung in a.dateien:
+        treffer = next(ziel_tag.glob(stabiles_muster(a, endung)), None)
+        if treffer is not None:
+            gefunden[endung] = treffer
+    return gefunden

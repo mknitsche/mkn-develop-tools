@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from mkn_foto.modell import Aufnahme, Serie
-from mkn_foto.namen import archiv_name, ist_schon_da
+from mkn_foto.namen import archiv_name, ist_schon_da, vorhandene_kopien
 
 SIDECAR = ".xmp"
 """Die Endung, die neben einer RAW-Datei leben darf, ohne im Inventar zu stehen."""
@@ -82,7 +82,15 @@ def kopiere(
     for a in aufnahmen:
         ziel_tag = ziel_wurzel / f"{a.zeitpunkt:%Y-%m-%d}"
         if ist_schon_da(ziel_tag, a):
+            # Uebersprungen heisst NICHT abwesend. Die Dateien liegen da, und
+            # die Anreicherung braucht ihre Pfade -- sonst tut ein zweiter Lauf
+            # ueber denselben Baum nichts und meldet trotzdem Erfolg. Genau das
+            # geschah am 2026-08-30 um 07:30: 1.293 Aufnahmen, 0 Sidecars,
+            # 0 Modellaufrufe, "FERTIG" nach 36 Sekunden.
             ergebnis.uebersprungen += 1
+            vorhanden = vorhandene_kopien(ziel_tag, a)
+            if vorhanden:
+                ergebnis.kopien.append((id(a), vorhanden))
             continue
 
         ziel_tag.mkdir(parents=True, exist_ok=True)

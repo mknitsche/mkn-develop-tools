@@ -182,3 +182,34 @@ def test_kopiere_meldet_die_zieldateien_je_aufnahme(tmp_path):
     assert all(str(tmp_path / "ziel") in str(p) for p in zu_a1.values()), (
         "die gemeldeten Pfade zeigen auf die Originale statt in den Zielbaum"
     )
+
+
+def test_ein_zweiter_lauf_findet_die_schon_vorhandenen_kopien(tmp_path: Path) -> None:
+    """Ein uebersprungenes Bild ist DA -- es fehlt nur die Kopie, nicht die Datei.
+
+    **Der Anlass, firsthand.** Am 2026-08-30 um 07:30 lief die Pipeline ueber
+    denselben Zielbaum ein zweites Mal. Sie meldete nach 36 Sekunden "FERTIG",
+    1.293 Aufnahmen, 0 Sidecars, 0 Modellaufrufe -- und tat nichts. Die Ursache
+    stand hier: `kopiere` zaehlte die vorhandenen Dateien als `uebersprungen`
+    und trug sie NICHT in `kopien` ein. Die Anreicherung bekam eine leere Liste
+    und hatte folgerichtig nichts zu tun. Alles gruen, alles wertlos.
+
+    Der Fehler ist der Unterschied zwischen "nicht kopiert" und "nicht da".
+    Ein Werkzeug, das beim zweiten Lauf ueber denselben Baum nichts mehr tut,
+    ist nicht idempotent -- es ist einmalig, und das merkt niemand, solange
+    niemand zweimal laeuft.
+    """
+    quelle = tmp_path / "q"
+    quelle.mkdir()
+    a = _aufnahme(quelle, "DSCF1", endungen=(".RAF", ".JPG"))
+    ziel = tmp_path / "z"
+
+    erst = schreiben.kopiere([a], ziel)
+    zweit = schreiben.kopiere([a], ziel)
+
+    assert erst.kopiert == 2, "erster Lauf muss kopieren"
+    assert zweit.uebersprungen == 1, "zweiter Lauf darf nicht erneut kopieren"
+    # Und das ist der Punkt: die Zuordnung muss trotzdem stehen.
+    assert dict(zweit.kopien) == dict(erst.kopien), (
+        "der zweite Lauf muss dieselben Zielpfade kennen wie der erste"
+    )
