@@ -23,6 +23,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+import mkn_foto
 import pytest
 from mkn_foto import anreichern, urheber
 from mkn_foto.modell import Aufnahme, Ort, Serie
@@ -228,3 +229,34 @@ def test_der_urheber_landet_an_jeder_datei(tmp_path: Path, monkeypatch) -> None:
     assert "-XMP-dc:Creator=Erika Muster" in gerufen[0]
     # Das Aufnahmejahr, nicht das heutige.
     assert "-XMP-dc:Rights=© 2019 Erika Muster" in gerufen[0]
+
+
+def test_jede_datei_nennt_den_stand_der_sie_geschrieben_hat(tmp_path, monkeypatch) -> None:
+    """Provenienz — KT-1s eigentliche Sorge hinter der Versionsfrage.
+
+    Woertlich (2026-08-30): *"nicht das alte staende der sw die duemmer waren
+    als die aktuellen versionen die gesamte arbeit negativ beeinflussen"* --
+    und die Frage danach: *"hast du eine saubere versionierung der sw?"*
+
+    Eine Versionsnummer im Repository beantwortet das NICHT. Sie sagt, was
+    heute gilt; sie sagt nicht, welcher Stand die Datei vor drei Wochen
+    angefasst hat. Ohne diese Angabe ist ein Baum aus mehreren Laeufen nicht
+    auseinanderzuhalten -- und genau deshalb musste heute alles geloescht
+    werden: es war nicht erkennbar, was von welchem Stand stammte.
+
+    `xmp:CreatorTool` ist das dafuer vorgesehene Feld (IPTC/XMP), kein
+    Eigenbau.
+    """
+    aufnahme = _aufnahme(tmp_path, "DSC_9", (".RAF",))
+    gerufen: list[list[str]] = []
+    monkeypatch.setattr(
+        anreichern, "_ruf_exiftool", lambda args, ziel: gerufen.append(args) or True
+    )
+
+    anreichern.schreibe([(aufnahme, None)])
+
+    assert gerufen
+    stand = [a for a in gerufen[0] if a.startswith("-XMP-xmp:CreatorTool=")]
+    assert stand, "keine Angabe, welcher Stand die Datei geschrieben hat"
+    assert mkn_foto.__version__ in stand[0]
+    assert "mkn-foto" in stand[0]

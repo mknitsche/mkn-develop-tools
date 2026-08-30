@@ -37,6 +37,22 @@ from mkn_foto.urheber import Urheber
 
 SIDECAR = ".xmp"
 
+WERKZEUG = "mkn-foto"
+"""Was in `xmp:CreatorTool` steht — zusammen mit der Version.
+
+**Warum das kein Schmuck ist.** KT-1 am 2026-08-30: *"nicht das alte staende
+der sw die duemmer waren als die aktuellen versionen die gesamte arbeit negativ
+beeinflussen"*. Eine Versionsnummer im Repository beantwortet das nicht -- sie
+sagt, was HEUTE gilt, nicht, welcher Stand die Datei vor drei Wochen angefasst
+hat.
+
+Ohne diese Angabe ist ein Baum aus mehreren Laeufen nicht auseinanderzuhalten.
+Genau daran scheiterte es an diesem Tag: es war nicht erkennbar, welche Datei
+von welchem Stand stammte, und die einzige sichere Antwort war, alles zu
+loeschen und neu zu rechnen. Ein Feld haette das erspart.
+
+`xmp:CreatorTool` ist das dafuer vorgesehene Feld, kein Eigenbau."""
+
 FARBE = "Blue"
 """Die einzige Farbe, die das Werkzeug vergibt. Sie heisst "gehoert zu einer
 Serie". Rot, Gelb und Gruen sind KT-1s Bewertungsachse (Spec § 6)."""
@@ -164,7 +180,11 @@ def _argumente(
     Ohne Ort keine Koordinate — im Zweifel schreibt das Werkzeug nichts, statt
     etwas Ungefaehres zu behaupten.
     """
-    args: list[str] = []
+    from mkn_foto import __version__
+
+    # An JEDER Datei, unabhaengig davon, was sonst bekannt ist: die Frage
+    # "welcher Stand hat das geschrieben" muss immer beantwortbar sein.
+    args: list[str] = [f"-XMP-xmp:CreatorTool={WERKZEUG} {__version__}"]
 
     if urheber_angaben is not None:
         # Der Urheber steht an JEDER Datei, unabhaengig davon, ob Ort, Serie

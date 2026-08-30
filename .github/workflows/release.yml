@@ -1,0 +1,29 @@
+# Versionen bewegen sich aus den Commits, nicht aus der Hand.
+#
+# Warum überhaupt: bis zum 2026-08-30 stand `0.1.0` unbewegt seit dem ersten
+# Commit, es gab keinen Tag und keinen benannten Stand. Auf die Frage "hast du
+# eine saubere Versionierung" war die ehrliche Antwort nein — und die Folge war
+# teuer: ein Baum aus mehreren Läufen ließ sich nicht auseinanderhalten, weil
+# keine Datei sagte, welcher Stand sie geschrieben hatte.
+#
+# release-please liest die Conventional Commits, die dieses Repository ohnehin
+# erzwingt, und öffnet einen PR mit neuer Version und Changelog-Eintrag. Der
+# Merge dieses PR ist die Freigabe — sie bleibt eine bewusste Handlung.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
