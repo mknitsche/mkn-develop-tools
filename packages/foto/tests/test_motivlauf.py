@@ -431,3 +431,86 @@ def test_ein_grosses_jpeg_geht_nicht_in_voller_groesse_hinaus(tmp_path) -> None:
     # Und das Original ist unberuehrt.
     assert Image.open(gross).size == (6192, 4128), "das Original wurde veraendert"
     assert gross.stat().st_size == vorher
+
+
+def test_ein_urteil_ueberlebt_den_abbruch(tmp_path, monkeypatch) -> None:
+    """**Was zweimal an einem Tag verloren ging.**
+
+    `aus_baum` liest den Stand eines frueheren Laufs aus den Sidecars und
+    ueberspringt, was schon beurteilt ist -- ein durchdachter
+    Wiederaufnahme-Weg. Er lief nur ins Leere: geschrieben wurde erst GANZ AM
+    ENDE, nach allen Aufrufen. Bis dahin lagen die Urteile im Arbeitsspeicher.
+
+    Am 2026-08-30 wurde der Lauf zweimal abgebrochen; beide Male waren die
+    bezahlten Urteile weg, und `aus_baum` fand beim Neustart nichts. Beim
+    zweiten Mal waren es 3,12 EUR und 200 Aufrufe.
+
+    Der Kommentar an `MOTIV_MARKE` sagt es selbst: *"Der Baum IST der Zustand"*.
+    Das stimmt aber erst, wenn waehrend des Laufs in ihn geschrieben wird.
+    """
+    from PIL import Image
+
+    bild = tmp_path / "b.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+    zweites = tmp_path / "c.jpg"
+    Image.new("RGB", (400, 300), (90, 60, 120)).save(zweites)
+
+    class Abbruch(RuntimeError):
+        pass
+
+    aufrufe = {"n": 0}
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        aufrufe["n"] += 1
+        if aufrufe["n"] > 1:
+            raise Abbruch("Strom weg")
+        return 200, json.dumps(
+            {
+                "content": [{"text": '{"sicher": true, "motive": ["Wald"]}'}],
+                "usage": {"input_tokens": 10, "output_tokens": 2},
+            }
+        ).encode()
+
+    wahl = modelle.Wahl(anbieter="anthropic", modell="x")
+    with pytest.raises(Abbruch):
+        motivlauf.fahre([(bild, None), (zweites, None)], wahl, schluessel="k", transport=transport)
+
+    # Das erste Urteil muss im Baum stehen -- sonst ist es bezahlt und weg.
+    wieder = motivlauf.aus_baum([bild, zweites])
+    assert bild in wieder.urteile, "das bezahlte Urteil ueberlebte den Abbruch nicht"
+    assert zweites not in wieder.urteile
+
+
+def test_ein_unsicheres_urteil_wird_nicht_gemerkt(tmp_path) -> None:
+    """Regel A gilt auch fuer die Zwischenspeicherung.
+
+    Wuerde ein unsicheres Urteil in den Baum geschrieben, haette es zwei
+    Wirkungen, und beide sind falsch: es stuende als Stichwort in KT-1s Datei,
+    obwohl das Modell selbst zweifelt -- und `aus_baum` haelte das Bild beim
+    naechsten Lauf fuer erledigt, sodass es NIE eine bessere Antwort bekaeme.
+
+    Aufgefallen durch eine hohle Mutation: der Abbruch-Test benutzt ein
+    SICHERES Urteil und konnte den Fall gar nicht sehen.
+    """
+    from PIL import Image
+
+    bild = tmp_path / "b.jpg"
+    Image.new("RGB", (400, 300), (60, 90, 120)).save(bild)
+
+    def transport(url, koerper, kopf, zeitgrenze=120.0):
+        return 200, json.dumps(
+            {
+                "content": [{"text": '{"sicher": false, "motive": ["Wald"]}'}],
+                "usage": {"input_tokens": 10, "output_tokens": 2},
+            }
+        ).encode()
+
+    motivlauf.fahre(
+        [(bild, None)],
+        modelle.Wahl(anbieter="anthropic", modell="x"),
+        schluessel="k",
+        transport=transport,
+    )
+
+    assert not bild.with_suffix(".xmp").exists(), "ein unsicheres Urteil landete in der Datei"
+    assert bild not in motivlauf.aus_baum([bild]).urteile
