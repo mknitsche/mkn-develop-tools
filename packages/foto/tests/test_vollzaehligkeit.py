@@ -269,3 +269,54 @@ def test_gleiche_inhalte_werden_nicht_beanstandet(tmp_path) -> None:
     bericht = vollzaehligkeit.pruefe(quelle, ziel)
 
     assert not bericht.ungleich, f"gleiche Inhalte beanstandet: {bericht.ungleich}"
+
+
+def test_ein_sidecar_aus_der_quelle_ist_kein_befund(tmp_path) -> None:
+    """**Was schon vorher dalag, hat das Werkzeug nicht verursacht.**
+
+    Ein JPEG ohne RAW traegt seine Angaben eingebettet; ein Sidecar daneben ist
+    normalerweise "zwei Traeger". Liegt er aber schon in der QUELLE, ist er KT-1s
+    eigene Arbeit aus Capture One — im Karwendel-Bestand sechs solche Faelle, mit
+    seinen Bewertungen darin. Das Werkzeug hat sie korrekt mitkopiert (RAW und
+    Sidecar nie getrennt bewegen); sie als Befund zu melden waere falsch, und sie
+    zu loeschen waere schlimmer.
+
+    Die Pruefung muss den Unterschied kennen, sonst meldet sie bei jedem Lauf
+    dieselben sechs Zeilen — und eine Pruefung, die immer dasselbe meldet, wird
+    nach zwei Laeufen ignoriert.
+    """
+    quelle, ziel = tmp_path / "q", tmp_path / "z"
+    q_jpg = _bild(quelle / "D85_0001.JPG", modell="NIKON D850")
+    q_jpg.with_suffix(".xmp").write_text("<x:xmpmeta/>", encoding="utf-8")
+
+    z_jpg = _bild(
+        ziel / "2026-08-24" / "2026-08-24_061900_D850_std_D85_0001.JPG", modell="NIKON D850"
+    )
+    z_jpg.with_suffix(".xmp").write_text("<x:xmpmeta/>", encoding="utf-8")
+
+    bericht = vollzaehligkeit.pruefe(quelle, ziel)
+
+    assert not bericht.doppelter_traeger, (
+        f"ein aus der Quelle uebernommener Sidecar wird als Befund gemeldet: "
+        f"{bericht.doppelter_traeger}"
+    )
+
+
+def test_ein_neu_entstandener_sidecar_bleibt_ein_befund(tmp_path) -> None:
+    """Die Untergrenze — sonst waere die Ausnahme ein Freibrief.
+
+    Der Fall, gegen den die Regel gebaut ist: das Werkzeug legt einen Sidecar
+    neben ein JPEG, in das es unmittelbar danach einbettet. Genau das geschah im
+    Lauf vom 2026-08-30 bis zu 65 Mal.
+    """
+    quelle, ziel = tmp_path / "q", tmp_path / "z"
+    _bild(quelle / "D85_0002.JPG", modell="NIKON D850")  # OHNE Sidecar
+
+    z_jpg = _bild(
+        ziel / "2026-08-24" / "2026-08-24_061900_D850_std_D85_0002.JPG", modell="NIKON D850"
+    )
+    z_jpg.with_suffix(".xmp").write_text("<x:xmpmeta/>", encoding="utf-8")
+
+    bericht = vollzaehligkeit.pruefe(quelle, ziel)
+
+    assert bericht.doppelter_traeger, "ein neu entstandener Sidecar wird nicht gemeldet"

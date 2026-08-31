@@ -144,6 +144,17 @@ def pruefe(quelle: Path, ziel: Path) -> Bericht:
         if fehlt:
             bericht.zerrissen.append(f"{k[2]}: {', '.join(sorted(fehlt))} fehlt im Ziel")
 
+    # Sidecars, die schon in der QUELLE neben einem JPEG lagen, sind KT-1s
+    # eigene Arbeit aus Capture One -- das Werkzeug hat sie nur mitkopiert, und
+    # sie zu melden waere ein Befund ueber einen vorgefundenen Zustand. Im
+    # Karwendel-Bestand sind es sechs, mit seinen Bewertungen darin.
+    schon_in_quelle = {
+        _schluessel(a)
+        for a in aus_quelle
+        for pfad in a.dateien.values()
+        if anreichern.traeger(pfad)[1] and pfad.with_suffix(SIDECAR).exists()
+    }
+
     for a in aus_ziel:
         if len({p.stem for p in a.dateien.values()}) > 1:
             bericht.uneinheitlich.append(
@@ -151,7 +162,12 @@ def pruefe(quelle: Path, ziel: Path) -> Bericht:
             )
         for pfad in a.dateien.values():
             _, eingebettet = anreichern.traeger(pfad)
-            if eingebettet and pfad.with_suffix(SIDECAR).exists() and not _hat_roh(a):
+            if (
+                eingebettet
+                and pfad.with_suffix(SIDECAR).exists()
+                and not _hat_roh(a)
+                and _schluessel(a) not in schon_in_quelle
+            ):
                 bericht.doppelter_traeger.append(pfad.name)
 
     bericht.ungleich = _ungleiche_paare(aus_ziel)
