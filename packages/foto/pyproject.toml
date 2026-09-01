@@ -7,9 +7,29 @@ license = "AGPL-3.0-or-later"
 authors = [{ name = "Matthias Nitsche" }]
 readme = "README.md"
 # Pillow: Vorschauen verkleinern und Kontaktboegen bauen (Spec Paragraf 4a/10).
-# Bewusst die einzige Laufzeit-Abhaengigkeit -- alles andere ist stdlib plus
-# exiftool, das ohnehin auf dem Rechner liegen muss.
-dependencies = ["Pillow>=10"]
+# mkn-kern: die Modell-Anfrage (`motivlauf.py` importiert sie am Dateikopf, also
+#   schon beim Laden des Pakets). Diese Zeile fehlte bis macb-S316, und im Repo
+#   fiel es nie auf: `pythonpath` in der pytest-Konfiguration blendet beide
+#   Paketquellen ein, die Suite war gruen. Eine frische Installation brach dagegen
+#   sofort -- `mkn-foto --help` endete in
+#   `ModuleNotFoundError: No module named 'mkn_kern'`. Gefunden durch echtes
+#   Installieren in eine leere Umgebung, nicht durch einen Test (LP-18); seither
+#   haelt `tests/test_paket_abhaengigkeiten.py` den Fall fest.
+# Sonst nichts: alles Weitere ist stdlib plus exiftool, das ohnehin auf dem
+# Rechner liegen muss.
+dependencies = ["Pillow>=10", "mkn-kern>=0.2"]
+
+# Ohne diesen Eintrag ergibt `pip install mkn-foto` eine Bibliothek und kein
+# Werkzeug -- jeder Lauf braeuchte weiter ein eigenes Skript (TODO-664).
+[project.scripts]
+mkn-foto = "mkn_foto.kommandozeile:haupt"
+
+# Im Arbeitsbereich kommt das Geschwisterpaket aus dem Repo, nicht aus einem Index.
+# Ohne diesen Eintrag verweigert uv die Aufloesung ("is included as a workspace
+# member, but is missing an entry in tool.uv.sources"). Fuer einen Build nach
+# aussen bleibt die Anforderung `mkn-kern>=0.2` massgeblich.
+[tool.uv.sources]
+mkn-kern = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

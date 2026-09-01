@@ -64,6 +64,36 @@ means it — that is what makes a one-off switch possible without editing a file
 **3 — Point it at your shooting tree.** The source stays untouched; everything is
 written into a copy under `ziel`.
 
+```
+mkn-foto ~/Pictures/2026-08-Karwendel
+```
+
+That is the whole call when `ziel` is in your configuration. Everything else is
+optional and matches the field names you already know from `konfig.json` — the
+interface is German, only this documentation is English:
+
+```
+mkn-foto SOURCE [--ziel DIR] [--gpx FILE] [--bibliothek LIB] [--album NAME]
+                [--notizen DIR] [--entscheidungen DIR] [--probelauf]
+                [--konfig FILE]
+```
+
+| Option | What it does |
+|---|---|
+| `--ziel` | destination tree; overrides `ziel` from the configuration |
+| `--gpx` | the GPS track of the trip |
+| `--bibliothek` / `--album` | a Photos library and the album to take places from |
+| `--notizen` | folder holding place questions **you have answered** |
+| `--entscheidungen` | where the still-open place questions are written |
+| `--probelauf` | compute everything, write nothing — look at the numbers first |
+| `--konfig` | use a different configuration file |
+
+**Nothing is guessed.** Without a destination — neither `--ziel` nor `ziel` in the
+configuration — the run stops and says so. A guessed destination scatters tens of
+gigabytes somewhere nobody will look for them. Likewise, a failure always leaves a
+non-zero exit status: a tool that reports success for a run that never happened
+makes every script built on it a liar.
+
 **4 — Run it twice.** The second run over the same tree does the same thing as
 the first — it skips what is already copied and still enriches it. That is not a
 detail: the first version silently did *nothing* on a second run and reported
