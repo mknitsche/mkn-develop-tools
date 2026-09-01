@@ -152,11 +152,15 @@ name = "mkn-foto"
 version = "0.2.0"
 source = { editable = "packages/foto" }
 dependencies = [
+    { name = "mkn-kern" },
     { name = "pillow" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pillow", specifier = ">=10" }]
+requires-dist = [
+    { name = "mkn-kern", editable = "packages/kern" },
+    { name = "pillow", specifier = ">=10" },
+]
 
 [[package]]
 name = "mkn-kern"
