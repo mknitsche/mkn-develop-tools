@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.0](https://github.com/mknitsche/mkn-develop-tools/compare/foto-v0.2.0...foto-v0.3.0) (2026-09-01)
+
+
+### Features
+
+* **foto:** die Abnahme eines Laufs zaehlt selbst nach ([9b2c7c8](https://github.com/mknitsche/mkn-develop-tools/commit/9b2c7c8c7433d1e5c5a87313e42a423605f6a156))
+* **foto:** die Kette schliesst sich — das Panorama wird erkannt und vorgelegt ([f5b076e](https://github.com/mknitsche/mkn-develop-tools/commit/f5b076edb8b1b081fe0ee90561194b0a38c91d13))
+* **foto:** die Messung haengt im Ablauf — KT-1s Panorama wird gefunden ([f120850](https://github.com/mknitsche/mkn-develop-tools/commit/f1208503ca04eeb71e02b9b513ebe4d758292c95))
+* **foto:** mkn-foto bekommt einen Kommandozeilen-Einstieg (TODO-664) ([12d74b3](https://github.com/mknitsche/mkn-develop-tools/commit/12d74b35c071b2fcaad5a33c997f49cf1b25d577))
+* **foto:** Serienerkennung Stufe 3 — Messkern, Urteil, Vorfilter, Vollzug ([9865874](https://github.com/mknitsche/mkn-develop-tools/commit/986587402939a461206a3923e69c0fab10637aac))
+
+
+### Bug Fixes
+
+* **foto:** das Panorama darf nicht leerer sein als seine Nachbarn ([1250cfb](https://github.com/mknitsche/mkn-develop-tools/commit/1250cfbda8e313e5c3396ff209dfd6566e74abda))
+* **foto:** die Traeger-Regel gilt an einer Stelle, nicht an zweien ([8782bb8](https://github.com/mknitsche/mkn-develop-tools/commit/8782bb878442b2a64728d23d8504aa98907cb1e6))
+* **foto:** Nacharbeit aus der Cross-Modell-Review — und ein Phantom zurueckgebaut ([b114431](https://github.com/mknitsche/mkn-develop-tools/commit/b114431317871e318901ac187cf34d798be531cc))
+* **foto:** was schon in der Quelle lag, hat das Werkzeug nicht verursacht ([824fece](https://github.com/mknitsche/mkn-develop-tools/commit/824fece812077bea3768d8692aca07d0ef008434))
+
 ## [0.2.0](https://github.com/mknitsche/mkn-develop-tools/compare/foto-v0.1.0...foto-v0.2.0) (2026-08-30)
 
 
