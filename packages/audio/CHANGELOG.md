@@ -2,13 +2,6 @@
 
 ## 0.1.0 (2026-10-24)
 
-
-### Features
-
-* **audio:** mkn-audio 0.1.0 - Dokumente hoerbar machen, erstes Werkzeug MP4-Konvertierung ([9ec81f7](https://github.com/mknitsche/mkn-develop-tools/commit/9ec81f7ee41ad99b8d5470a657d7f9308b7f41fd))
-
-## [0.1.0]
-
 ### Features
 
 * Quellen lesen: EPUB (Lesefolge, Beiwerk weggelassen), PDF (Kopf-/Fusszeilen, Seitenzahlen,
