@@ -6,8 +6,10 @@ alles von vorn beginnt. Jede Stufe legt deshalb ihr Ergebnis hier ab; ein spaete
 nimmt es, wenn es noch zu seinen Eingaben passt, und rechnet sonst neu.
 
 **Ein Ordner je Quelle.** Der Name ist der Anfang des SHA-256 der Quell-BYTES, nicht des
-Dateinamens: dieselbe Datei unter anderem Namen findet ihre Zwischenergebnisse wieder,
-eine geaenderte Datei unter gleichem Namen nicht.
+Dateinamens: dieselbe Datei unter anderem Namen findet ihren Ordner und ihre Aufnahmen
+wieder, eine geaenderte Datei unter gleichem Namen nicht. Die Stufen ab dem Lesen rechnen
+bei neuem Namen dennoch neu, weil ein Leser den Namen als Titel nehmen kann -- das kostet
+bei einer Umbenennung einen Lauf des Sprachmodells, gesprochen wird nur, was sich aendert.
 
 **Fingerabdruck statt Zeitstempel.** Jede JSON-Stufe traegt `{"fingerabdruck", "daten"}`;
 der Fingerabdruck ist ein Hash aus dem der Vorstufe und den Parametern, die genau diese

@@ -991,3 +991,17 @@ def test_ueberleitung_im_kapitel_klingt_wie_die_ansage_stimme(umgebung_ansage, e
     # Vorspann, Kapitel 1, dann Kapitel 2 in zwei Laeufen (Ueberleitung, Text), dann Abspann.
     assert gemastert == ["stimme-b", "stimme-a", "stimme-b", "stimme-a", "stimme-b"]
     assert len(ffprobe(ergebnis.dateien[0])["chapters"]) == 4
+
+
+def test_gleicher_inhalt_unter_neuem_namen_bekommt_den_neuen_titel(umgebung, tmp_path):
+    # Der Leser nimmt bei Text den Dateinamen als Titel; der Zwischenspeicher darf ihn
+    # deshalb nicht allein nach dem Inhalt wiederfinden.
+    alt = tmp_path / "Erste Probe.txt"
+    neu = tmp_path / "Zweite Probe.txt"
+    for pfad in (alt, neu):
+        pfad.write_text("Ein Satz zum Vorlesen. Und noch einer.\n", encoding="utf-8")
+    with Zaehler() as arbeiter:
+        lauf(umgebung, alt, arbeiter)
+        ergebnis = lauf(umgebung, neu, arbeiter)
+    (m4b,) = ergebnis.dateien
+    assert m4b.name == "2026-10-24 Zweite Probe_v01.m4b"

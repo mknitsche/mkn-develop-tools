@@ -371,8 +371,15 @@ def konvertiere(
     verz = Arbeitsverzeichnis.fuer_quelle(konfig.arbeitsort, quelle)
 
     # -- Lesen ------------------------------------------------------------------------
+    # Der Dateiname gehoert in den Fingerabdruck: jeder Leser nimmt ihn als Titel, wenn die
+    # Quelle keinen nennt -- sonst bekaeme gleicher Inhalt unter neuem Namen den alten Titel.
     fp_lesen = fingerabdruck(
-        "lesen", verz.quelle_hash, textmodell is not None, __version__, STAND_LESEN
+        "lesen",
+        verz.quelle_hash,
+        unicodedata.normalize("NFC", quelle.name),
+        textmodell is not None,
+        __version__,
+        STAND_LESEN,
     )
     gespeichert = verz.lies_stufe("lesetext", fp_lesen)
     if gespeichert is None:
