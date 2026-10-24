@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/mknitsche/mkn-develop-tools/compare/audio-v0.1.0...audio-v0.2.0) (2026-10-24)
+
+
+### Features
+
+* **audio:** die gesprochene Einleitung spricht ganze Saetze ([bf4b099](https://github.com/mknitsche/mkn-develop-tools/commit/bf4b0996e655aac39b9d508b4a4619d80bd1c120))
+
+
+### Bug Fixes
+
+* **audio:** gleicher Inhalt unter neuem Namen bekommt den neuen Titel ([76dc893](https://github.com/mknitsche/mkn-develop-tools/commit/76dc8932757c261997afa0414a40ea70030e75f0))
+
 ## 0.1.0 (2026-10-24)
 
 ### Features
