@@ -628,11 +628,10 @@ def test_kopfseite_feste_reihenfolge():
     )
 
     assert kopfseite_von(neu) == (
-        "Sie hören eine Buchzusammenfassung: „Die Kunst des Zuhörens“.",
-        "Erika Beispiel.",
+        "Sie hören eine Buchzusammenfassung „Die Kunst des Zuhörens“ von Erika Beispiel.",
         "Es geht um das Zuhören. Wer zuhört, versteht mehr.",
-        "Rund eine Minute in zwei Abschnitten: Worum es geht und Was daraus folgt.",
-        "Es beginnt mit Worum es geht.",
+        "Es dauert rund eine Minute und hat zwei Abschnitte: „Worum es geht“ und "
+        "„Was daraus folgt“.",
     )
     assert neu.kapitel[0].titel == ""  # die Kopfseite ist ein eigenes Kapitel vor dem Text
 
@@ -646,16 +645,17 @@ def test_kopfseite_herkunft_datum_ort_mit_komma():
         ort="Schlosshof Wiesenburg",
     )
     neu, _ = inszeniere(PROGRAMM, rollenbild(PROGRAMM_ROLLEN["rollen"]), textmodell=Modell(antwort))
-    assert kopfseite_von(neu)[1] == (
-        "Kammerorchester Musica Vera, Samstag, 12. Juli, Schlosshof Wiesenburg."
+    assert kopfseite_von(neu)[0] == (
+        "Sie hören ein Programmheft „Sommerkonzert“ von Kammerorchester Musica Vera, "
+        "Samstag, 12. Juli, Schlosshof Wiesenburg."
     )
-    # Nur der Ort belegt: kein Komma davor, kein Satz fuer die fehlende Herkunft.
+    # Nur der Ort belegt: kein "von" fuer die fehlende Herkunft.
     neu, _ = inszeniere(
         PROGRAMM,
         rollenbild(PROGRAMM_ROLLEN["rollen"]),
         textmodell=Modell(kopf(titel="Sommerkonzert", ort="Schlosshof Wiesenburg")),
     )
-    assert kopfseite_von(neu)[:2] == ("Sie hören „Sommerkonzert“.", "Schlosshof Wiesenburg.")
+    assert kopfseite_von(neu)[0] == "Sie hören „Sommerkonzert“, Schlosshof Wiesenburg."
 
 
 def test_kopfseite_unbelegtes_feld_entfaellt():
@@ -672,9 +672,8 @@ def test_kopfseite_unbelegtes_feld_entfaellt():
     )
 
     zeilen = kopfseite_von(neu)
-    assert zeilen[:2] == (
-        "Sie hören ein Programmheft: „Sommerkonzert“.",
-        "Kammerorchester Musica Vera.",
+    assert (
+        zeilen[0] == "Sie hören ein Programmheft „Sommerkonzert“ von Kammerorchester Musica Vera."
     )
     text = " ".join(zeilen)
     assert "13" not in text and "dreißig" not in text
@@ -708,34 +707,34 @@ def test_kopfseite_ohne_belegte_felder_gibt_keine_kopfseite():
 def test_kopfseite_umfang_gerundet(woerter, erwartet):
     quelle = dokument_mit_umfang(woerter)
     neu, _ = inszeniere(quelle, Rollenbild("x", {}), textmodell=Modell(kopf(titel="Muster")))
-    assert kopfseite_von(neu)[1] == f"Rund {erwartet}."
+    assert kopfseite_von(neu)[1] == f"Es dauert rund {erwartet}."
 
 
 def test_kopfseite_umfang_und_gliederung():
     quelle = dokument_mit_umfang(140, 70, 70)  # drei Abschnitte, 280 Woerter = zwei Minuten
     neu, _ = inszeniere(
-        quelle, Rollenbild("x", {}), textmodell=Modell(kopf(dokumentart="ein Text"))
+        quelle, Rollenbild("x", {}), textmodell=Modell(kopf(dokumentart="einen Text"))
     )
     assert kopfseite_von(neu) == (
-        "Sie hören ein Text.",
-        "Rund zwei Minuten in drei Abschnitten: Teil A, Teil B und Teil C.",
-        "Es beginnt mit Teil A.",
+        "Sie hören einen Text.",
+        "Es dauert rund zwei Minuten und hat drei Abschnitte: „Teil A“, „Teil B“ und „Teil C“.",
     )
 
 
 def test_kopfseite_viele_abschnitte_nur_zahl():
     sechs = dokument_mit_umfang(*[40] * 6)
     sieben = dokument_mit_umfang(*[40] * 7)
-    modell = lambda: Modell(kopf(dokumentart="ein Text"))  # noqa: E731
+    modell = lambda: Modell(kopf(dokumentart="einen Text"))  # noqa: E731
     neu6, _ = inszeniere(sechs, Rollenbild("x", {}), textmodell=modell())
     neu7, _ = inszeniere(sieben, Rollenbild("x", {}), textmodell=modell())
 
     assert kopfseite_von(neu6)[1] == (
-        "Rund zwei Minuten in sechs Abschnitten: Teil A, Teil B, Teil C, Teil D, Teil E und Teil F."
+        "Es dauert rund zwei Minuten und hat sechs Abschnitte: „Teil A“, „Teil B“, „Teil C“, "
+        "„Teil D“, „Teil E“ und „Teil F“."
     )
     assert kopfseite_von(neu7)[1:] == (
-        "Rund zwei Minuten in sieben Abschnitten.",
-        "Es beginnt mit Teil A.",
+        "Es dauert rund zwei Minuten und hat sieben Abschnitte.",
+        "Es beginnt mit „Teil A“.",
     )
 
 
@@ -743,15 +742,15 @@ def test_kopfseite_ein_abschnitt_ohne_gliederung_und_ohne_doppelten_titel():
     # Ein einziger Abschnitt traegt den Titel des Dokuments: weder Gliederung noch "mit ...".
     quelle = Dokument("Muster", None, "de", (Kapitel("Muster", (viele_worte(70),)),))
     neu, _ = inszeniere(quelle, Rollenbild("x", {}), textmodell=Modell(kopf(titel="Muster")))
-    assert kopfseite_von(neu) == ("Sie hören „Muster“.", "Rund eine Minute.", "Es beginnt.")
+    assert kopfseite_von(neu) == ("Sie hören „Muster“.", "Es dauert rund eine Minute.")
 
 
 def test_kopfseite_abschnitt_ohne_titel_beginnt_ohne_namen():
     quelle = Dokument("Muster", None, "de", (Kapitel("", (viele_worte(70),)),))
     neu, _ = inszeniere(
-        quelle, Rollenbild("x", {}), textmodell=Modell(kopf(dokumentart="ein Text"))
+        quelle, Rollenbild("x", {}), textmodell=Modell(kopf(dokumentart="einen Text"))
     )
-    assert kopfseite_von(neu)[-1] == "Es beginnt."
+    assert kopfseite_von(neu)[-1] == "Es dauert rund eine Minute."
 
 
 def test_kopfseite_hoechstens_hundert_woerter_thema_wird_ein_satz():
@@ -760,7 +759,7 @@ def test_kopfseite_hoechstens_hundert_woerter_thema_wird_ein_satz():
     neu, _ = inszeniere(
         dokument_mit_umfang(70),
         Rollenbild("x", {}),
-        textmodell=Modell(kopf(dokumentart="ein Text", thema=thema)),
+        textmodell=Modell(kopf(dokumentart="einen Text", thema=thema)),
     )
     zeilen = kopfseite_von(neu)
     assert f"Anfang {satz}." in zeilen and "Schluss" not in " ".join(zeilen)
@@ -769,7 +768,7 @@ def test_kopfseite_hoechstens_hundert_woerter_thema_wird_ein_satz():
     neu, _ = inszeniere(
         dokument_mit_umfang(70),
         Rollenbild("x", {}),
-        textmodell=Modell(kopf(dokumentart="ein Text", thema=kurz)),
+        textmodell=Modell(kopf(dokumentart="einen Text", thema=kurz)),
     )
     assert kurz in kopfseite_von(neu)
 
@@ -778,9 +777,9 @@ def test_kopfseite_titel_ohne_anfuehrungszeichen_der_vorlage_doppelt():
     neu, _ = inszeniere(
         dokument_mit_umfang(70),
         Rollenbild("x", {}),
-        textmodell=Modell(kopf(dokumentart="ein Text", titel="„Muster“")),
+        textmodell=Modell(kopf(dokumentart="einen Text", titel="„Muster“")),
     )
-    assert kopfseite_von(neu)[0] == "Sie hören ein Text: „Muster“."
+    assert kopfseite_von(neu)[0] == "Sie hören einen Text „Muster“."
 
 
 def test_prompt_nennt_die_felder_der_kopfseite():
@@ -1031,11 +1030,11 @@ def rollen_der(*zeilen: str) -> Rollenbild:
 
 def test_kopfseite_titel_aus_erster_ueberschrift():
     zeilen = ("# Der Klang der Dämmerung!", viele_worte(70))
-    modell = Modell(kopf(dokumentart="ein Text"))  # das Modell nennt keinen Titel
+    modell = Modell(kopf(dokumentart="einen Text"))  # das Modell nennt keinen Titel
     neu, warnungen = inszeniere(
         ueberschriften_dokument(*zeilen), rollen_der(*zeilen), textmodell=modell
     )
-    assert kopfseite_von(neu)[0] == "Sie hören ein Text: „Der Klang der Dämmerung“."
+    assert kopfseite_von(neu)[0] == "Sie hören einen Text „Der Klang der Dämmerung“."
     assert "scan_0042" not in " ".join(kopfseite_von(neu))
     # Die Titelzeile steht nun in der Kopfseite und nicht noch einmal im Text.
     assert neu.kapitel[1].absaetze == (viele_worte(70),)
@@ -1046,16 +1045,16 @@ def test_kopfseite_titel_aus_erster_ueberschrift():
 
 def test_kopfseite_titel_des_modells_hat_vorrang_vor_der_ueberschrift():
     zeilen = ("# Erste Überschrift", viele_worte(70))
-    modell = Modell(kopf(dokumentart="ein Text", titel="Erste Überschrift Wort"))
+    modell = Modell(kopf(dokumentart="einen Text", titel="Erste Überschrift Wort"))
     neu, _ = inszeniere(ueberschriften_dokument(*zeilen), rollen_der(*zeilen), textmodell=modell)
-    assert kopfseite_von(neu)[0] == "Sie hören ein Text: „Erste Überschrift Wort“."
+    assert kopfseite_von(neu)[0] == "Sie hören einen Text „Erste Überschrift Wort“."
 
 
 def test_kopfseite_ohne_ueberschrift_hat_keinen_titel_und_nie_den_dateinamen():
     zeilen = (viele_worte(70),)
-    modell = Modell(kopf(dokumentart="ein Text"))
+    modell = Modell(kopf(dokumentart="einen Text"))
     neu, _ = inszeniere(ueberschriften_dokument(*zeilen), rollen_der(*zeilen), textmodell=modell)
-    assert kopfseite_von(neu)[0] == "Sie hören ein Text."
+    assert kopfseite_von(neu)[0] == "Sie hören einen Text."
 
 
 def test_kopfseite_gliederung_aus_zwischenueberschriften():
@@ -1066,16 +1065,15 @@ def test_kopfseite_gliederung_aus_zwischenueberschriften():
         "# Die Folgen",
         viele_worte(30),
     )
-    modell = Modell(kopf(dokumentart="ein Text"))
+    modell = Modell(kopf(dokumentart="einen Text"))
     neu, _ = inszeniere(ueberschriften_dokument(*zeilen), rollen_der(*zeilen), textmodell=modell)
     assert kopfseite_von(neu) == (
-        "Sie hören ein Text: „Der Klang der Dämmerung“.",
-        "Rund eine Minute in zwei Abschnitten: Die Anfänge und Die Folgen.",
-        "Es beginnt mit Die Anfänge.",
+        "Sie hören einen Text „Der Klang der Dämmerung“.",
+        "Es dauert rund eine Minute und hat zwei Abschnitte: „Die Anfänge“ und „Die Folgen“.",
     )
 
 
-def test_gliederung_aus_ueberschriften_beginnt_ohne_namen_wenn_text_davor_steht():
+def test_gliederung_aus_ueberschriften_auch_wenn_text_davor_steht():
     zeilen = (
         "# Der Klang der Dämmerung",
         viele_worte(20),
@@ -1084,11 +1082,10 @@ def test_gliederung_aus_ueberschriften_beginnt_ohne_namen_wenn_text_davor_steht(
         "# Die Folgen",
         viele_worte(30),
     )
-    modell = Modell(kopf(dokumentart="ein Text"))
+    modell = Modell(kopf(dokumentart="einen Text"))
     neu, _ = inszeniere(ueberschriften_dokument(*zeilen), rollen_der(*zeilen), textmodell=modell)
     assert kopfseite_von(neu)[1:] == (
-        "Rund eine Minute in zwei Abschnitten: Die Anfänge und Die Folgen.",
-        "Es beginnt.",
+        "Es dauert rund eine Minute und hat zwei Abschnitte: „Die Anfänge“ und „Die Folgen“.",
     )
 
 
@@ -1097,7 +1094,7 @@ def test_gliederung_aus_ueberschriften_nur_von_zwei_bis_sechs(anzahl):
     zeilen = ["# Der Klang der Dämmerung"]
     for i in range(anzahl):
         zeilen += [f"# Abschnitt {chr(65 + i)}", viele_worte(20)]
-    modell = Modell(kopf(dokumentart="ein Text"))
+    modell = Modell(kopf(dokumentart="einen Text"))
     neu, _ = inszeniere(ueberschriften_dokument(*zeilen), rollen_der(*zeilen), textmodell=modell)
     # Ein Kapitel, also kein Abschnittswechsel: weder Titel noch Zahl der Ueberschriften.
     assert "Abschnitten" not in " ".join(kopfseite_von(neu))
@@ -1106,8 +1103,10 @@ def test_gliederung_aus_ueberschriften_nur_von_zwei_bis_sechs(anzahl):
 def test_mehrere_kapitel_behalten_ihre_gliederung_nach_kapiteln():
     quelle = dokument_mit_umfang(70, 70)
     rollen = Rollenbild("x", {})
-    neu, _ = inszeniere(quelle, rollen, textmodell=Modell(kopf(dokumentart="ein Text")))
-    assert kopfseite_von(neu)[1] == "Rund eine Minute in zwei Abschnitten: Teil A und Teil B."
+    neu, _ = inszeniere(quelle, rollen, textmodell=Modell(kopf(dokumentart="einen Text")))
+    assert kopfseite_von(neu)[1] == (
+        "Es dauert rund eine Minute und hat zwei Abschnitte: „Teil A“ und „Teil B“."
+    )
 
 
 # ---- Beleg der Ansagen gegen Erfinden --------------------------------------------------------
@@ -1189,9 +1188,11 @@ def test_belegte_ansage_bleibt():
     }
     neu, warnungen = inszeniere(BELEGT, Rollenbild("Heft", {}), textmodell=Modell(antwort))
     zeilen = kopfseite_von(neu)
-    assert zeilen[0] == "Sie hören ein Heft: „Der Zauberwald“."
-    assert zeilen[1] == "Erika Beispiel, Verlag Lindenblatt, im Juli, Wiesenburg."
-    assert zeilen[2] == "Es geht um den Zauberwald und die Bewohner von Wiesenburg."
+    assert zeilen[0] == (
+        "Sie hören ein Heft „Der Zauberwald“ von Erika Beispiel, Verlag Lindenblatt, im Juli, "
+        "Wiesenburg."
+    )
+    assert zeilen[1] == "Es geht um den Zauberwald und die Bewohner von Wiesenburg."
     assert neu.kapitel[1].absaetze[-1] == "Hören wir nun das zweite Kapitel über den Winter."
     assert neu.kapitel[-1].absaetze == ("Das war der Zauberwald.",)
     assert not any("verworfen" in w for w in warnungen)
@@ -1226,7 +1227,7 @@ def test_jedes_wort_von_titel_herkunft_ort_muss_belegt_sein():
     )
     neu, warnungen = inszeniere(BELEGT, Rollenbild("Heft", {}), textmodell=Modell(antwort))
     zeilen = kopfseite_von(neu)
-    assert zeilen[0] == "Sie hören ein Heft." and zeilen[1] == "Wiesenburg."
+    assert zeilen[0] == "Sie hören ein Heft, Wiesenburg."
     assert len([w for w in warnungen if w.startswith("Ansage verworfen")]) == 2
 
 
@@ -1317,18 +1318,18 @@ def test_kopfseite_hart_begrenzt():
 
     # 1. Zwei Saetze Thema passen, die Titel der Gliederung nicht: nur die Zahl bleibt.
     thema = f"{_satz(20)} {_satz(20)}"
-    modell = Modell(kopf(dokumentart="ein Text", thema=thema))
+    modell = Modell(kopf(dokumentart="einen Text", thema=thema))
     neu, warnungen = inszeniere(dok, Rollenbild("x", {}), textmodell=modell)
     zeilen = " ".join(kopfseite_von(neu))
     assert _kopf_woerter(neu) <= 100
     assert thema in kopfseite_von(neu)  # beide Saetze bleiben
-    assert "Teil1" not in zeilen and "in sechs Abschnitten." in zeilen
+    assert "Teil1" not in zeilen and "und hat sechs Abschnitte." in zeilen
     assert any(w.startswith("Kopfseite gekürzt") and "Gliederung" in w for w in warnungen)
 
     # 2. Reicht das nicht, schrumpft das Thema auf EINEN Satz.
     thema = f"{_satz(50)} {_satz(50)}"
     neu, warnungen = inszeniere(
-        dok, Rollenbild("x", {}), textmodell=Modell(kopf(dokumentart="ein Text", thema=thema))
+        dok, Rollenbild("x", {}), textmodell=Modell(kopf(dokumentart="einen Text", thema=thema))
     )
     assert _kopf_woerter(neu) <= 100
     assert _satz(50) in kopfseite_von(neu) and thema not in kopfseite_von(neu)
@@ -1338,11 +1339,11 @@ def test_kopfseite_hart_begrenzt():
     neu, warnungen = inszeniere(
         dok,
         Rollenbild("x", {}),
-        textmodell=Modell(kopf(dokumentart="ein Text", thema=_satz(120))),
+        textmodell=Modell(kopf(dokumentart="einen Text", thema=_satz(120))),
     )
     assert _kopf_woerter(neu) <= 100
     assert _satz(120) not in " ".join(kopfseite_von(neu))
-    assert kopfseite_von(neu)[0] == "Sie hören ein Text."
+    assert kopfseite_von(neu)[0] == "Sie hören einen Text."
     assert any("Thema entfällt" in w for w in warnungen)
 
 
@@ -1366,7 +1367,7 @@ def test_ausgeschriebene_kuerzel_der_quelle_belegen_die_ansage():
     neu, warnungen = inszeniere(
         kurz, rollenbild(PROGRAMM_ROLLEN["rollen"]), textmodell=Modell(antwort)
     )
-    assert "Samstag, 17. Oktober." in kopfseite_von(neu)
+    assert "Sie hören „Sommerkonzert“, Samstag, 17. Oktober." in kopfseite_von(neu)
     assert not [w for w in warnungen if "verworfen" in w]
 
     # Gegenprobe: ein Monat, den die Quelle in keiner Form nennt, faellt weiter heraus.
@@ -1423,3 +1424,66 @@ def test_technischer_dateiname_als_titel_wird_der_belegte_titel():
     )
     assert neu.titel == "Kammerorchester Musica Vera"
     assert all(k.titel != "IMG_4474" for k in neu.kapitel)
+
+
+def test_kopfseite_spricht_ganze_saetze_wie_ein_mensch():
+    # Die runde Form der Hoerprobe: Was und Woher in einem Satz, Umfang als Satz mit Verb,
+    # Abschnittstitel in Anfuehrungszeichen, kein "Es beginnt", wenn die Gliederung schon
+    # alle Abschnitte genannt hat. Bruchstuecke ("Erika Beispiel.") klangen abgehackt.
+    zeilen = regie.baue_kopfseite(
+        {
+            "dokumentart": "ein Kapitel aus dem Sachbuch",
+            "titel": "Wie Muster entstehen",
+            "herkunft": "Erika Beispiel",
+            "thema": "Es geht um Muster.",
+        },
+        wortzahl=30 * regie.WOERTER_JE_MINUTE,
+        abschnitte=["Der Anfang", "Die Mitte", "Das Ende"],
+    )
+    assert zeilen == (
+        "Sie hören ein Kapitel aus dem Sachbuch „Wie Muster entstehen“ von Erika Beispiel.",
+        "Es geht um Muster.",
+        "Es dauert rund dreißig Minuten und hat drei Abschnitte: „Der Anfang“, „Die Mitte“ "
+        "und „Das Ende“.",
+    )
+
+
+def test_kopfseite_ohne_genannte_gliederung_nennt_den_ersten_abschnitt():
+    zeilen = regie.baue_kopfseite(
+        {"dokumentart": "ein Heft", "datum": "im Juli", "ort": "Wiesenburg"},
+        wortzahl=2 * regie.WOERTER_JE_MINUTE,
+        abschnitte=[f"Teil {b}" for b in "ABCDEFG"],
+    )
+    assert zeilen == (
+        "Sie hören ein Heft, im Juli, Wiesenburg.",
+        "Es dauert rund zwei Minuten und hat sieben Abschnitte.",
+        "Es beginnt mit „Teil A“.",
+    )
+
+
+def test_kopfseite_nur_herkunft_hat_einen_satzgegenstand():
+    zeilen = regie.baue_kopfseite(
+        {"herkunft": "dem Kammerorchester Musica Vera"}, wortzahl=10, abschnitte=[]
+    )
+    assert zeilen[0] == "Sie hören einen Text vom Kammerorchester Musica Vera."
+
+
+def test_gekuerzte_kopfseite_nennt_im_uebergang_keinen_titel():
+    zeilen = regie.baue_kopfseite(
+        {"dokumentart": "ein Heft"},
+        wortzahl=10,
+        abschnitte=[f"Teil {b}" for b in "ABCDEFG"],
+        mit_titeln=False,
+    )
+    assert zeilen == (
+        "Sie hören ein Heft.",
+        "Es dauert rund eine Minute und hat sieben Abschnitte.",
+    )
+
+
+def test_artikel_der_herkunft_brauchen_keinen_beleg():
+    # Die Herkunft kommt so, wie sie nach "von" steht; eine englische Quelle kennt "der" nicht.
+    quelle = Dokument("Report", "The New York Times", "en", (Kapitel("", ("News today.",)),))
+    beleg = regie._Beleg.aus(quelle, "ein Bericht")
+    assert regie._unbelegte("der New York Times", beleg, "alle") == []
+    assert regie._unbelegte("der Washington Post", beleg, "alle") == ["Washington", "Post"]

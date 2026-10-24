@@ -639,11 +639,10 @@ def test_vereinzelte_ausfaelle_zaehlen_nicht_zusammen(umgebung, tmp_path, monkey
 
 # -- Regie: Verstehen, Ansagen, zweite Stimme -----------------------------------------------
 
-VORSPANN = "Sie hören ein Buch: „Das Musterbuch“."
+VORSPANN = "Sie hören ein Buch „Das Musterbuch“."
 KOPFSEITE = (
     VORSPANN,
-    "Rund eine Minute in zwei Abschnitten: Erstes Kapitel und Zweites Kapitel.",
-    "Es beginnt mit Erstes Kapitel.",
+    "Es dauert rund eine Minute und hat zwei Abschnitte: „Erstes Kapitel“ und „Zweites Kapitel“.",
 )
 ABSPANN = "Das war das Musterbuch."
 
