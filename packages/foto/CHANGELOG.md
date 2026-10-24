@@ -7,8 +7,8 @@
 
 * **foto:** die Abnahme eines Laufs zaehlt selbst nach ([9b2c7c8](https://github.com/mknitsche/mkn-develop-tools/commit/9b2c7c8c7433d1e5c5a87313e42a423605f6a156))
 * **foto:** die Kette schliesst sich — das Panorama wird erkannt und vorgelegt ([f5b076e](https://github.com/mknitsche/mkn-develop-tools/commit/f5b076edb8b1b081fe0ee90561194b0a38c91d13))
-* **foto:** die Messung haengt im Ablauf — KT-1s Panorama wird gefunden ([f120850](https://github.com/mknitsche/mkn-develop-tools/commit/f1208503ca04eeb71e02b9b513ebe4d758292c95))
-* **foto:** mkn-foto bekommt einen Kommandozeilen-Einstieg (TODO-664) ([12d74b3](https://github.com/mknitsche/mkn-develop-tools/commit/12d74b35c071b2fcaad5a33c997f49cf1b25d577))
+* **foto:** die Messung haengt im Ablauf — das Panorama wird gefunden ([f120850](https://github.com/mknitsche/mkn-develop-tools/commit/f1208503ca04eeb71e02b9b513ebe4d758292c95))
+* **foto:** mkn-foto bekommt einen Kommandozeilen-Einstieg ([12d74b3](https://github.com/mknitsche/mkn-develop-tools/commit/12d74b35c071b2fcaad5a33c997f49cf1b25d577))
 * **foto:** Serienerkennung Stufe 3 — Messkern, Urteil, Vorfilter, Vollzug ([9865874](https://github.com/mknitsche/mkn-develop-tools/commit/986587402939a461206a3923e69c0fab10637aac))
 
 
