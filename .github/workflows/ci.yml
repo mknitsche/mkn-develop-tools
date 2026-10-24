@@ -26,7 +26,7 @@ jobs:
       # und liest damit echte Dateien. Ohne es ueberspringt pytest sie, und die
       # CI meldet gruen fuer eine Suite, die ihren Gegenstand nicht angefasst
       # hat (LP-34: ein Beweis muss seinen Gegenstand enthalten).
-      - run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl ffmpeg
+      - run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl ffmpeg rubberband-cli
       # `uv sync` INSTALLIERT die Pakete des Workspace samt ihrer
       # Abhaengigkeiten. Der frueher hier stehende Aufruf `uv run --with pytest`
       # holte nur pytest; `Pillow` fehlte, und jeder Lauf seit dem ersten Commit
