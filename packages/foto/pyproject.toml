@@ -1,6 +1,6 @@
 [project]
 name = "mkn-foto"
-version = "0.2.0"
+version = "0.3.0"
 description = "Photo workflow tools - enrich RAW and JPEG with place, series and keywords"
 requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
