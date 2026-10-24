@@ -34,7 +34,7 @@ Zuhoerer wollen aber jedes Mal dieselbe, kurze Orientierung: was ist das, woher,
 geht es, wie lang, wie gegliedert, und dann geht es los. Darum liefert das Modell nur
 FELDER (Dokumentart, Titel, Herkunft, Datum, Ort, Thema); die Saetze baut `baue_kopfseite`
 in fester Reihenfolge. Jedes Feld besteht die Pruefung gegen Erfinden einzeln, und ein
-Feld, das durchfaellt oder fehlt, nimmt nur seinen eigenen Satz mit -- die uebrige
+Feld, das durchfaellt oder fehlt, nimmt nur seinen eigenen Teil mit -- die uebrige
 Kopfseite bleibt. Umfang und Gliederung rechnet der Code aus dem Wortlaut selbst, das
 Modell sieht sie nicht und kann sie darum nicht falsch nennen.
 
@@ -133,10 +133,14 @@ ANSAGE_WOERTER = frozenset(
     {
         "sie", "wir", "kapitel", "abschnitt", "abschnitte", "abschnitten", "einleitung",
         "abspann", "zusammenfassung", "buch", "artikel", "seite", "minute", "minuten",
-        "kernaussage", "kernaussagen",
+        "kernaussage", "kernaussagen", "der", "die", "das", "dem", "den", "des",
     }
 )  # fmt: skip
-"""Woerter, die eine Ansage zur Orientierung braucht und die darum keinen Beleg verlangen."""
+"""Woerter, die eine Ansage zur Orientierung braucht und die darum keinen Beleg verlangen.
+
+Die Artikel stehen hier, weil die Herkunft so geliefert wird, wie sie nach "von" steht
+("der Sueddeutschen Zeitung"); sie behaupten nichts ueber die Quelle.
+"""
 
 BELEG_PRAEFIX = 5
 """Beugung: bei einem Wort ab `BELEG_PRAEFIX + 1` Zeichen genuegen seine ersten fuenf."""
@@ -194,14 +198,16 @@ PROMPT_INSZENIEREN = (
     "Kopfseite, deren Sätze ein Programm aus deinen Feldern baut: du schreibst dafür KEINE "
     "ganzen Sätze, nur diese Felder, in der Sprache des Dokuments und als Wortgruppe ohne "
     "Anführungszeichen und ohne Klammern:\n"
-    '- "dokumentart": die Art des Dokuments mit unbestimmtem Artikel, kurz, zum Beispiel '
-    '"eine Buchzusammenfassung", "ein Programmheft", "ein Zeitungsartikel".\n'
+    '- "dokumentart": die Art des Dokuments mit unbestimmtem Artikel, kurz, so wie sie nach '
+    '"Sie hören" steht, zum Beispiel "eine Buchzusammenfassung", "ein Programmheft", '
+    '"einen Zeitungsartikel".\n'
     '- "titel": der Haupttitel des Dokuments, wie er im Material steht. Hat das Dokument '
     "keinen ausdrücklichen Titel, ist es die prominenteste Überschrift, im Material als "
     '"Erste Überschrift" genannt. Ein Dateiname oder eine Kennung (zum Beispiel '
     '"scan_0042") ist nie ein Titel; gibt es auch keine Überschrift, bleibt das Feld leer.\n'
-    '- "herkunft": Autor oder Quelle in wenigen Wörtern, wie im Material genannt, ohne '
-    "Satzteile und ohne Erklärungen.\n"
+    '- "herkunft": Autor oder Quelle in wenigen Wörtern, wie im Material genannt, so wie '
+    'sie nach "von" steht (eine Person mit ihrem Namen, eine Zeitung mit Artikel: "der '
+    'Süddeutschen Zeitung"), ohne weitere Satzteile und ohne Erklärungen.\n'
     '- "datum": Datum oder Jahr, wie im Material genannt.\n'
     '- "ort": Ort, wie im Material genannt.\n'
     '- "thema": ein bis zwei ganze Sätze in gesprochener Sprache (keine Aufzählungszeichen, '
@@ -738,22 +744,21 @@ def baue_kopfseite(
     abschnitte: list[str],
     bekannte_titel: tuple[str, ...] = (),
     thema_saetze: int | None = None,
-    beginnt_mit_abschnitt: bool = True,
     mit_titeln: bool = True,
 ) -> tuple[str, ...]:
     """Die Zeilen der gesprochenen Kopfseite in der festen Reihenfolge der Vorlage.
 
-    1. Was: "Sie hoeren {dokumentart}: „{titel}“." 2. Woher: Herkunft, Datum, Ort durch
-    Kommas getrennt. 3. Worum es geht: das Thema. 4. Was kommt: Umfang in Minuten (aus
-    `wortzahl`) und, bei zwei bis `GLIEDERUNG_MAX` Abschnitten mit Titeln, die Gliederung;
-    darueber nur die Zahl, bei einem Abschnitt gar nichts. 5. Uebergang: "Es beginnt mit
-    {erster Abschnitt}." -- ohne Namen, wenn der erste Abschnitt keinen hat oder nur den
-    Titel des Dokuments traegt (der steht in Zeile 1), oder wenn `beginnt_mit_abschnitt`
-    falsch ist (Text steht vor der ersten Zwischenueberschrift). `mit_titeln=False` nennt auch
-    bei wenigen Abschnitten nur ihre Zahl (die Kuerzung einer zu langen Kopfseite). Ein leeres
-    Feld laesst seine Zeile
-    (bzw. seinen Teil) weg; Umfang und Uebergang gibt es nur, wenn die Kopfseite ueberhaupt
-    etwas Belegtes sagt.
+    Ganze Saetze, wie ein Mensch eine Sendung ansagt -- Bruchstuecke ("Erika Beispiel.")
+    klangen in der Hoerprobe abgehackt. 1. Was und Woher in einem Satz: "Sie hoeren
+    {dokumentart} „{titel}“ von {herkunft}, {datum}, {ort}." 2. Worum es geht: das Thema.
+    3. Was kommt: "Es dauert rund {n} Minuten" (aus `wortzahl`) und, ab zwei Abschnitten,
+    "und hat {k} Abschnitte" -- bei zwei bis `GLIEDERUNG_MAX` Abschnitten mit Titeln samt
+    ihren Titeln in Anfuehrungszeichen. 4. Uebergang "Es beginnt mit „{erster Abschnitt}“."
+    nur, wenn die Gliederung ihn nicht schon genannt hat -- und nicht, wenn der erste
+    Abschnitt keinen Namen hat oder nur den Titel des Dokuments traegt (der steht in Zeile 1).
+    `mit_titeln=False` nennt auch bei wenigen Abschnitten nur ihre Zahl (die Kuerzung einer
+    zu langen Kopfseite). Ein leeres Feld laesst seinen Teil weg; Umfang und Uebergang gibt
+    es nur, wenn die Kopfseite ueberhaupt etwas Belegtes sagt.
 
     `felder` sind schon geprueft. Zahlen, die der Code selbst nennt (Minuten, Abschnitte),
     werden hier ausgeschrieben -- sie haben keine Quelle und brauchen keine.
@@ -763,37 +768,36 @@ def baue_kopfseite(
     zeilen: list[str] = []
 
     art, titel = felder.get("dokumentart", ""), felder.get("titel", "")
-    if art and titel:
-        zeilen.append(f"Sie hören {art}: „{titel}“.")
-    elif art:
-        zeilen.append(f"Sie hören {art}.")
-    elif titel:
-        zeilen.append(f"Sie hören „{titel}“.")
-
-    woher = [felder[n] for n in ("herkunft", "datum", "ort") if felder.get(n)]
-    if woher:
-        zeilen.append(", ".join(woher) + ".")
+    was = " ".join(t for t in (art, f"„{titel}“" if titel else "") if t)
+    if not was and any(felder.get(n) for n in ("herkunft", "datum", "ort")):
+        was = "einen Text"  # sonst hiesse es "Sie hoeren Erika Beispiel" oder "Sie hoeren im Juli"
+    if felder.get("herkunft"):
+        was += " " + re.sub(r"^von dem ", "vom ", f"von {felder['herkunft']}")
+    teile = [was, *(felder[n] for n in ("datum", "ort") if felder.get(n))]
+    teile = [t for t in teile if t]
+    if teile:
+        zeilen.append(_mit_satzende("Sie hören " + ", ".join(teile)))
 
     thema = felder.get("thema", "")
     if thema:
         zeilen.append(_kuerze(thema, "thema", thema_saetze))
 
     minuten = rund_minuten(wortzahl)
-    umfang = f"Rund {minuten} {'Minute' if minuten == 1 else 'Minuten'}"
+    umfang = f"Es dauert rund {minuten} {'Minute' if minuten == 1 else 'Minuten'}"
     if len(abschnitte) >= 2:
-        umfang += f" in {len(abschnitte)} Abschnitten"
+        umfang += f" und hat {len(abschnitte)} Abschnitte"
     umfang = ausschreiben(umfang)
     namen = [_ohne_satzende(a) for a in abschnitte]
-    if mit_titeln and 2 <= len(abschnitte) <= GLIEDERUNG_MAX and all(namen):
-        umfang += ": " + _aufzaehlung(namen)
+    gegliedert = mit_titeln and 2 <= len(abschnitte) <= GLIEDERUNG_MAX and all(namen)
+    if gegliedert:
+        umfang += ": " + _aufzaehlung([f"„{n}“" for n in namen])
     zeilen.append(_mit_satzende(umfang))
 
-    erster = namen[0] if namen and beginnt_mit_abschnitt else ""
+    # Gekuerzt (`mit_titeln` falsch) nennt auch der Uebergang keinen Titel: die Titel waren zu lang.
+    erster = namen[0] if namen and mit_titeln and not gegliedert else ""
     bekannt = {_vergleichsform(t) for t in (*bekannte_titel, titel) if t}
     if erster and _vergleichsform(erster) not in bekannt:
-        zeilen.append(_mit_satzende(f"Es beginnt mit {erster}"))
-    else:
-        zeilen.append("Es beginnt.")
+        zeilen.append(f"Es beginnt mit „{erster}“.")
     return tuple(zeilen)
 
 
@@ -1055,7 +1059,6 @@ def inszeniere(
     # Gliederung: ein Kapitel ist kein Abschnittswechsel; gliedern dann seine gesprochenen
     # Zwischenueberschriften (zwei bis `GLIEDERUNG_MAX`), sonst die Kapitel wie bisher.
     abschnitte = [t for t, _, _ in sprechbar.values()]
-    beginnt_mit_abschnitt = True
     if len(sprechbar) == 1:
         (_, absaetze, _), rollen_kapitel = (
             next(iter(sprechbar.values())),
@@ -1066,7 +1069,6 @@ def inszeniere(
         ]
         if 2 <= len(zwischen) <= GLIEDERUNG_MAX:
             abschnitte = zwischen
-            beginnt_mit_abschnitt = rollen_kapitel[0] == "ueberschrift"
     # Die Kopfseite ist hart auf `KOPF_WOERTER_MAX` Woerter begrenzt (rund 40 Sekunden). Was
     # zuerst weicht, ist das Entbehrlichste: die Titel der Gliederung (die Zahl bleibt), dann
     # ein Satz des Themas, dann das Thema ganz. Jede Kuerzung steht im Bericht.
@@ -1085,7 +1087,6 @@ def inszeniere(
             abschnitte=abschnitte,
             bekannte_titel=(dok.titel,),
             thema_saetze=saetze or None,
-            beginnt_mit_abschnitt=beginnt_mit_abschnitt,
             mit_titeln=mit_titeln,
         )
         if len(woerter(" ".join(kopfseite))) <= KOPF_WOERTER_MAX:
