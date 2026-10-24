@@ -1,0 +1,93 @@
+# Abkuerzungen und Einheiten fuer den Hoertext (Deutsch).
+#
+# Die Schluessel stehen so, wie sie gedruckt werden; Leerraum zwischen den Teilen ist
+# beim Suchen egal ("z. B." findet auch "z.B."). Die Gross-/Kleinschreibung des ersten
+# Buchstabens ist egal, der Rest ist genau. Nur eindeutige Abkuerzungen gehoeren hierher:
+# was je nach Satz etwas anderes heisst ("St." Sankt/Stueck, "Fr." Frau/Freitag, "Art."
+# Artikel/Art), bleibt dem Sprachmodell und der Pruefung ueberlassen. "UA" steht im
+# Konzertprogramm fuer Urauffuehrung und hat keinen Punkt.
+
+# Gelten mitten im Satz: der Punkt gehoert zur Abkuerzung und faellt weg.
+[abkuerzungen]
+"z. B." = "zum Beispiel"
+"d. h." = "das heißt"
+"u. a." = "unter anderem"
+"i. d. R." = "in der Regel"
+"v. a." = "vor allem"
+"s. o." = "siehe oben"
+"s. u." = "siehe unten"
+"vgl." = "vergleiche"
+"bzw." = "beziehungsweise"
+"bspw." = "beispielsweise"
+"ggf." = "gegebenenfalls"
+"evtl." = "eventuell"
+"inkl." = "inklusive"
+"exkl." = "exklusive"
+"zzgl." = "zuzüglich"
+"ca." = "circa"
+"max." = "maximal"
+"mind." = "mindestens"
+"Dr." = "Doktor"
+"Prof." = "Professor"
+"Hrsg." = "Herausgeber"
+"geb." = "geboren"
+"gest." = "gestorben"
+"Nr." = "Nummer"
+"Abs." = "Absatz"
+"Abb." = "Abbildung"
+"Tab." = "Tabelle"
+"Kap." = "Kapitel"
+"Bd." = "Band"
+"Aufl." = "Auflage"
+"Anm." = "Anmerkung"
+"Tel." = "Telefon"
+"Jh." = "Jahrhundert"
+"UA" = "Uraufführung"
+"Std." = "Stunden"
+"Min." = "Minuten"
+"Sek." = "Sekunden"
+"Mio." = "Millionen"
+"Mrd." = "Milliarden"
+"Tsd." = "Tausend"
+"§§" = "Paragrafen"
+"§" = "Paragraf"
+
+# Koennen einen Satz beenden: der Punkt bleibt, wenn danach ein neuer Satz oder das
+# Ende des Absatzes kommt ("Äpfel usw. Dann ..." -> "... und so weiter. Dann ...").
+[satzende]
+"usw." = "und so weiter"
+"usf." = "und so fort"
+"etc." = "et cetera"
+"u. a. m." = "und anderes mehr"
+"u. Ä." = "und Ähnliches"
+"o. Ä." = "oder Ähnliches"
+"v. Chr." = "vor Christus"
+"n. Chr." = "nach Christus"
+
+# Einheiten hinter einer Zahl ("5 km" -> "fünf Kilometer"). Die Mehrzahl lautet bei
+# allen gleich wie die Einzahl, darum genuegt ein Wort.
+[einheiten]
+"%" = "Prozent"
+"€" = "Euro"
+"$" = "Dollar"
+"°C" = "Grad Celsius"
+"°" = "Grad"
+"km/h" = "Kilometer pro Stunde"
+"km" = "Kilometer"
+"m²" = "Quadratmeter"
+"m³" = "Kubikmeter"
+"m" = "Meter"
+"cm" = "Zentimeter"
+"mm" = "Millimeter"
+"kg" = "Kilogramm"
+"mg" = "Milligramm"
+"g" = "Gramm"
+"ml" = "Milliliter"
+"l" = "Liter"
+"kWh" = "Kilowattstunden"
+"MHz" = "Megahertz"
+"GB" = "Gigabyte"
+"MB" = "Megabyte"
+"min" = "Minuten"
+"h" = "Stunden"
+"s" = "Sekunden"

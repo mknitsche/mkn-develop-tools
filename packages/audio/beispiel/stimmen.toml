@@ -1,0 +1,16 @@
+# Beispiel-Tabelle. Eine Zeile je Stimme unter [stimmen.<name>]; `standard` nennt die
+# Stimme, die ohne Wahl gilt. Vorlagen-Pfade gelten relativ zu dieser Datei.
+#
+# Die Vorlage `vorlagen/beispiel.wav` ist ein Platzhalter: ein freier Sprachausschnitt
+# von rund 24 Sekunden, mono, 24 kHz, gehoert hierher -- das Paket bringt keine mit.
+standard = "beispiel"
+
+[stimmen.beispiel]
+beschreibung = "Beispielstimme (Platzhalter-Vorlage)"
+vorlage = "vorlagen/beispiel.wav"
+sprache = "de"
+exaggeration = 0.5
+cfg_weight = 0.5
+temperature = 0.8
+tempo = 1.0
+stand = "probe"

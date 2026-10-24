@@ -30,7 +30,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "packages"]
-pythonpath = ["packages/kern/src", "packages/foto/src"]
+pythonpath = ["packages/kern/src", "packages/foto/src", "packages/audio/src"]
 addopts = "-q --strict-markers --strict-config"
 xfail_strict = true
 

@@ -44,6 +44,7 @@ shared apparatus (linting, tests, CI, release) exists once for all of them.
 |---|---|---|
 | `packages/kern` | shared foundation used by the other packages | scaffolding |
 | `packages/foto` | photo workflow tools (import, enrichment) | planned |
+| `packages/audio` | audio tools — make documents listenable; first tool: MP4 conversion (`mkn-mp4`: EPUB, PDF, text, photo → M4B with chapters) | 0.1.0 |
 
 ## Licence and intellectual property
 
