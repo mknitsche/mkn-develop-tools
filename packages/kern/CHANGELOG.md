@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/mknitsche/mkn-develop-tools/compare/kern-v0.2.0...kern-v0.3.0) (2026-10-30)
+
+
+### Features
+
+* **kern:** AnfrageFehler traegt HTTP-Status und Fehlercode ([a353eae](https://github.com/mknitsche/mkn-develop-tools/commit/a353eae36e5714123533ceba811faab3f8dfe7fe))
+
 ## [0.2.0](https://github.com/mknitsche/mkn-develop-tools/compare/kern-v0.1.0...kern-v0.2.0) (2026-08-30)
 
 
