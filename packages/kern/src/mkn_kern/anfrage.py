@@ -38,7 +38,18 @@ Transport = Callable[[str, bytes, dict[str, str], float], tuple[int, bytes]]
 
 
 class AnfrageFehler(RuntimeError):
-    """Die Anfrage ist nicht durchgekommen oder die Antwort war unbrauchbar."""
+    """Die Anfrage ist nicht durchgekommen oder die Antwort war unbrauchbar.
+
+    `status` ist der HTTP-Status, `code` der `error.code` des Antwortkoerpers
+    (als Text). Beide sind `None`, wo es sie nicht gibt: Zeitueberschreitung,
+    Verbindungsfehler, Antwort ohne JSON. Ein Aufrufer, der auf eine Sperre
+    anders antwortet als auf ein Limit, liest sie hier statt im Meldungstext.
+    """
+
+    def __init__(self, meldung: str, *, status: int | None = None, code: str | None = None):
+        super().__init__(meldung)
+        self.status = status
+        self.code = code
 
 
 def sende(
@@ -62,7 +73,11 @@ def sende(
         ) from exc
 
     if status != 200:
-        raise AnfrageFehler(f"Status {status} von {url}: {_meldung(antwort)}")
+        raise AnfrageFehler(
+            f"Status {status} von {url}: {_meldung(antwort)}",
+            status=status,
+            code=_fehlercode(antwort),
+        )
 
     try:
         return json.loads(antwort)
@@ -82,10 +97,23 @@ def _meldung(antwort: bytes) -> str:
         d = json.loads(antwort)
     except Exception:
         return antwort[:200].decode("utf-8", "replace")
+    if not isinstance(d, dict):
+        return str(d)[:200]
     fehler = d.get("error")
     if isinstance(fehler, dict):
         return str(fehler.get("message") or fehler)
     return str(fehler or d)[:200]
+
+
+def _fehlercode(antwort: bytes) -> str | None:
+    """Der `error.code` des Koerpers als Text, sonst `None`."""
+    try:
+        d = json.loads(antwort)
+    except Exception:
+        return None
+    fehler = d.get("error") if isinstance(d, dict) else None
+    code = fehler.get("code") if isinstance(fehler, dict) else None
+    return None if code is None else str(code)
 
 
 def _urllib_transport(
