@@ -106,3 +106,66 @@ def test_der_koerper_geht_als_json_hinaus():
     assert json.loads(gesehen["koerper"]) == {"model": "opus", "messages": []}
     assert gesehen["kopf"]["x-api-key"] == "geheim"
     assert gesehen["kopf"]["content-type"] == "application/json"
+
+
+def test_fehler_traegt_status_und_code():
+    """Wer auf eine Sperre anders antwortet als auf ein Limit, liest den Status
+    und den Code aus dem Fehler -- nicht aus dem Meldungstext."""
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        return 400, b'{"error": {"code": "content_blocked", "message": "x"}}'
+
+    with pytest.raises(anfrage.AnfrageFehler) as fehler:
+        anfrage.sende("https://beispiel.invalid/v1", {}, {}, transport=transport)
+
+    assert fehler.value.status == 400
+    assert fehler.value.code == "content_blocked"
+    assert "400" in str(fehler.value)
+    assert "x" in str(fehler.value)
+
+
+def test_fehler_ohne_koerper_hat_code_none():
+    def transport(url, koerper, kopf, zeitgrenze):
+        return 503, b""
+
+    with pytest.raises(anfrage.AnfrageFehler) as fehler:
+        anfrage.sende("https://beispiel.invalid/v1", {}, {}, transport=transport)
+
+    assert fehler.value.status == 503
+    assert fehler.value.code is None
+
+
+def test_fehler_mit_numerischem_code_liefert_text():
+    def transport(url, koerper, kopf, zeitgrenze):
+        return 429, b'{"error": {"code": 429, "message": "limit"}}'
+
+    with pytest.raises(anfrage.AnfrageFehler) as fehler:
+        anfrage.sende("https://beispiel.invalid/v1", {}, {}, transport=transport)
+
+    assert fehler.value.status == 429
+    assert fehler.value.code == "429"
+
+
+def test_fehler_mit_fremdem_koerper_hat_code_none():
+    """Ein Koerper, der kein Objekt mit `error` ist, darf den Fehler nicht
+    verdecken: der Status bleibt, der Code fehlt."""
+
+    def transport(url, koerper, kopf, zeitgrenze):
+        return 502, b"[1, 2]"
+
+    with pytest.raises(anfrage.AnfrageFehler) as fehler:
+        anfrage.sende("https://beispiel.invalid/v1", {}, {}, transport=transport)
+
+    assert fehler.value.status == 502
+    assert fehler.value.code is None
+
+
+def test_zeitueberschreitung_ohne_status():
+    def transport(url, koerper, kopf, zeitgrenze):
+        raise TimeoutError("zu langsam")
+
+    with pytest.raises(anfrage.AnfrageFehler) as fehler:
+        anfrage.sende("https://beispiel.invalid/v1", {}, {}, transport=transport)
+
+    assert fehler.value.status is None
+    assert fehler.value.code is None
