@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/mknitsche/mkn-develop-tools/compare/audio-v0.2.0...audio-v0.3.0) (2026-10-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* **audio:** Befehl mkn-mp4 entfaellt ohne Alias (mkn-mp4-local, mkn-mp4-gemini); Stimmen-Tabelle Schema 2, Schema 1 wird mit Hinweis gelesen und entfaellt mit 0.4.0
+
+### Features
+
+* **audio:** zweiter Vorlese-Weg mkn-mp4-gemini, Befehl mkn-mp4-local, Stimmen-Tabelle Schema 2 ([#46](https://github.com/mknitsche/mkn-develop-tools/issues/46)) ([59f6979](https://github.com/mknitsche/mkn-develop-tools/commit/59f6979680aa10ca85d4b3616b237582a7c0620c))
+
 ## [0.2.0](https://github.com/mknitsche/mkn-develop-tools/compare/audio-v0.1.0...audio-v0.2.0) (2026-10-24)
 
 
