@@ -797,6 +797,39 @@ def test_ansage_mit_zweiter_stimme_gesprochen(umgebung_ansage, epub, monkeypatch
     assert f"neu formuliert (vorspann): „{' '.join(KOPFSEITE)}“" in bericht
 
 
+def test_bericht_misst_das_erste_textkapitel_nicht_die_einleitung(
+    umgebung_ansage, epub, monkeypatch
+):
+    """Tonlage und Sprechtempo stammen aus dem ersten Kapitel mit Fliesstext der
+    Text-Stimme -- nicht aus der Einleitung davor, die nur die Ansage-Stimme spricht."""
+    gemessen: list[tuple[str, float]] = []  # (Kapitel-WAV, ihre Dauer in s)
+    messwerte: list[dict] = []
+    echt_ausschnitt, echt_bericht = lauf_modul._ausschnitt, lauf_modul.schreibe_bericht
+
+    def ausschnitt(wav, ziel, sekunden):
+        gemessen.append((Path(wav).name, lauf_modul.wav_info(wav)[3] / lauf_modul.SAMPLERATE))
+        return echt_ausschnitt(wav, ziel, sekunden)
+
+    def bericht(*args, **kw):
+        messwerte.append(kw["messwerte"])
+        return echt_bericht(*args, **kw)
+
+    monkeypatch.setattr(lauf_modul, "_ausschnitt", ausschnitt)
+    monkeypatch.setattr(lauf_modul, "schreibe_bericht", bericht)
+
+    with Zaehler() as arbeiter:
+        lauf(umgebung_ansage, epub, arbeiter, textmodell=Regisseur())
+
+    ((wav, dauer),) = gemessen
+    assert wav == "01.wav"  # 00.wav ist die Einleitung
+    text = (
+        "Erstes Kapitel Die Sonne geht heute früh über dem See auf. Ein leiser Wind bewegt das "
+        "Schilf. Am Ufer wartet ein kleines Boot auf seinen Besitzer. Niemand ist hier zu sehen."
+    )
+    woerter = len(lauf_modul._WORT.findall(text))
+    assert messwerte[0]["woerter_je_minute"] == pytest.approx(woerter / (dauer / 60))
+
+
 def test_kapitelmarke_einleitung():
     """Die Kopfseite heisst in der Kapitelliste "Einleitung", der Schluss "Abspann"."""
     dok = Dokument(

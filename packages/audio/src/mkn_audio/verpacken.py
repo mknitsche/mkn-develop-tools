@@ -47,6 +47,21 @@ _NAME_BYTES = 240
 """Dateinamen sind auf 255 Bytes begrenzt (ext4 auf einem Linux-Server); 15 bleiben fuer die
 Temporaer-Endung `.teil` und Reserve. Umlaute zaehlen 2 Bytes, Titel 3."""
 
+_SPITZE = (
+    f"aresample={4 * SAMPLERATE},alimiter=limit=0.7079:level=false:latency=true,"
+    f"aresample={SAMPLERATE}"
+)
+"""Spitzen vor der verlustbehafteten Kodierung auf -3 dBFS, vierfach ueberabgetastet (nahe am
+True Peak), ohne Pegelausgleich und ohne Versatz (die Kapitelmarken bleiben). Der Kodierer
+setzt Ueberschwinger auf die gemasterten Kapitel (True Peak -1,1 bis -1,5 dBTP): gemessen
+an echten Hoerbuechern AAC 64 kbit/s bis +4,4 dBTP, MP3 64 kbit/s bis +0,3 dBTP."""
+
+_AAC = ("-c:a", "aac", "-b:a", "80k", "-aac_pns", 0)
+"""AAC fuer die M4B. Gegen die Ueberschwinger reicht `_SPITZE` allein nicht: die
+Rausch-Ersetzung (PNS) machte aus Hochton-Stoessen Spitzen von +6 dB ueber der Quelle, und
+64 kbit/s blies harte Einsaetze auf. Mit allen drei Massnahmen blieben drei echte Hoerbuecher
+bei -2,0 bis -2,4 dBTP und -16,2 bis -16,5 LUFS (64 kbit/s ohne PNS: harte Stoesse +2,7)."""
+
 _DATUM = re.compile(r"\d{4}-\d{2}-\d{2}")
 _VERBOTEN = re.compile(r"[/:\x00-\x1f\x7f]")
 
@@ -175,7 +190,7 @@ def m4b(
     *,
     pause_kapitel: float,
 ) -> Path:
-    """Packt die Kapitel-WAVs in eine `.m4b` (AAC mono 64 kbit/s, 24 kHz) mit Kapitelmarken.
+    """Packt die Kapitel-WAVs in eine `.m4b` (AAC mono 80 kbit/s, 24 kHz) mit Kapitelmarken.
 
     `kapitel` sind `(Titel, WAV)` in Lesereihenfolge; zwischen ihnen liegen
     `pause_kapitel` Sekunden Stille. Titel, Autor, Album und Genre kommen als Tags, das
@@ -223,7 +238,7 @@ def m4b(
         with atomar(ziel) as tmp:
             ffmpeg(
                 *eingaben, *zuordnung,
-                *("-c:a", "aac", "-b:a", "64k", "-ac", 1, "-ar", SAMPLERATE),
+                *("-af", _SPITZE), *_AAC, *("-ac", 1, "-ar", SAMPLERATE),
                 *bild, *("-movflags", "+faststart", "-f", "ipod", tmp),
                 zeit_s=zeitgrenze(gesamt),
             )  # fmt: skip
@@ -276,6 +291,7 @@ def mp3(
             with atomar(ziel) as tmp:
                 ffmpeg(
                     *eingaben, *zuordnung, *meta,
+                    *("-af", _SPITZE),
                     *("-c:a", "libmp3lame", "-b:a", "64k", "-ac", 1, "-ar", SAMPLERATE),
                     *bild, *("-id3v2_version", 3, "-f", "mp3", tmp),
                     zeit_s=zeitgrenze(pruefe_format(wav) / SAMPLERATE),
