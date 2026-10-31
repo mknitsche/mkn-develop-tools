@@ -202,6 +202,14 @@ class Arbeitsverzeichnis:
         info = self.wurzel / "ton" / f"{schluessel}.json"
         schreibe_atomar(info, json.dumps(antwort, ensure_ascii=False).encode("utf-8"))
 
+    def verwirf_ton(self, schluessel: str) -> None:
+        """Entfernt Aufnahme und Messwerte: ein Fortsetzen spricht den Block frisch."""
+        for pfad in (
+            self.wurzel / "ton" / f"{schluessel}.json",
+            self.ton_wav(schluessel),
+        ):
+            pfad.unlink(missing_ok=True)
+
     # -- Kapitel --------------------------------------------------------------------
 
     def kapitel_wav(self, nr: int) -> Path:

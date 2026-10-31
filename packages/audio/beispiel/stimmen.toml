@@ -1,10 +1,29 @@
-# Beispiel-Tabelle. Eine Zeile je Stimme unter [stimmen.<name>]; `standard` nennt die
-# Stimme, die ohne Wahl gilt. Vorlagen-Pfade gelten relativ zu dieser Datei.
+# Beispiel-Tabelle, Schema 2: Weg x Sprache x Rolle.
+#
+# Eine Zeile je Stimme unter [stimmen.<name>]; `weg` nennt den Weg (ohne Angabe: local).
+# [wege.<weg>] nennt das Modell des Wegs, [standard.<weg>.<sprache>] bindet die Rollen:
+# `text` spricht den Fliesstext, `ansage` Titel, Ueberschriften, Vorspann, Ueberleitung und
+# Abspann (derselbe Name fuer beide ist erlaubt). Vorlagen-Pfade gelten relativ zu dieser Datei.
 #
 # Die Vorlage `vorlagen/beispiel.wav` ist ein Platzhalter: ein freier Sprachausschnitt
 # von rund 24 Sekunden, mono, 24 kHz, gehoert hierher -- das Paket bringt keine mit.
-standard = "beispiel"
+schema = 2
 
+[wege.local]
+modell = "chatterbox-multilingual"
+
+[wege.gemini]
+modell = "gemini-2.5-pro-preview-tts"
+
+[standard.local.de]
+text = "beispiel"
+ansage = "beispiel"
+
+[standard.gemini.de]
+text = "deutsch-gemini-charon"
+ansage = "deutsch-gemini-sulafat"
+
+# Chatterbox-Zeile: Vorlage und Regler gehoeren zusammen und wurden zusammen gemessen.
 [stimmen.beispiel]
 beschreibung = "Beispielstimme (Platzhalter-Vorlage)"
 vorlage = "vorlagen/beispiel.wav"
@@ -13,4 +32,29 @@ exaggeration = 0.5
 cfg_weight = 0.5
 temperature = 0.8
 tempo = 1.0
+stand = "probe"
+
+# Gemini-Zeilen: `stimme` ist der Name bei Google; Regler und Vorlage gibt es hier nicht.
+[stimmen.deutsch-gemini-charon]
+weg = "gemini"
+stimme = "Charon"
+beschreibung = "maennlich, ruhig; Fliesstext"
+sprache = "de"
+stand = "probe"
+
+[stimmen.deutsch-gemini-kore]
+weg = "gemini"
+stimme = "Kore"
+beschreibung = "weiblich, klar; waehlbare Ansage-Stimme"
+sprache = "de"
+stand = "probe"
+
+# Standard-Ansage des Wegs gemini (Titel und Ueberschriften). Eine andere Ansage-Stimme
+# zum Vergleichen: `ansage` in [standard.gemini.de] auf deren Namen setzen (etwa
+# `deutsch-gemini-kore`), sonst aendert sich nichts.
+[stimmen.deutsch-gemini-sulafat]
+weg = "gemini"
+stimme = "Sulafat"
+beschreibung = "weiblich, warm; Titel und Ueberschriften"
+sprache = "de"
 stand = "probe"

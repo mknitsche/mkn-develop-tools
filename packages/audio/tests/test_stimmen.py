@@ -13,13 +13,25 @@ from mkn_audio.typen import Mp4Fehler
 BEISPIEL_TABELLE = Path(__file__).resolve().parents[1] / "beispiel" / "stimmen.toml"
 
 
+def _lokal_text(tabelle):
+    """Die Text-Stimme des Wegs local fuer Deutsch (Schema 1: die Zeile von `standard`)."""
+    return tabelle.standard_fuer("local", "de")[0]
+
+
 def test_tabelle_laedt_standard_und_hole():
     tabelle = lade_tabelle(BEISPIEL_TABELLE)
 
-    assert tabelle.standard.name == "beispiel"
-    assert tabelle.hole("beispiel") is tabelle.standard
-    assert tabelle.namen() == ("beispiel",)
-    vorlage = tabelle.standard.vorlage
+    standard = _lokal_text(tabelle)
+    assert standard.name == "beispiel"
+    assert tabelle.hole("beispiel") is standard
+    assert tabelle.namen("local") == ("beispiel",)
+    assert tabelle.namen() == (
+        "beispiel",
+        "deutsch-gemini-charon",
+        "deutsch-gemini-kore",
+        "deutsch-gemini-sulafat",
+    )
+    vorlage = standard.vorlage
     assert vorlage.is_absolute()
     assert vorlage == BEISPIEL_TABELLE.parent / "vorlagen" / "beispiel.wav"
 
@@ -120,12 +132,12 @@ def test_vorgaben_und_klang_als_tupel(tmp_path):
         encoding="utf-8",
     )
 
-    stimme = lade_tabelle(pfad).standard
+    stimme = _lokal_text(lade_tabelle(pfad))
 
     assert stimme.klang == ("highpass=f=80", "equalizer=f=250:t=q:w=1:g=-1.5")
     assert stimme.tempo == 1.0
     assert isinstance(stimme.tempo, float)
-    assert stimme.modell == "chatterbox-multilingual"
+    assert lade_tabelle(pfad).wege["local"].modell == "chatterbox-multilingual"
     assert stimme.sprache == "de"
     assert (stimme.pause_stueck, stimme.pause_absatz) == (0.25, 0.6)
     assert (stimme.pause_titel, stimme.pause_kapitel) == (1.5, 2.0)
@@ -135,8 +147,28 @@ def test_vorgaben_und_klang_als_tupel(tmp_path):
     assert stimme.stand == "standard"
 
 
+def test_pause_vor_und_nach_ueberschrift(schreibe_tabelle, tmp_path):
+    """Zwei neue Pausenfelder: Vorgabe 1,0 / 0,7, in der Tabelle setzbar, nie negativ."""
+    vorgabe = _lokal_text(lade_tabelle(schreibe_tabelle("a", standard="a")))
+    assert (vorgabe.pause_vor_ueberschrift, vorgabe.pause_nach_ueberschrift) == (1.0, 0.7)
+
+    gesetzt = _lokal_text(
+        lade_tabelle(
+            schreibe_tabelle(
+                "a",
+                standard="a",
+                extra="pause_vor_ueberschrift = 1.2\npause_nach_ueberschrift = 0.5\n",
+            )
+        )
+    )
+    assert (gesetzt.pause_vor_ueberschrift, gesetzt.pause_nach_ueberschrift) == (1.2, 0.5)
+
+    with pytest.raises(Mp4Fehler, match="pause_vor_ueberschrift"):
+        lade_tabelle(schreibe_tabelle("a", standard="a", extra="pause_vor_ueberschrift = -0.1\n"))
+
+
 def test_stimme_ist_unveraenderlich():
-    stimme = lade_tabelle(BEISPIEL_TABELLE).standard
+    stimme = _lokal_text(lade_tabelle(BEISPIEL_TABELLE))
 
     assert isinstance(stimme, Stimme)
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -174,8 +206,8 @@ def test_stimmenname_ist_ordnertauglich(tmp_path, name):
 def test_stimmenname_nach_schema_und_version(schreibe_tabelle):
     pfad = schreibe_tabelle("deutsch-maennlich", standard="deutsch-maennlich", extra="")
     tabelle = lade_tabelle(pfad)
-    assert tabelle.standard.name == "deutsch-maennlich"
-    assert tabelle.standard.version == 1
+    assert _lokal_text(tabelle).name == "deutsch-maennlich"
+    assert _lokal_text(tabelle).version == 1
 
 
 @pytest.mark.parametrize("wert", ["0", "1.5", "true", '"2"'])
@@ -208,14 +240,210 @@ def test_ansage_stimme_muss_existieren(schreibe_tabelle):
 
 
 def test_ansage_stimme_nennt_eine_andere_stimme_oder_sich_selbst(schreibe_tabelle):
-    andere = lade_tabelle(
-        schreibe_tabelle("b", "a", standard="a", extra='ansage_stimme = "b"\n')
-    ).hole("a")
-    selbst = lade_tabelle(schreibe_tabelle("a", standard="a", extra='ansage_stimme = "a"\n')).hole(
-        "a"
-    )
-    ohne = lade_tabelle(schreibe_tabelle("a", standard="a")).hole("a")
+    """Schema 1: `ansage_stimme` der Standard-Zeile wird die Ansage-Rolle von `local`."""
 
-    assert andere.ansage_stimme == "b"
-    assert selbst.ansage_stimme == "a"  # gleiche Stimme erlaubt
-    assert ohne.ansage_stimme is None
+    def ansage_von(*namen, extra=""):
+        tabelle = lade_tabelle(schreibe_tabelle(*namen, standard="a", extra=extra))
+        return tabelle.standard_fuer("local", "de")[1].name
+
+    assert ansage_von("b", "a", extra='ansage_stimme = "b"\n') == "b"
+    assert ansage_von("a", extra='ansage_stimme = "a"\n') == "a"  # gleiche Stimme erlaubt
+    assert ansage_von("a") == "a"  # ohne Eintrag spricht die Hauptstimme
+
+
+# --- Schema 2: Weg x Sprache x Rolle (Plan B1, Spec § 7) ---------------------------------
+
+LOKAL_ZEILE = """
+[stimmen.{name}]
+beschreibung = "Teststimme lokal"
+vorlage = "vorlagen/{name}.wav"
+sprache = "{sprache}"
+exaggeration = 0.45
+cfg_weight = 0.45
+temperature = 0.75
+tempo = 0.9
+stand = "probe"
+"""
+
+GEMINI_ZEILE = """
+[stimmen.{name}]
+weg = "gemini"
+stimme = "{stimme}"
+beschreibung = "Teststimme Gemini"
+sprache = "{sprache}"
+stand = "probe"
+"""
+
+GEMINI_WEG = '\n[wege.gemini]\nmodell = "test-tts-modell"\n'
+
+
+def _schema2(tmp_path: Path, rumpf: str) -> Path:
+    """Schreibt eine Tabelle im Schema 2: Kopf `schema = 2`, danach `rumpf` woertlich."""
+    pfad = tmp_path / "stimmen.toml"
+    pfad.write_text("schema = 2\n" + rumpf, encoding="utf-8")
+    return pfad
+
+
+def _zwei_wege() -> str:
+    """Eine gueltige Schema-2-Tabelle: local de (Text + Ansage) und gemini de (Text, Ansage)."""
+    return (
+        GEMINI_WEG
+        + '\n[standard.local.de]\ntext = "deutsch-lokal"\nansage = "deutsch-lokal-ansage"\n'
+        + '\n[standard.gemini.de]\ntext = "deutsch-gemini-a"\nansage = "deutsch-gemini-b"\n'
+        + LOKAL_ZEILE.format(name="deutsch-lokal", sprache="de")
+        + LOKAL_ZEILE.format(name="deutsch-lokal-ansage", sprache="de")
+        + GEMINI_ZEILE.format(name="deutsch-gemini-a", stimme="Achird", sprache="de")
+        + GEMINI_ZEILE.format(name="deutsch-gemini-b", stimme="Aoede", sprache="de")
+    )
+
+
+def _meldung(pfad: Path) -> str:
+    """Die Fehlermeldung von `lade_tabelle(pfad)` OHNE den Pfad.
+
+    Der Pfad unter `tmp_path` traegt den Testnamen ("..._ohne_vorlage0"); ein `match` auf die
+    ganze Meldung faende das Feld sonst im Pfad statt in der Diagnose (LP-35).
+    """
+    with pytest.raises(Mp4Fehler) as fehler:
+        lade_tabelle(pfad)
+    return str(fehler.value).replace(str(pfad), "<tabelle>")
+
+
+def _namen(wahl: tuple[Stimme, Stimme, str | None]) -> tuple[str, str, str | None]:
+    text, ansage, warnung = wahl
+    return text.name, ansage.name, warnung
+
+
+def test_beispieltabelle_standards():
+    """Das oeffentliche Beispiel zeigt beide Wege und beide Rollen (Plan B1)."""
+    tabelle = lade_tabelle(BEISPIEL_TABELLE)
+
+    assert tabelle.schema == 2
+    assert _namen(tabelle.standard_fuer("gemini", "de")) == (
+        "deutsch-gemini-charon",
+        "deutsch-gemini-sulafat",
+        None,
+    )
+    assert _namen(tabelle.standard_fuer("local", "de")) == ("beispiel", "beispiel", None)
+    charon = tabelle.hole("deutsch-gemini-charon")
+    assert (charon.weg, charon.stimme) == ("gemini", "Charon")
+    assert tabelle.hole("deutsch-gemini-kore").stimme == "Kore"
+    assert tabelle.hole("deutsch-gemini-sulafat").stimme == "Sulafat"  # KT-1 2026-10-31: Ansage
+    assert charon.exaggeration is None  # Chatterbox-Felder gibt es an einer Gemini-Zeile nicht
+    assert tabelle.hole("beispiel").weg == "local"
+
+
+def test_schema2_fehlende_sprache_faellt_auf_de_mit_warnung(tmp_path):
+    """Fehlt die Dokumentsprache in `[standard.<weg>]`, spricht `de` -- mit Warnung, nie still."""
+    tabelle = lade_tabelle(_schema2(tmp_path, _zwei_wege()))
+
+    text, ansage, warnung = tabelle.standard_fuer("local", "en")
+
+    assert (text.name, ansage.name) == ("deutsch-lokal", "deutsch-lokal-ansage")
+    assert warnung is not None
+    assert "en" in warnung
+
+
+def test_gemini_zeile_mit_exaggeration_bricht(tmp_path):
+    """Ein Chatterbox-Regler an einer Gemini-Zeile waere eine Behauptung ohne Wirkung."""
+    lade_tabelle(_schema2(tmp_path, _zwei_wege()))  # Gegenprobe: ohne den Regler gueltig
+    rumpf = _zwei_wege().replace('stimme = "Achird"\n', 'stimme = "Achird"\nexaggeration = 0.5\n')
+
+    meldung = _meldung(_schema2(tmp_path, rumpf))
+
+    assert "deutsch-gemini-a" in meldung and "exaggeration" in meldung
+
+
+def test_local_zeile_ohne_vorlage_bricht(tmp_path):
+    lade_tabelle(_schema2(tmp_path, _zwei_wege()))  # Gegenprobe: mit Vorlage gueltig
+    rumpf = _zwei_wege().replace('vorlage = "vorlagen/deutsch-lokal.wav"\n', "")
+
+    meldung = _meldung(_schema2(tmp_path, rumpf))
+
+    assert "deutsch-lokal" in meldung and "vorlage" in meldung
+
+
+def test_ansage_stimme_in_schema2_bricht(tmp_path):
+    """Schema 2 bindet die Rolle an `[standard.<weg>.<sprache>]`, nicht an die Zeile."""
+    rumpf = _zwei_wege().replace(
+        'vorlage = "vorlagen/deutsch-lokal.wav"\n',
+        'vorlage = "vorlagen/deutsch-lokal.wav"\nansage_stimme = "deutsch-lokal-ansage"\n',
+    )
+    lade_tabelle(_schema2(tmp_path, _zwei_wege()))  # Gegenprobe: ohne das Feld gueltig
+
+    assert "ansage_stimme" in _meldung(_schema2(tmp_path, rumpf))
+
+
+def test_modell_an_zeile_in_schema2_bricht(tmp_path):
+    """Das Modell gehoert dem Weg: die Meldung nennt den Ort, an dem es stehen muss."""
+    rumpf = _zwei_wege().replace(
+        'stimme = "Achird"\n', 'stimme = "Achird"\nmodell = "test-tts-modell"\n'
+    )
+    lade_tabelle(_schema2(tmp_path, _zwei_wege()))  # Gegenprobe: ohne Zeilen-Modell gueltig
+
+    meldung = _meldung(_schema2(tmp_path, rumpf))
+
+    assert "modell" in meldung and "[wege." in meldung
+
+
+def test_wege_local_modell_nur_aus_MODELLE(tmp_path):
+    """Ein Modell, das der Arbeiter nicht kann, wuerde still mit Chatterbox gesprochen."""
+    ohne = lade_tabelle(_schema2(tmp_path, _zwei_wege()))
+    assert ohne.wege["local"].modell == "chatterbox-multilingual"  # Vorgabe ohne [wege.local]
+    rumpf = '\n[wege.local]\nmodell = "f5-tts"\n' + _zwei_wege()
+
+    meldung = _meldung(_schema2(tmp_path, rumpf))
+
+    assert "f5-tts" in meldung and "chatterbox-multilingual" in meldung
+
+
+def test_standard_verweist_auf_fremden_weg_bricht(tmp_path):
+    """Eine Gemini-Zeile als lokale Text-Stimme waere ein stiller Wegwechsel."""
+    rumpf = _zwei_wege().replace(
+        '[standard.local.de]\ntext = "deutsch-lokal"',
+        '[standard.local.de]\ntext = "deutsch-gemini-a"',
+    )
+    lade_tabelle(_schema2(tmp_path, _zwei_wege()))  # Gegenprobe: eigene Zeile gueltig
+
+    meldung = _meldung(_schema2(tmp_path, rumpf))
+
+    assert "deutsch-gemini-a" in meldung and "local" in meldung
+
+
+def test_schema1_wird_abgebildet_mit_hinweis(tmp_path):
+    """Die alte Tabelle laeuft weiter: `standard` + `ansage_stimme` -> `[standard.local.<spr>]`."""
+    pfad = tmp_path / "stimmen.toml"
+    pfad.write_text(
+        'standard = "x"\n'
+        + LOKAL_ZEILE.format(name="x", sprache="de")
+        + 'modell = "chatterbox-multilingual"\nansage_stimme = "y"\n'
+        + LOKAL_ZEILE.format(name="y", sprache="de"),
+        encoding="utf-8",
+    )
+
+    tabelle = lade_tabelle(pfad)
+
+    assert tabelle.schema == 1
+    assert _namen(tabelle.standard_fuer("local", "de")) == ("x", "y", None)
+    assert tabelle.wege["local"].modell == "chatterbox-multilingual"
+    assert any("Schema 1" in hinweis for hinweis in tabelle.hinweise)
+
+
+def test_hole_mit_weg_prueft_zugehoerigkeit(tmp_path):
+    """`--stimme` mit dem Namen eines anderen Wegs ist ein Bedienfehler, kein Wegwechsel."""
+    tabelle = lade_tabelle(_schema2(tmp_path, _zwei_wege()))
+
+    assert tabelle.hole("deutsch-gemini-a", weg="gemini").stimme == "Achird"
+    assert tabelle.hole("deutsch-gemini-a").weg == "gemini"
+    with pytest.raises(Mp4Fehler, match="deutsch-gemini-a"):
+        tabelle.hole("deutsch-gemini-a", weg="local")
+
+
+def test_wegkonfig_gemini_pflicht_modell(tmp_path):
+    """Sobald eine Gemini-Zeile existiert, muss `[wege.gemini].modell` stehen; Rest hat Vorgaben."""
+    gemini = lade_tabelle(_schema2(tmp_path, _zwei_wege())).wege["gemini"]
+    assert gemini.modell == "test-tts-modell"
+    assert (gemini.parallel, gemini.block_zeichen, gemini.zeitgrenze_s) == (3, 1100, 300.0)
+    assert gemini.preis_usd_je_1m_text_token is None
+    assert gemini.preisstand is None
+
+    assert "modell" in _meldung(_schema2(tmp_path, _zwei_wege().replace(GEMINI_WEG, "")))

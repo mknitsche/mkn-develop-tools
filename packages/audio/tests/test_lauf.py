@@ -7,6 +7,7 @@ endet in einer M4B, und was in ihr steht, beweist nur ffprobe.
 
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -30,6 +31,7 @@ from muster_quellen import (
     COVER_BYTES,
     epub_mit_kapiteln,
     muster_pdf_leer,
+    muster_pdf_seitentitel,
     muster_png,
     xhtml,
 )
@@ -100,11 +102,18 @@ def epub(tmp_path):
 
 
 def lauf(umgebung, quelle, arbeiter, **kw) -> Ergebnis:
+    """Der Lauf mit dem lokalen Sprecher. Ohne `stimme` gelten Text- und Ansage-Stimme von
+    `[standard.local.de]`; mit `stimme` (ohne `ansage`) spricht diese Stimme auch die Ansagen."""
+    from mkn_audio.sprecher import SprecherLokal
+
     t, konfig, ziel = umgebung
-    stimme = kw.pop("stimme", t.standard)
+    text, standard_ansage, _ = t.standard_fuer("local", "de")
+    stimme = kw.pop("stimme", text)
+    kw.setdefault("ansage", standard_ansage if stimme is text else stimme)
     kw.setdefault("heute", HEUTE)
     kw.setdefault("textmodell", None)
-    return konvertiere(quelle, ziel, stimme, arbeiter=arbeiter, konfig=konfig, **kw)
+    sprecher = SprecherLokal(arbeiter, t.wege["local"])
+    return konvertiere(quelle, ziel, stimme, sprecher=sprecher, konfig=konfig, **kw)
 
 
 def ffprobe(pfad: Path) -> dict:
@@ -154,6 +163,19 @@ def test_ganzer_lauf_erzeugt_m4b_und_bericht(umgebung, epub):
     assert "Tonlage" in bericht
     assert "Sprechtempo" in bericht
     assert ergebnis.dauer_s == pytest.approx(float(info["format"]["duration"]), abs=1.5)
+
+
+def test_m4b_kapitelmarken_tragen_satzschreibung(umgebung, tmp_path):
+    """Seitentitel eines zweispaltigen PDF stehen in Satzschreibung in der Kapitelliste."""
+    quelle = muster_pdf_seitentitel(tmp_path / "seitentitel.pdf")
+    with Zaehler() as arbeiter:
+        ergebnis = lauf(umgebung, quelle, arbeiter)
+
+    (m4b,) = ergebnis.dateien
+    assert [k["tags"]["title"] for k in ffprobe(m4b)["chapters"]] == [
+        "Ein Anfang im Garten",
+        "Wenn sich Gewohnheiten verändern",
+    ]
 
 
 def test_zweiter_lauf_ueberschreibt_nichts(umgebung, epub):
@@ -713,7 +735,8 @@ def test_ohne_textmodell_keine_regie_aber_lauf_gelingt(umgebung, epub):
     assert any("keine Regie" in w for w in ergebnis.warnungen)
     bericht = ergebnis.bericht.read_text(encoding="utf-8")
     assert "keine Regie" in bericht
-    assert "Ansage-Stimme" not in bericht
+    # Der Titel spricht die Ansage-Stimme (Spec E2): ohne zweite Stimme ist es die Hauptstimme.
+    assert "Ansage-Stimme:** stimme-a_v01 (gleiche Stimme)" in bericht
     assert [k["tags"]["title"] for k in ffprobe(ergebnis.dateien[0])["chapters"]] == [
         "Erstes Kapitel",
         "Zweites Kapitel",
@@ -752,14 +775,16 @@ def test_ansage_mit_zweiter_stimme_gesprochen(umgebung_ansage, epub, monkeypatch
     with Zaehler() as arbeiter:
         ergebnis = lauf(umgebung_ansage, epub, arbeiter, textmodell=Regisseur())
 
-    # Ansagen mit Vorlage und Reglern von stimme-b, alles andere mit stimme-a ...
-    ansagen = {*KOPFSEITE, ABSPANN}
+    # Ansagen und Kapiteltitel mit Vorlage und Reglern von stimme-b, alles andere mit stimme-a ...
+    titel = {"Erstes Kapitel", "Zweites Kapitel"}
+    ansagen = {*KOPFSEITE, ABSPANN, *titel}
     assert {arbeiter.vorlagen[a] for a in ansagen} == {"stimme-b.wav"}
     uebrige = {t for t in arbeiter.vorlagen if t not in ansagen}
     assert uebrige
     assert {arbeiter.vorlagen[t] for t in uebrige} == {"stimme-a.wav"}
-    # ... Vorspann- und Abspann-Kapitel (nur Ansagen) mit Klang und Tempo der Ansage-Stimme.
-    assert gemastert == ["stimme-b", "stimme-a", "stimme-a", "stimme-b"]
+    # ... Vorspann- und Abspann-Kapitel (nur Ansagen) mit Klang und Tempo der Ansage-Stimme,
+    # in den Kapiteln erst der Titel (Ansage-Stimme), dann der Text.
+    assert gemastert == ["stimme-b", "stimme-b", "stimme-a", "stimme-b", "stimme-a", "stimme-b"]
     # Kapitelmarken: Ansage-Kapitel heissen nach ihrer Art, echte Kapitel behalten ihren Titel.
     assert [k["tags"]["title"] for k in ffprobe(ergebnis.dateien[0])["chapters"]] == [
         "Einleitung",
@@ -790,6 +815,106 @@ def test_kapitelmarke_einleitung():
         "Erstes",
         "Abspann",
         "Kapitel 2",  # die Ansage-Kapitel zaehlen nicht mit
+    ]
+
+
+def test_kapitel_mit_ueberschrift_ist_kein_ansagekapitel():
+    """Eine Zwischenueberschrift ist Quelltext (`QUELL_ARTEN`): das Kapitel zaehlt mit."""
+    dok = Dokument(
+        "T",
+        None,
+        "de",
+        (
+            Kapitel("", ("Sie hören ein Buch.",), ("vorspann",)),
+            Kapitel("", ("Ein Zwischentitel",), ("ueberschrift",)),
+            Kapitel("", ("Ohne Titel.",)),
+        ),
+    )
+    assert [_kapitelname(dok, k) for k in range(3)] == ["Einleitung", "Kapitel 1", "Kapitel 2"]
+
+
+def _fremde_importe(paket: Path, teile: tuple[str, ...]) -> list[str]:
+    """Importe aus `mkn_audio`, die die Dateien unter `teile` machen, aber `teile` nicht deckt."""
+    gedeckt = {t.removesuffix(".py") for t in teile}
+    dateien = [
+        datei
+        for teil in teile
+        for datei in ((paket / teil).rglob("*.py") if (paket / teil).is_dir() else [paket / teil])
+    ]
+    fremd = []
+    for datei in dateien:
+        paket_davor = ".".join(("mkn_audio", *datei.relative_to(paket).parent.parts))
+        for knoten in ast.walk(ast.parse(datei.read_text(encoding="utf-8"))):
+            if isinstance(knoten, ast.Import):
+                module = [a.name for a in knoten.names]
+            elif isinstance(knoten, ast.ImportFrom):
+                if knoten.level:  # relativ: vom Paket der Datei aus
+                    basis = paket_davor.split(".")[: len(paket_davor.split(".")) - knoten.level + 1]
+                    modul = ".".join([*basis, *([knoten.module] if knoten.module else [])])
+                else:
+                    modul = knoten.module or ""
+                # `from mkn_audio import sprache` importiert das Modul `mkn_audio.sprache`
+                module = (
+                    [f"{modul}.{a.name}" for a in knoten.names] if modul == "mkn_audio" else [modul]
+                )
+            else:
+                continue
+            for name in module:
+                teil = name.split(".")
+                if teil[0] != "mkn_audio":
+                    continue
+                if len(teil) < 2 or teil[1] not in gedeckt:
+                    fremd.append(f"{datei.relative_to(paket)}: {name}")
+    return fremd
+
+
+def _teile_von(konstante: str) -> tuple[str, ...]:
+    """Die Teile, aus denen `lauf.py` den Code-Stand `konstante` rechnet (aus dem Quelltext)."""
+    baum = ast.parse(Path(lauf_modul.__file__).read_text(encoding="utf-8"))
+    for knoten in baum.body:
+        if (
+            isinstance(knoten, ast.Assign)
+            and [getattr(z, "id", None) for z in knoten.targets] == [konstante]
+            and isinstance(knoten.value, ast.Call)
+        ):
+            return ast.literal_eval(knoten.value.args[1])
+    raise AssertionError(f"{konstante} nicht in lauf.py gefunden")
+
+
+def test_lesen_importiert_nur_was_stand_lesen_deckt():
+    """Waechter (LP-40): die Lesestufe haengt nur an Code, den `STAND_LESEN` mitrechnet.
+
+    Sonst aendert sich ihr Ergebnis, ohne dass ihr Fingerabdruck es merkt, und ein alter
+    Zwischenstand wird weiterverwendet. Geprueft wird jede Datei, die `STAND_LESEN` deckt
+    (auch `sprache.py`, wo `satzschreibung` liegt). Mutation: `satzschreibung` importiert aus
+    `hoertext` -> rot.
+    """
+    paket = Path(lauf_modul.__file__).parent
+    teile = _teile_von("STAND_LESEN")
+    assert "lesen" in teile and "sprache.py" in teile  # Untergrenze: es gibt etwas zu pruefen
+
+    assert _fremde_importe(paket, teile) == []
+
+
+def test_import_waechter_erkennt_fremden_import(tmp_path):
+    """Gegenprobe des Waechters an einer Kopie: ein Import aus `hoertext` faellt auf."""
+    (tmp_path / "lesen").mkdir()
+    (tmp_path / "lesen" / "a.py").write_text(
+        "from mkn_audio.sprache import x\nfrom . import b\nfrom ..typen import Kapitel\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "sprache.py").write_text(
+        "def f():\n    from mkn_audio.hoertext.abkuerzungen import wortformen\n"
+        "from mkn_audio import gliedern\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "typen.py").write_text("", encoding="utf-8")
+
+    fremd = _fremde_importe(tmp_path, ("lesen", "sprache.py", "typen.py"))
+
+    assert sorted(fremd) == [
+        "sprache.py: mkn_audio.gliedern",
+        "sprache.py: mkn_audio.hoertext.abkuerzungen",
     ]
 
 
@@ -987,8 +1112,9 @@ def test_ueberleitung_im_kapitel_klingt_wie_die_ansage_stimme(umgebung_ansage, e
             regie_modus="voll",
         )
     assert arbeiter.vorlagen["Gegen Mittag kommt ein Fischer."] == "stimme-b.wav"
-    # Vorspann, Kapitel 1, dann Kapitel 2 in zwei Laeufen (Ueberleitung, Text), dann Abspann.
-    assert gemastert == ["stimme-b", "stimme-a", "stimme-b", "stimme-a", "stimme-b"]
+    # Vorspann; Kapitel 1: Titel, Text, Ueberleitung; Kapitel 2: Titel, Text; Abspann.
+    vorspann, kapitel1, kapitel2, abspann = ["b"], ["b", "a", "b"], ["b", "a"], ["b"]
+    assert gemastert == [f"stimme-{v}" for v in (*vorspann, *kapitel1, *kapitel2, *abspann)]
     assert len(ffprobe(ergebnis.dateien[0])["chapters"]) == 4
 
 
@@ -1004,3 +1130,736 @@ def test_gleicher_inhalt_unter_neuem_namen_bekommt_den_neuen_titel(umgebung, tmp
         ergebnis = lauf(umgebung, neu, arbeiter)
     (m4b,) = ergebnis.dateien
     assert m4b.name == "2026-10-24 Zweite Probe_v01.m4b"
+
+
+# -- Lauf mit Sprecher auf Bloecken (Plan B2) ---------------------------------------------
+# `mkn_audio.sprecher` entsteht mit B2: der Import steht im Test, damit diese Datei bis dahin
+# gesammelt wird und nur die neuen Tests rot sind.
+
+
+def lauf_mit_sprecher(umgebung, quelle, arbeiter, *, sprecher=None, **kw) -> Ergebnis:
+    """Wie `lauf`, aber ueber die Sprecher-Schnittstelle; Ansage-Stimme ohne Angabe = Stimme."""
+    from mkn_audio.sprecher import SprecherLokal
+
+    t, konfig, ziel = umgebung
+    stimme = kw.pop("stimme", t.hole("stimme-a"))
+    kw.setdefault("ansage", stimme)
+    kw.setdefault("heute", HEUTE)
+    kw.setdefault("textmodell", None)
+    sprecher = sprecher or SprecherLokal(arbeiter, t.wege["local"])
+    return konvertiere(quelle, ziel, stimme, sprecher=sprecher, konfig=konfig, **kw)
+
+
+def test_lauf_mit_sprecher_lokal_wie_bisher(umgebung, epub):
+    """`SprecherLokal` traegt den Lauf wie der Arbeiter vorher; Titel spricht die Ansage-Stimme."""
+    t, _, _ = umgebung
+    with Zaehler() as arbeiter:
+        ergebnis = lauf_mit_sprecher(umgebung, epub, arbeiter, ansage=t.hole("stimme-b"))
+
+    (m4b,) = ergebnis.dateien
+    kapitel = ffprobe(m4b)["chapters"]
+    assert [k["tags"]["title"] for k in kapitel] == ["Erstes Kapitel", "Zweites Kapitel"]
+    assert arbeiter.vorlagen["Erstes Kapitel"] == "stimme-b.wav"
+    assert arbeiter.vorlagen["Zweites Kapitel"] == "stimme-b.wav"
+    text = {v for satz, v in arbeiter.vorlagen.items() if "Kapitel" not in satz}
+    assert text == {"stimme-a.wav"}
+    assert (ergebnis.weg, ergebnis.modell, ergebnis.verbrauch) == (
+        "local",
+        "chatterbox-multilingual",
+        None,
+    )
+    assert "chatterbox-multilingual" in ergebnis.bericht.read_text(encoding="utf-8")
+
+
+def test_ton_schluessel_je_block_fortsetzen(umgebung, epub):
+    """Abbruch nach 3 Bloecken: der zweite Lauf spricht nur den Rest, jede Aufnahme liegt
+    unter dem Ton-Schluessel, den der Sprecher fuer ihren Block nennt."""
+    from mkn_audio.sprecher import Block, SprecherLokal
+
+    t, konfig, _ = umgebung
+    stimme = t.hole("stimme-a")
+    with Zaehler() as erst:
+        with pytest.raises(Gewichen):
+            lauf_mit_sprecher(umgebung, epub, erst, soll_weichen=lambda: len(erst.gesprochen) >= 3)
+        assert len(erst.gesprochen) == 3
+        assert len(ton_dateien(konfig)) == 3
+
+    with Zaehler() as zweit:
+        sprecher = SprecherLokal(zweit, t.wege["local"])
+        ergebnis = lauf_mit_sprecher(umgebung, epub, zweit, sprecher=sprecher)
+
+    insgesamt = erst.gesprochen + zweit.gesprochen
+    assert zweit.gesprochen  # Untergrenze: es blieb etwas zu sprechen
+    assert len(insgesamt) == len(set(insgesamt))
+    assert not set(erst.gesprochen) & set(zweit.gesprochen)
+    erwartet = {
+        sprecher.ton_schluessel(
+            Block(nr=0, stueck_nrs=(0,), text=satz, kapitel=0, ansage=False), stimme
+        )
+        for satz in insgesamt
+    }
+    assert {p.stem for p in ton_dateien(konfig)} == erwartet
+    assert ergebnis.dateien[0].exists()
+
+
+def test_ohne_hoeren_steht_ungeprueft_im_bericht(umgebung, epub):
+    """Kann der Sprecher nicht hoeren, ist die Abschrift ungeprueft -- Warnung, nie Entwarnung."""
+    from mkn_audio.sprecher import SprecherLokal
+
+    class OhneOhr(SprecherLokal):
+        def kann_hoeren(self) -> bool:
+            return False
+
+    t, _, _ = umgebung
+    with Zaehler() as arbeiter:
+        ergebnis = lauf_mit_sprecher(
+            umgebung, epub, arbeiter, sprecher=OhneOhr(arbeiter, t.wege["local"])
+        )
+
+    assert arbeiter.gesprochen  # Untergrenze: der Lauf hat gesprochen
+    assert arbeiter.gehoert == []
+    assert "Abschrift: nicht geprüft (kein Arbeiter)" in ergebnis.bericht.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_schema1_hinweis_steht_im_bericht(umgebung, epub):
+    """Eine Tabelle im alten Format laeuft, und der Bericht sagt, dass sie gehoben werden soll."""
+    with Zaehler() as arbeiter:
+        ergebnis = lauf_mit_sprecher(umgebung, epub, arbeiter)
+
+    assert "Schema 1" in ergebnis.bericht.read_text(encoding="utf-8")
+
+
+def test_lauf_prueft_die_kapitelmarken_der_m4b(umgebung, epub, monkeypatch):
+    """Die Marken der fertigen M4B liegen in den Pausen: kein Befund, und gepruft wurde wirklich.
+
+    Untergrenze: der Waechter ist gerufen worden, mit der M4B und einer Marke je Kapitel.
+    """
+    gerufen: list[tuple[Path, list[float]]] = []
+    echt = lauf_modul.pruefe_kapitelmarken
+
+    def merke(audio, marken, **kw):
+        gerufen.append((Path(audio), list(marken)))
+        return echt(audio, marken, **kw)
+
+    monkeypatch.setattr(lauf_modul, "pruefe_kapitelmarken", merke)
+    with Zaehler() as arbeiter:
+        ergebnis = lauf(umgebung, epub, arbeiter)
+
+    ((audio, marken),) = gerufen
+    assert audio == ergebnis.dateien[0]
+    assert len(marken) == 2 and marken[0] == 0.0 and marken[1] > 0
+    assert not any("Kapitelmarke" in w for w in ergebnis.warnungen)
+
+
+def test_kapitelmarken_waechter_liest_die_marken_der_fertigen_datei(umgebung, epub, monkeypatch):
+    """Waechter (LP-40): sitzt die Marke in der M4B mitten im Ton, ist das ein Befund.
+
+    Die Marken kommen aus der FERTIGEN Datei (ffprobe), nicht aus der Rechnung des Laufs: wird
+    die Rechnung in `verpacken._kapitel_zeiten` um 8 s verschoben, stimmt die Rechnung des Laufs
+    weiter, die Datei nicht. Schutzgut: falsche Information (Kapitelsprung mitten in ein Wort).
+    Mutation: im Lauf die Marken wieder aus `kapitel_start` nehmen -> dieser Test wird rot.
+    """
+    import mkn_audio.verpacken as verpacken
+
+    echt = verpacken._kapitel_zeiten
+
+    def verschoben(kapitel, pause_kapitel):
+        zeiten, gesamt = echt(kapitel, pause_kapitel)
+        (s0, e0), (s1, e1) = zeiten
+        return [(s0, e0 + 8000), (s1 + 8000, e1 + 8000)], gesamt
+
+    monkeypatch.setattr(verpacken, "_kapitel_zeiten", verschoben)
+    with Zaehler() as arbeiter:
+        ergebnis = lauf(umgebung, epub, arbeiter)
+
+    assert any("Kapitelmarke 2 liegt nicht in einer Pause" in w for w in ergebnis.warnungen)
+
+
+def test_mp3_kapitelmarken_stehen_als_ungeprueft_im_bericht(umgebung, epub):
+    """Ein Format ohne Kapitel hat nichts zu pruefen -- und das steht da (LP-32), nie still ok."""
+    with Zaehler() as arbeiter:
+        ergebnis = lauf(umgebung, epub, arbeiter, format="mp3")
+
+    assert any("Kapitelmarken: ungeprüft (Format ohne Kapitel)" in w for w in ergebnis.warnungen)
+    assert "Kapitelmarken: ungeprüft" in ergebnis.bericht.read_text(encoding="utf-8")
+
+
+def test_m4b_ohne_kapitel_in_der_datei_steht_als_ungeprueft(umgebung, epub, monkeypatch):
+    """Liefert ffprobe fuer eine M4B keine Kapitel, ist die Pruefung nicht gelaufen (LP-32)."""
+    monkeypatch.setattr(lauf_modul, "lies_kapitelmarken", lambda *a, **kw: ())
+    with Zaehler() as arbeiter:
+        ergebnis = lauf(umgebung, epub, arbeiter)
+
+    assert any("Kapitelmarken: ungeprüft" in w for w in ergebnis.warnungen)
+
+
+def test_kapitelmarke_ausserhalb_der_pause_steht_im_bericht(umgebung, epub, monkeypatch):
+    """Meldet der Waechter einen Befund, steht er als Hinweis im Bericht -- nie still."""
+    monkeypatch.setattr(
+        lauf_modul,
+        "pruefe_kapitelmarken",
+        lambda *a, **kw: ("Kapitelmarke 2 liegt nicht in einer Pause (bei 00:07)",),
+    )
+    with Zaehler() as arbeiter:
+        ergebnis = lauf(umgebung, epub, arbeiter)
+
+    assert "Kapitelmarke 2 liegt nicht in einer Pause" in ergebnis.bericht.read_text(
+        encoding="utf-8"
+    )
+    assert any("Kapitelmarke 2" in w for w in ergebnis.warnungen)
+
+
+# -- Lauf auf dem Weg gemini (Plan C2) ------------------------------------------------------
+# Der Sprecher ist `SprecherGemini` am Schein-Transport (`schein_google`), Uhr und Schlaf sind
+# eingespeist. ffmpeg und ffprobe laufen echt wie bei den lokalen Laeufen. `mkn_audio.gemini`
+# entsteht mit Plan C1; der Import steht darum in `lauf_gemini`.
+
+SAETZE = (
+    "Der Gärtner gießt am Morgen die Rosen.",
+    "Die Amsel singt im hohen Kirschbaum.",
+    "Am Nachmittag ruht er unter der Linde.",
+    "Ein Igel raschelt im trockenen Laub.",
+)
+LANG_SATZ = (
+    "Der alte Gärtner geht am frühen Morgen durch den stillen Garten "
+    "und schaut lange nach den Rosen am {tag}."
+)
+TAGE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag")
+FUCHS = (
+    "Ein roter Fuchs schleicht am frühen Morgen durch den stillen Garten "
+    "und schaut lange nach den Hühnern im Stall."
+)
+
+
+@pytest.fixture
+def umgebung_gemini(tmp_path):
+    """Tabelle Schema 2 (Gemini-Standard Charon/Kore), Konfiguration, Arbeits- und Zielort."""
+    from schein_google import schreibe_tabelle_schema2
+
+    tabelle = schreibe_tabelle_schema2(tmp_path)
+    konfig = Konfig(
+        stimmen_tabelle=tabelle,
+        arbeitsort=tmp_path / "arbeit",
+        arbeiter_python=Path(sys.executable),
+    )
+    ziel = tmp_path / "ziel"
+    ziel.mkdir()
+    return lade_tabelle(tabelle), konfig, ziel
+
+
+def md_quelle(ordner: Path, *absaetze: str, name: str = "garten.md") -> Path:
+    """Eine Markdown-Quelle: ein Kapitel »Gartenjahr« mit diesen Absaetzen."""
+    pfad = ordner / name
+    pfad.write_text("# Gartenjahr\n\n" + "\n\n".join(absaetze) + "\n", encoding="utf-8")
+    return pfad
+
+
+def lauf_gemini(umgebung, quelle, schein, *, weg=None, verbrauch=None, vorbereiten=None, **kw):
+    """Der Lauf mit `SprecherGemini`; Text- und Ansage-Stimme aus `[standard.gemini.de]`.
+
+    Gibt `(Ergebnis, Sprecher, Uhr)` zurueck. `weg` ersetzt die `WegKonfig` der Tabelle (so
+    setzt das PKA Katalogpreise), `vorbereiten(sprecher)` laeuft vor dem Lauf.
+    """
+    from mkn_audio.gemini import SprecherGemini
+    from schein_google import Uhr
+
+    t, konfig, ziel = umgebung
+    text, ansage, _ = t.standard_fuer("gemini", "de")
+    uhr = Uhr()
+    sprecher = SprecherGemini(
+        schluessel="nur-ein-test",
+        konfig=weg or t.wege["gemini"],
+        transport=schein,
+        uhr=uhr,
+        schlaf=uhr.schlaf,
+        verbrauch=verbrauch,
+    )
+    if vorbereiten is not None:
+        vorbereiten(sprecher)
+    kw.setdefault("heute", HEUTE)
+    kw.setdefault("textmodell", None)
+    ergebnis = konvertiere(
+        quelle, ziel, text, sprecher=sprecher, ansage=ansage, konfig=konfig, **kw
+    )
+    return ergebnis, sprecher, uhr
+
+
+def _saetze_in(text: str) -> int:
+    return sum(s in text for s in SAETZE)
+
+
+def test_sperre_einmal_wiederholung_spricht(umgebung_gemini, tmp_path):
+    """Eine Sperre ist nicht deterministisch: der erste Schritt ist EINE Wiederholung."""
+    from schein_google import ScheinGoogle, sperre, text_von
+
+    gesperrt = []
+
+    def regel(n, rumpf):
+        if _saetze_in(text_von(rumpf)) == 4 and not gesperrt:
+            gesperrt.append(n)
+            return sperre()
+        return None
+
+    schein = ScheinGoogle(regel=regel)
+    ergebnis, _, _ = lauf_gemini(umgebung_gemini, md_quelle(tmp_path, " ".join(SAETZE)), schein)
+
+    assert schein.status.count(400) == 1
+    assert [_saetze_in(t) for t in schein.texte if _saetze_in(t)] == [4, 4]  # nicht geteilt
+    assert ergebnis.dateien[0].exists()
+    assert "Sperren: 1 (durch Wiederholung gelöst)" in ergebnis.bericht.read_text(encoding="utf-8")
+
+
+def test_sperre_teilt_in_zwei_dann_vier(umgebung_gemini, tmp_path):
+    """Bleibt die Sperre, wird an Satzgrenzen in 2, dann in 4 Teile geteilt. Die Teile liegen
+    unter eigenen Ton-Schluesseln; der Block bleibt die Einheit des Berichts."""
+    from mkn_audio.sprecher import Block
+    from schein_google import ScheinGoogle, sperre, text_von
+
+    schein = ScheinGoogle(regel=lambda n, r: sperre() if _saetze_in(text_von(r)) >= 2 else None)
+    ergebnis, sprecher, _ = lauf_gemini(
+        umgebung_gemini, md_quelle(tmp_path, " ".join(SAETZE)), schein
+    )
+
+    gesprochen = [t.strip() for t, st in zip(schein.texte, schein.status, strict=True) if st == 200]
+    assert sorted(t for t in gesprochen if t in SAETZE) == sorted(SAETZE)  # vier Viertel
+    assert schein.status.count(200) == 5  # Titel + vier Teile
+    assert sum(1 for t in schein.texte if _saetze_in(t) == 2) >= 2  # die Haelften wurden versucht
+    _, konfig, _ = umgebung_gemini
+    abgelegt = {p.stem for p in konfig.arbeitsort.glob("*/ton/*.wav")}
+    charon = umgebung_gemini[0].hole("deutsch-gemini-charon")
+    for satz in SAETZE:
+        # Critic R B9: die Teile sprechen unter ihren Schluesseln, bleiben aber nicht liegen
+        teil = Block(nr=0, stueck_nrs=(0,), text=satz, kapitel=0, ansage=False)
+        assert sprecher.ton_schluessel(teil, charon) not in abgelegt, satz
+    assert len(abgelegt) == 2  # Titel und der ganze Block
+    assert not list(konfig.arbeitsort.glob("*/ton/.mkn-mp4-*"))  # Arbeitsordner geraeumt
+    bericht = ergebnis.bericht.read_text(encoding="utf-8")
+    assert "**Blöcke:** 2" in bericht  # Titel und Text, nicht sechs
+    assert "Sperren: 1 (durch Teilen gelöst)" in bericht
+
+
+def test_sperre_bleibt_nach_vier_teilen_bricht_laut_mit_stelle(umgebung_gemini, tmp_path):
+    """Review Focus 1: ein Block, den Google sperrt und der auch geteilt gesperrt bleibt -- der
+    Lauf bricht laut ab und nennt Kapitel, Block und erste Woerter; niemals Stille, niemals
+    ein zweites Modell. Der gesperrte Satz steht vorn: Blockanfang und Stelle fallen zusammen.
+    """
+    import re
+
+    from mkn_audio.sprecher import SprecherFehler
+    from schein_google import MODELL, ScheinGoogle, sperre, text_von
+
+    _, _, ziel = umgebung_gemini
+    schein = ScheinGoogle(regel=lambda n, r: sperre() if SAETZE[0] in text_von(r) else None)
+
+    with pytest.raises(SprecherFehler) as info:
+        lauf_gemini(umgebung_gemini, md_quelle(tmp_path, " ".join(SAETZE)), schein)
+
+    meldung = str(info.value)
+    assert info.value.klasse == "Sperre"
+    assert "Gartenjahr" in meldung or re.search(r"Kapitel\s+1\b", meldung), meldung
+    assert re.search(r"Block\s+\d+", meldung), meldung
+    assert "Der Gärtner gießt" in meldung
+    assert schein.modelle == {MODELL}  # genau EINE Modell-ID in allen Ruempfen
+    assert any(t.strip() == SAETZE[0] for t in schein.texte)  # bis auf den Einzelsatz geteilt
+    assert list(ziel.iterdir()) == []  # kein Hoerstueck mit Stille an der Stelle
+
+
+def test_fehlerantwort_viermal_dann_stille(umgebung_gemini, tmp_path):
+    """500 viermal (Wartezeit 20 s): Stille der erwarteten Dauer und Befund, kein Abbruch.
+
+    Die Erwartung ist `len(text) / 16` (Spec 8.3): der Lauf hat keinen Median, weil kein Block
+    100 Zeichen erreicht -- die feste lokale Rate (14 Z/s) waere hier falsch.
+    """
+    from mkn_audio.sprecher import Block
+    from schein_google import ScheinGoogle, fehler, text_von
+
+    absatz = "Der Gärtner gießt am Morgen die Rosen im Garten hinter dem alten Haus."
+    schein = ScheinGoogle(regel=lambda n, r: fehler(500) if "Rosen" in text_von(r) else None)
+    ergebnis, sprecher, uhr = lauf_gemini(umgebung_gemini, md_quelle(tmp_path, absatz), schein)
+
+    assert schein.anfragen_mit("Rosen") == 4
+    assert sum(uhr.schlaefe) == 3 * 20
+    assert "nicht gesprochen (Fehlerantwort)" in ergebnis.bericht.read_text(encoding="utf-8")
+    gesendet = next(t for t in schein.texte if "Rosen" in t)
+    charon = umgebung_gemini[0].hole("deutsch-gemini-charon")
+    schluessel = sprecher.ton_schluessel(Block(0, (0,), gesendet, 0, False), charon)
+    (stille,) = umgebung_gemini[1].arbeitsort.glob(f"*/ton/{schluessel}.wav")
+    assert _wav_dauer(stille) == pytest.approx(len(gesendet) / 16, abs=0.05)
+    assert ergebnis.dateien[0].exists()
+
+
+def _fuchs_regel(erster: float, zweiter: float):
+    """Der Fuchs-Absatz kommt beim ersten Mal mit `erster` x, danach mit `zweiter` x der
+    erwarteten Dauer (16 Z/s); alle anderen Bloecke genau mit 16 Z/s."""
+    from schein_google import text_von
+
+    wuerfe = []
+
+    def regel(n, rumpf):
+        text = text_von(rumpf)
+        if "Fuchs" not in text:
+            return None
+        wuerfe.append(n)
+        return (erster if len(wuerfe) == 1 else zweiter) * len(text) / 16
+
+    return regel
+
+
+@pytest.mark.parametrize(
+    ("erster", "zweiter", "laut"),
+    [(0.6, 0.6, True), (0.9, 0.9, False), (0.6, 1.0, False)],
+    ids=["zweimal-ausserhalb", "im-band", "neu-gesprochen-im-band"],
+)
+def test_ausreisser_neu_dann_laut(umgebung_gemini, tmp_path, erster, zweiter, laut):
+    """Waechter (LP-40): ein Block ausserhalb 0,75-1,3 des Lauf-Medians wird einmal neu
+    gesprochen; liegt er wieder ausserhalb, bricht der Lauf laut mit Stelle ab.
+
+    Schutzgut: falsche Information (ein 140-s-Block ist Wiederholungs- oder
+    Halluzinationsverdacht, Spec 8.3). Sechs Absaetze zu je einem Satz ueber 100 Zeichen,
+    `block_zeichen` 130: jeder Absatz ein Block, Median 16 Z/s. Mutation (nach C2 GREEN,
+    Auftrag 08): `WEGE["gemini"].pruefband` auf (0.5, 1.3) -> der Fall `zweimal-ausserhalb`
+    wird rot.
+    """
+    import re
+
+    from mkn_audio.sprecher import SprecherFehler
+    from mkn_audio.stimmen import WegKonfig
+    from schein_google import MODELL, ScheinGoogle
+
+    absaetze = [LANG_SATZ.format(tag=t) for t in TAGE[:3]] + [FUCHS]
+    absaetze += [LANG_SATZ.format(tag=t) for t in TAGE[3:]]
+    quelle = md_quelle(tmp_path, *absaetze)
+    schein = ScheinGoogle(regel=_fuchs_regel(erster, zweiter))
+    weg = WegKonfig(modell=MODELL, block_zeichen=130)
+
+    if laut:
+        with pytest.raises(SprecherFehler) as info:
+            lauf_gemini(umgebung_gemini, quelle, schein, weg=weg)
+        meldung = str(info.value)
+        assert info.value.klasse == "Ausreisser"
+        assert "Gartenjahr" in meldung or re.search(r"Kapitel\s+1\b", meldung), meldung
+        assert re.search(r"Block\s+\d+", meldung), meldung
+        assert "Ein roter Fuchs" in meldung
+    else:
+        ergebnis, _, _ = lauf_gemini(umgebung_gemini, quelle, schein, weg=weg)
+        assert ergebnis.dateien[0].exists()
+    assert len(schein.texte) == 1 + 7 + (erster != 0.9)  # Titel, sieben Bloecke, Neusprechen
+    assert schein.anfragen_mit("Fuchs") == (1 if erster == 0.9 else 2)
+
+
+def test_nach_ausreisser_abbruch_spricht_der_naechste_lauf_den_block_frisch(
+    umgebung_gemini, tmp_path
+):
+    """Schutzgut falsche Information: nach dem Abbruch stehen weder die Aufnahme des zweiten
+    Wurfs noch die Messwerte des ersten im Zwischenstand -- ein Fortsetzen misst sonst Ton und
+    Zahl, die nicht zusammengehoeren. Der zweite Lauf spricht genau diesen Block neu (jetzt im
+    Band) und hat danach nichts mehr neu zu sprechen.
+    """
+    from mkn_audio.sprecher import SprecherFehler
+    from mkn_audio.stimmen import WegKonfig
+    from schein_google import MODELL, ScheinGoogle
+
+    absaetze = [LANG_SATZ.format(tag=t) for t in TAGE[:3]] + [FUCHS]
+    absaetze += [LANG_SATZ.format(tag=t) for t in TAGE[3:]]
+    quelle = md_quelle(tmp_path, *absaetze)
+    weg = WegKonfig(modell=MODELL, block_zeichen=130)
+
+    erster = ScheinGoogle(regel=_fuchs_regel(0.6, 0.6))
+    with pytest.raises(SprecherFehler) as info:
+        lauf_gemini(umgebung_gemini, quelle, erster, weg=weg)
+    assert info.value.klasse == "Ausreisser"
+
+    zweiter = ScheinGoogle(regel=_fuchs_regel(1.0, 1.0))
+    ergebnis, _, _ = lauf_gemini(umgebung_gemini, quelle, zweiter, weg=weg)
+
+    assert zweiter.anfragen_mit("Fuchs") == 1  # frisch gesprochen, im Band
+    assert len(zweiter.texte) == 1  # alle anderen Bloecke kamen aus dem Zwischenstand
+    bericht = ergebnis.bericht.read_text(encoding="utf-8")
+    assert "Neu gesprochen nach der Prüfung (Ausreißer): 0" in bericht
+
+
+def test_verbrauch_je_antwort_mit_audio(umgebung_gemini, tmp_path):
+    """Je Antwort mit Audio genau ein Rueckruf: Teile einer Sperre, Neusprechen und Startprobe
+    zaehlen, gesperrte Anfragen (400) und Treffer im Zwischenstand nie. `Ergebnis.verbrauch`
+    zaehlt nur die Anfragen DIESES Aufrufs.
+    """
+    from mkn_audio.stimmen import WegKonfig
+    from schein_google import MODELL, ScheinGoogle, sperre, text_von
+
+    def merker(liste):
+        return lambda *a, **kw: liste.append(a[0] if a else kw.get("modell"))
+
+    gesperrt_zwei = " ".join(SAETZE[:2])  # beide Saetze zusammen gesperrt, einzeln frei
+    quelle = md_quelle(tmp_path, gesperrt_zwei, *(LANG_SATZ.format(tag=t) for t in TAGE[:5]), FUCHS)
+    fuchs = _fuchs_regel(0.6, 1.0)
+
+    def regel(n, rumpf):
+        if _saetze_in(text_von(rumpf)) == 2:
+            return sperre()
+        return fuchs(n, rumpf)
+
+    weg = WegKonfig(modell=MODELL, block_zeichen=130)
+    schein = ScheinGoogle(regel=regel)
+    rueckrufe: list[str] = []
+    ergebnis, _, _ = lauf_gemini(
+        umgebung_gemini, quelle, schein, weg=weg, verbrauch=merker(rueckrufe)
+    )
+
+    assert schein.status.count(400) >= 2  # Erstversuch und Wiederholung: kein Rueckruf
+    assert any(t.strip() == SAETZE[0] for t in schein.texte)  # Teile gesprochen
+    assert schein.anfragen_mit("Fuchs") == 2  # Neusprechen
+    assert len(rueckrufe) == schein.status.count(200)
+    assert set(rueckrufe) == {MODELL}
+    assert ergebnis.verbrauch is not None
+    assert ergebnis.verbrauch.anfragen == len(rueckrufe)
+
+    # Startprobe: ein Rueckruf je Stimme.
+    from mkn_audio.gemini import SprecherGemini
+
+    probe: list[str] = []
+    t, _, _ = umgebung_gemini
+    SprecherGemini(
+        schluessel="nur-ein-test", konfig=weg, transport=ScheinGoogle(), verbrauch=merker(probe)
+    ).startprobe(list(t.standard_fuer("gemini", "de")[:2]))
+    assert len(probe) == 2
+
+    # Fortsetzen: alles liegt im Zwischenstand -- keine Anfrage, kein Rueckruf.
+    schein2 = ScheinGoogle(regel=regel)
+    zweiter: list[str] = []
+    ergebnis2, _, _ = lauf_gemini(
+        umgebung_gemini, quelle, schein2, weg=weg, verbrauch=merker(zweiter)
+    )
+    assert schein2.ruempfe == []
+    assert zweiter == []
+    assert ergebnis2.verbrauch is not None and ergebnis2.verbrauch.anfragen == 0
+
+
+def _mit_token(faktor: float = 1.0):
+    """Laesst `lies_antwort` Token melden: Audio-Token = 25 je Sekunde x `faktor`.
+
+    Die Feldnamen der echten Antwort liest C1 aus einer echten Antwort (HC-10); der Test haengt
+    darum an der Schnittstelle `lies_antwort -> (daten, mime, token)`, nicht an Feldnamen.
+    """
+
+    def vorbereiten(sprecher):
+        echt = sprecher.lies_antwort
+
+        def lies(antwort):
+            daten, mime, token = echt(antwort)
+            sekunden = len(daten) / 48_000  # PCM 16 bit mono 24 kHz
+            audio = round(25 * sekunden * faktor)
+            return daten, mime, {**token, "tokens_text": 100, "tokens_audio": audio}
+
+        sprecher.lies_antwort = lies
+
+    return vorbereiten
+
+
+def test_kosten_schaetzung_und_ausweis(umgebung_gemini, tmp_path):
+    """Schaetzung vor dem Sprechen, Ausweis nach dem Lauf mit Preisstand -- und ohne Preise
+    oder ohne Token-Angabe ein Satz statt einer Zahl (LP-32)."""
+    from datetime import date
+
+    from mkn_audio.gemini import schaetze_kosten_usd
+    from mkn_audio.stimmen import WegKonfig
+    from schein_google import MODELL, ScheinGoogle
+
+    mit_preisen = WegKonfig(
+        modell=MODELL,
+        preis_usd_je_1m_text_token=1.00,
+        preis_usd_je_1m_audio_token=20.00,
+        preisstand=date(2026, 10, 30),
+    )
+    ohne_preise = WegKonfig(modell=MODELL)
+    assert schaetze_kosten_usd(131_000, mit_preisen) == pytest.approx(4.13, abs=0.01)
+    assert schaetze_kosten_usd(131_000, ohne_preise) is None
+
+    # Die Preise kommen aus der WegKonfig des Sprechers (so setzt das PKA Katalogpreise), nicht
+    # aus der Tabelle -- die Tabelle dieses Tests hat keine.
+    erst, _, _ = lauf_gemini(
+        umgebung_gemini,
+        md_quelle(tmp_path, SAETZE[0], name="eins.md"),
+        ScheinGoogle(),
+        weg=mit_preisen,
+        vorbereiten=_mit_token(),
+    )
+    bericht = erst.bericht.read_text(encoding="utf-8")
+    assert "USD" in bericht and "2026-10-30" in bericht
+
+    zweit, _, _ = lauf_gemini(
+        umgebung_gemini,
+        md_quelle(tmp_path, SAETZE[1], name="zwei.md"),
+        ScheinGoogle(),
+        weg=ohne_preise,
+        vorbereiten=_mit_token(),
+    )
+    assert "Preise nicht konfiguriert" in zweit.bericht.read_text(encoding="utf-8")
+
+    dritt, _, _ = lauf_gemini(
+        umgebung_gemini,
+        md_quelle(tmp_path, SAETZE[2], name="drei.md"),
+        ScheinGoogle(),
+        weg=mit_preisen,
+    )
+    assert "Token nicht gemeldet" in dritt.bericht.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(("faktor", "warnt"), [(1.10, True), (1.02, False)])
+def test_token_gegen_dauer_warnt_ab_fuenf_prozent(umgebung_gemini, tmp_path, faktor, warnt):
+    """Audio-Token / 25 muss der gemessenen Dauer auf +-5 % entsprechen, sonst Warnung."""
+    from schein_google import ScheinGoogle
+
+    ergebnis, _, _ = lauf_gemini(
+        umgebung_gemini,
+        md_quelle(tmp_path, " ".join(SAETZE)),
+        ScheinGoogle(),
+        vorbereiten=_mit_token(faktor),
+    )
+
+    assert any("Token" in w for w in ergebnis.warnungen) is warnt, ergebnis.warnungen
+
+
+# -- Datenschutz-Hinweis im Lauf (Plan C3) --------------------------------------------------
+# Die Kontaktangabe ist erfunden; eine E-Mail-Adresse zaehlt immer (Spec 9), auch ohne Regie.
+
+KONTAKT = "Antworten bitte an erika@beispiel.example bis Ende der Woche."
+
+
+def test_lauf_gemini_ohne_cloud_ok_bricht_vor_erster_anfrage(umgebung_gemini, tmp_path):
+    """Hinweise und keine Freigabe: `RueckfrageNoetig` VOR der ersten Anfrage an Google --
+    sonst waere der Text schon gesendet, wenn die Frage kommt."""
+    from mkn_audio.typen import Mp4Fehler
+    from mkn_audio.vertraulich import RueckfrageNoetig
+    from schein_google import ScheinGoogle
+
+    _, _, ziel = umgebung_gemini
+    quelle = md_quelle(tmp_path, SAETZE[0], KONTAKT)
+    gesehen: list[tuple] = []
+
+    def frage(hinweise) -> bool:
+        gesehen.append(tuple(hinweise))
+        return False
+
+    for cloud_ok in (False, frage):
+        schein = ScheinGoogle()
+        with pytest.raises(RueckfrageNoetig):
+            lauf_gemini(umgebung_gemini, quelle, schein, cloud_ok=cloud_ok)
+        assert schein.ruempfe == []  # Transport-Zaehler 0
+    assert issubclass(RueckfrageNoetig, Mp4Fehler)
+    ((hinweis,),) = gesehen
+    assert hinweis.klasse == "Kontaktdaten"
+    assert list(ziel.iterdir()) == []
+
+
+def test_lauf_gemini_mit_cloud_ok_nennt_hinweise_im_bericht(umgebung_gemini, tmp_path):
+    """Mit Freigabe wird gesprochen, und der Bericht nennt die Hinweise -- maskiert."""
+    from schein_google import ScheinGoogle
+
+    schein = ScheinGoogle()
+    ergebnis, _, _ = lauf_gemini(
+        umgebung_gemini, md_quelle(tmp_path, SAETZE[0], KONTAKT), schein, cloud_ok=True
+    )
+
+    bericht = ergebnis.bericht.read_text(encoding="utf-8")
+    assert schein.ruempfe  # Untergrenze: es wurde gesprochen
+    assert "Datenschutz-Hinweise" in bericht
+    assert "Kontaktdaten" in bericht
+    assert "erika@beispiel.example" not in bericht
+
+
+def test_lauf_local_prueft_nicht(umgebung, tmp_path):
+    """Der lokale Weg sendet keinen Text an Google: keine Erkennung, keine Rueckfrage."""
+    quelle = md_quelle(tmp_path, SAETZE[0], KONTAKT)
+    with Zaehler() as arbeiter:
+        ergebnis = lauf(umgebung, quelle, arbeiter, cloud_ok=False)
+
+    assert ergebnis.dateien[0].exists()
+    assert "Datenschutz" not in ergebnis.bericht.read_text(encoding="utf-8")
+
+
+# -- Nacharbeit R: textgleiche Bloecke (B5), Teil-Aufnahmen (B9) -----------------------------
+
+
+def test_textgleiche_bloecke_derselben_stimme_werden_einmal_gesprochen(umgebung_gemini, tmp_path):
+    """Critic R B5: zwei Zwischentitel gleichen Wortlauts teilen sich den inhaltsadressierten
+    Ton-Schluessel. Bei `parallel` 3 sprach der Lauf beide gleichzeitig auf dieselbe Datei
+    (FileNotFoundError beim Umbenennen, sonst doppelt bezahlt). Jetzt: eine Anfrage, beide
+    Bloecke mit Ton und denselben Messwerten.
+    Mutation (rot): die Entdoppelung in `lauf.py` entfernen (Auftraege je Block statt je
+    Schluessel).
+    """
+    from schein_google import ScheinGoogle
+
+    schein = ScheinGoogle(verzoegerung_s=0.05)
+    quelle = md_quelle(
+        tmp_path,
+        "Der Gärtner gießt am Morgen die Rosen.",
+        "## Zusammenfassung",
+        "Die Amsel singt im hohen Kirschbaum.",
+        "## Zusammenfassung",
+        "Ein Igel raschelt im trockenen Laub.",
+        "## Zusammenfassung",
+        "Am Nachmittag ruht er unter der Linde.",
+    )
+
+    ergebnis, _, _ = lauf_gemini(umgebung_gemini, quelle, schein)
+
+    assert ergebnis.dateien[0].exists()
+    assert schein.anfragen_mit("Zusammenfassung") == 1  # einmal gesprochen, einmal bezahlt
+
+
+def test_textgleiche_ausreisser_werden_einmal_neu_gesprochen(umgebung_gemini, tmp_path):
+    """Critic R B5, Pruefung: zwei Bloecke gleichen Wortlauts sind EINE Aufnahme. Liegt sie
+    ausserhalb des Bands, wird sie einmal neu gesprochen (nicht je Block) und der neue Wurf
+    gilt fuer beide Bloecke.
+    Mutation (rot): in `lauf.py` die Entdoppelung der Pruefbloecke entfernen -> vier statt
+    zwei Fuchs-Anfragen.
+    """
+    from mkn_audio.stimmen import WegKonfig
+    from schein_google import MODELL, ScheinGoogle
+
+    absaetze = [LANG_SATZ.format(tag=t) for t in TAGE[:4]] + [FUCHS, FUCHS]
+    quelle = md_quelle(tmp_path, *absaetze)
+    schein = ScheinGoogle(regel=_fuchs_regel(0.6, 1.0))
+    weg = WegKonfig(modell=MODELL, block_zeichen=130)
+
+    ergebnis, _, _ = lauf_gemini(umgebung_gemini, quelle, schein, weg=weg)
+
+    assert ergebnis.dateien[0].exists()
+    assert schein.anfragen_mit("Fuchs") == 2  # einmal gesprochen (zu kurz), einmal neu
+
+
+def test_teil_aufnahmen_treffen_keine_datei_eines_anderen_blocks(tmp_path):
+    """Critic R B9: ein Teil, dessen Text einem anderen Block derselben Stimme gleicht, darf
+    dessen Aufnahme nicht ueberschreiben (die Teile lagen inhaltsadressiert neben dem Ziel) und
+    keine Teil-WAV hinterlassen.
+    Mutation (rot): in `gemini.py` die Teil-Aufnahme wieder neben das Ziel schreiben.
+    """
+    from mkn_audio.gemini import SprecherGemini
+    from mkn_audio.sprecher import Block
+    from mkn_audio.stimmen import WegKonfig
+    from schein_google import MODELL, ScheinGoogle, gemini_stimme, sperre, text_von
+
+    schein = ScheinGoogle(regel=lambda n, r: sperre() if _saetze_in(text_von(r)) >= 2 else None)
+    sprecher = SprecherGemini(
+        schluessel="nur-ein-test",
+        konfig=WegKonfig(modell=MODELL),
+        transport=schein,
+        schlaf=lambda s: None,
+    )
+    stimme = gemini_stimme()
+    ganz = Block(nr=1, stueck_nrs=(1,), text=" ".join(SAETZE), kapitel=0, ansage=False)
+    fremd = Block(nr=2, stueck_nrs=(2,), text=SAETZE[0], kapitel=0, ansage=False)
+    ordner = tmp_path / "ton"
+    ordner.mkdir()
+    fremde_datei = ordner / f"{sprecher.ton_schluessel(fremd, stimme)}.wav"
+    fremde_datei.write_bytes(b"aufnahme-eines-anderen-blocks")
+    ziel = ordner / f"{sprecher.ton_schluessel(ganz, stimme)}.wav"
+
+    sprecher.sprich(ganz, stimme, ziel)
+
+    assert schein.status.count(200) == 4  # vier Viertel gesprochen
+    assert fremde_datei.read_bytes() == b"aufnahme-eines-anderen-blocks"
+    assert sorted(p.name for p in ordner.iterdir()) == sorted([fremde_datei.name, ziel.name])

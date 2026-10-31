@@ -24,7 +24,7 @@ from mkn_audio.regie import (
 from mkn_audio.regie import (
     regie as mache_regie,
 )
-from mkn_audio.typen import Dokument, Kapitel, Mp4Fehler
+from mkn_audio.typen import QUELL_ARTEN, Dokument, Kapitel, Mp4Fehler
 
 
 class Modell:
@@ -357,7 +357,7 @@ def test_wortlaut_bleibt_unveraendert():
         a
         for k in neu.kapitel
         for a, art in zip(k.absaetze, k.arten, strict=True)
-        if art == "wortlaut"
+        if art in QUELL_ARTEN  # Haupttext und Zwischenueberschrift stammen aus der Quelle
     ]
     assert wortlaut == [
         PROGRAMM.kapitel[0].absaetze[i] for i in (2, 3, 5, 6)
@@ -475,7 +475,7 @@ def test_unbrauchbare_ansagen_antwort_einmal_nachfragen_dann_ohne_ansagen():
     modell = Modell("kein json", {"titel": 5})
     neu, warnungen = inszeniere(PROGRAMM, rollenbild(PROGRAMM_ROLLEN["rollen"]), textmodell=modell)
     assert len(modell.aufrufe) == 2
-    assert neu.kapitel[0].arten[0] == "wortlaut"  # der Wortlaut bleibt, nur ohne Ansagen
+    assert neu.kapitel[0].arten[0] in QUELL_ARTEN  # der Wortlaut bleibt, nur ohne Ansagen
     assert any("Ansagen" in w for w in warnungen)
 
 
@@ -829,6 +829,43 @@ def test_ueberschrift_ohne_gesprochenen_text_faellt_weg():
     assert "weggelassen: Bildunterschriften (1)" in warnungen
 
 
+def test_verwaiste_leser_ueberschrift_faellt_weg_wie_die_der_regie():
+    """Vorrang (Plan A1): die Verwaist-Erkennung folgt der Art des Lesers, nicht nur der Rolle.
+
+    Das Rollenbild kennt keine Ueberschrift (alles Haupttext); die Ueberschriften kommen vom
+    Leser. Eine auf eine Ueberschrift folgende und eine am Kapitelende stehende ist verwaist --
+    genau wie bei einer Ueberschrift der Regie.
+    """
+    quelle = Dokument(
+        "T",
+        None,
+        "de",
+        (
+            Kapitel(
+                "K",
+                (
+                    "Erste Überschrift",  # folgt eine Ueberschrift: verwaist
+                    "Zweite Überschrift",  # Text folgt: bleibt
+                    "Ein Absatz Haupttext, den man hören soll.",
+                    "Ein Ausblick",  # Kapitelende: verwaist
+                ),
+                ("ueberschrift", "ueberschrift", "wortlaut", "ueberschrift"),
+            ),
+        ),
+    )
+
+    neu, warnungen = inszeniere(
+        quelle, Rollenbild("x", {}), textmodell=Modell(kopf(titel="Ein eigener Titel"))
+    )
+
+    assert neu.kapitel[-1].absaetze == (
+        "Zweite Überschrift",
+        "Ein Absatz Haupttext, den man hören soll.",
+    )
+    assert neu.kapitel[-1].arten == ("ueberschrift", "wortlaut")
+    assert "weggelassen: Überschriften ohne Text (2)" in warnungen
+
+
 def test_ueberschriften_mit_text_erzeugen_keine_meldung():
     bild = rollenbild(PROGRAMM_ROLLEN["rollen"])
     _, warnungen = inszeniere(PROGRAMM, bild, textmodell=Modell(KEINE_ANSAGEN))
@@ -1041,6 +1078,34 @@ def test_kopfseite_titel_aus_erster_ueberschrift():
     assert any("ersten Überschrift" in w for w in warnungen)
     # Der Auftrag zeigt dem Modell die Ueberschrift und sagt, dass sie Titel sein darf.
     assert "Der Klang der Dämmerung" in modell.prompts[0]
+
+
+def test_kopfseite_titel_aus_leser_ueberschrift_die_das_modell_haupttext_nennt():
+    """Vorrang (Plan A1): die erste Ueberschrift der Vorlage folgt der Art des Lesers.
+
+    Das Rollenbild nennt die Zeile Haupttext; der Leser kennt sie aus dem Layout als
+    Ueberschrift -- sie ist der Titel, nicht die naechste Ueberschrift oder gar keine.
+    """
+    quelle = Dokument(
+        "T",
+        None,
+        "de",
+        (
+            Kapitel(
+                "K",
+                ("Der Klang der Dämmerung", viele_worte(70)),
+                ("ueberschrift", "wortlaut"),
+            ),
+        ),
+    )
+    rollen = Rollenbild("x", {(0, 0): "haupttext", (0, 1): "haupttext"})
+    modell = Modell(kopf(dokumentart="einen Text"))  # das Modell nennt keinen Titel
+
+    neu, warnungen = inszeniere(quelle, rollen, textmodell=modell)
+
+    assert kopfseite_von(neu)[0] == "Sie hören einen Text „Der Klang der Dämmerung“."
+    assert "Der Klang der Dämmerung" in modell.prompts[0]
+    assert any("ersten Überschrift" in w for w in warnungen)
 
 
 def test_kopfseite_titel_des_modells_hat_vorrang_vor_der_ueberschrift():
@@ -1487,3 +1552,144 @@ def test_artikel_der_herkunft_brauchen_keinen_beleg():
     beleg = regie._Beleg.aus(quelle, "ein Bericht")
     assert regie._unbelegte("der New York Times", beleg, "alle") == []
     assert regie._unbelegte("der Washington Post", beleg, "alle") == ["Washington", "Post"]
+
+
+# ---- Zwischenueberschriften als eigene Art -----------------------------------------------
+
+
+def leser_dokument() -> Dokument:
+    """Ein Dokument, in dem der Leser eine Zwischenueberschrift gesetzt hat (Layout-Beleg)."""
+    return Dokument(
+        "Ein Musterheft",
+        None,
+        "de",
+        (
+            Kapitel(
+                "Ein Musterheft",
+                (
+                    "Ein erster Abschnitt",
+                    "Ein Absatz Haupttext, den man hören soll.",
+                    "Noch ein Absatz Haupttext, der dazugehört.",
+                ),
+                ("ueberschrift", "wortlaut", "wortlaut"),
+            ),
+        ),
+    )
+
+
+def arten_je_absatz(neu: Dokument) -> dict[str, str]:
+    return {
+        a: art
+        for k in neu.kapitel
+        for a, art in zip(k.absaetze, k.arten or ("wortlaut",) * len(k.absaetze), strict=True)
+    }
+
+
+def test_regie_rolle_ueberschrift_wird_art_ueberschrift():
+    """Die Regie-Rolle `ueberschrift` wird Art `ueberschrift`; Haupttext bleibt `wortlaut`."""
+    bild = rollenbild(PROGRAMM_ROLLEN["rollen"])
+    neu, _ = inszeniere(
+        PROGRAMM, bild, textmodell=Modell(kopf(titel="Sommerkonzert im Schlosshof"))
+    )
+
+    absaetze = PROGRAMM.kapitel[0].absaetze
+    arten = arten_je_absatz(neu)
+    assert [arten[absaetze[i]] for i in (2, 3, 5, 6)] == [
+        "ueberschrift",
+        "wortlaut",
+        "ueberschrift",
+        "wortlaut",
+    ]
+
+
+def test_leser_ueberschrift_gewinnt_gegen_rollenbild_haupttext():
+    """Das Layout ist Beleg: sagt der Leser Ueberschrift, das Modell Haupttext, gilt der Leser."""
+    quelle = leser_dokument()
+    # Das Modell nennt den Titel des Dokuments: die erste Ueberschrift bleibt Zwischenueberschrift.
+    neu, _ = inszeniere(
+        quelle, Rollenbild("x", {}), textmodell=Modell(kopf(titel="Ein Musterheft"))
+    )
+
+    arten = arten_je_absatz(neu)
+    assert arten["Ein erster Abschnitt"] == "ueberschrift"
+    assert arten["Ein Absatz Haupttext, den man hören soll."] == "wortlaut"
+    assert arten["Noch ein Absatz Haupttext, der dazugehört."] == "wortlaut"
+
+
+def test_regie_aus_behaelt_leser_arten():
+    quelle = leser_dokument()
+    erwartet = ("ueberschrift", "wortlaut", "wortlaut")
+
+    aus, _ = mache_regie(quelle, textmodell=Modell(), modus="aus")
+    ohne_modell, _ = mache_regie(quelle, textmodell=None)
+    direkt, _ = inszeniere(quelle, Rollenbild("x", {}), textmodell=Modell(), modus="aus")
+
+    for dok in (aus, ohne_modell, direkt):
+        assert dok.kapitel[0].arten == erwartet
+
+
+def test_uebernahmepruefung_deckt_ueberschrift():
+    """Eine Ueberschrift ist Quelltext: steht sie nicht in der Quelle, bricht die Zusicherung."""
+    haupttext = PROGRAMM.kapitel[0].absaetze[3]
+    erfunden = Dokument(
+        "T",
+        None,
+        "de",
+        (Kapitel("K", ("Ein erfundener Zwischentitel", haupttext), ("ueberschrift", "wortlaut")),),
+    )
+    belegt = Dokument(
+        "T", None, "de", (Kapitel("K", ("Erster Teil", haupttext), ("ueberschrift", "wortlaut")),)
+    )
+
+    with pytest.raises(Mp4Fehler, match="nicht in der Quelle"):
+        regie.pruefe_wortlaut(erfunden, PROGRAMM)
+    regie.pruefe_wortlaut(belegt, PROGRAMM)  # Ueberschrift aus der Quelle: kein Fehler
+
+
+def test_wortzahl_zaehlt_ueberschriften_wie_heute():
+    """Der Umfang der Kopfseite zaehlt Ueberschriften mit, egal ob Regie oder Leser sie setzt.
+
+    200 Woerter Haupttext allein sind eine Minute, mit 20 Woertern Ueberschrift zwei.
+    """
+    ueberschrift, text = viele_worte(20), viele_worte(200)
+    modell = lambda: Modell(kopf(titel="Muster"))  # noqa: E731
+
+    aus_regie = Dokument("Muster", None, "de", (Kapitel("Teil A", (ueberschrift, text)),))
+    neu, _ = inszeniere(aus_regie, Rollenbild("x", {(0, 0): "ueberschrift"}), textmodell=modell())
+    assert "rund zwei Minuten" in " ".join(kopfseite_von(neu))
+
+    aus_leser = Dokument(
+        "Muster",
+        None,
+        "de",
+        (Kapitel("Teil A", (ueberschrift, text), ("ueberschrift", "wortlaut")),),
+    )
+    neu, _ = inszeniere(aus_leser, Rollenbild("x", {}), textmodell=modell())
+    assert "rund zwei Minuten" in " ".join(kopfseite_von(neu))
+
+
+def test_kopfseite_gliedert_nach_leser_ueberschriften():
+    """Vorrang (Plan A1): eine Leser-Ueberschrift gliedert die Kopfseite wie eine der Regie.
+
+    Das Rollenbild kennt keine Ueberschrift (alles Haupttext); die Arten kommen vom Leser.
+    """
+    quelle = Dokument(
+        "T",
+        None,
+        "de",
+        (
+            Kapitel(
+                "Ein Musterheft",
+                ("Die Anfänge", viele_worte(40), "Die Folgen", viele_worte(30)),
+                ("ueberschrift", "wortlaut", "ueberschrift", "wortlaut"),
+            ),
+        ),
+    )
+
+    neu, _ = inszeniere(
+        quelle,
+        Rollenbild("x", {}),
+        textmodell=Modell(kopf(dokumentart="einen Text", titel="Ein Musterheft")),
+    )
+
+    assert "zwei Abschnitte: „Die Anfänge“ und „Die Folgen“" in " ".join(kopfseite_von(neu))

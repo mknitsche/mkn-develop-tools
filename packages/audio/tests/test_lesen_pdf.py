@@ -8,10 +8,12 @@ from mkn_audio.lesen import bild, lies
 from mkn_audio.lesen.text import KeinText
 from mkn_audio.typen import Mp4Fehler
 from muster_quellen import (
+    SEITENTITEL_SEITEN,
     muster_pdf_kopf_fuss,
     muster_pdf_leer,
     muster_pdf_mit_gliederung,
     muster_pdf_scan,
+    muster_pdf_seitentitel,
     muster_pdf_zwei_spalten,
 )
 
@@ -385,3 +387,117 @@ def test_satz_der_auf_funktionswort_oder_komma_endet_geht_ueber_spalten_weiter()
     assert not pdf_modul._setzt_fort(
         absatz("Geistige Flexibilität", "links"), absatz("Wer sie hat.", "rechts")
     )
+
+
+# ---- Zweispaltige PDF ohne Lesezeichen: Seitentitel und Versalien-Ueberschriften ----------
+
+
+def _spalten(seite: int) -> tuple[str, str]:
+    _kopf, links, rechts = SEITENTITEL_SEITEN[seite]
+    return links, rechts
+
+
+def test_pdf_seitentitel_ueber_beide_spalten_wird_kapitel(tmp_path):
+    """Seite 1 und 3 tragen einen Block oben ueber beide Spalten: je ein neues Kapitel.
+
+    Der Titel von Seite 3 besteht aus zwei Bloecken und wird zu EINEM Titel verbunden, in
+    Satzschreibung; als Absatz erscheint keiner der Kopfbloecke.
+    """
+    dok = lies(muster_pdf_seitentitel(tmp_path / "t.pdf"), textmodell=None)
+
+    assert [k.titel for k in dok.kapitel] == [
+        "Ein Anfang im Garten",
+        "Wenn sich Gewohnheiten verändern",
+    ]
+    assert dok.kapitel[0].absaetze == (*_spalten(0), *_spalten(1))
+    assert dok.kapitel[1].absaetze == _spalten(2)
+
+
+def test_pdf_einspaltig_ohne_lesezeichen_bleibt_ein_kapitel(tmp_path):
+    """Gegenbeispiel: einspaltig ist ein Block ueber die Mitte kein Seitentitel."""
+    satz = "Ein ruhiger Satz im einspaltigen Text, der bis zum Ende der Zeile reicht."
+    pfad = _pdf(
+        tmp_path / "e.pdf",
+        [
+            [_zeile(100, satz), _zeile(160, satz)],
+            [_zeile(100, "Ein mittiger Zwischentitel", x=230, groesse=18), _zeile(200, satz)],
+            [_zeile(100, satz)],
+        ],
+    )
+
+    dok = lies(pfad, textmodell=None)
+
+    assert len(dok.kapitel) == 1
+    assert "Ein mittiger Zwischentitel" in dok.kapitel[0].absaetze
+
+
+# Fliesstext unter den Versalien-Ueberschriften: deutsch, lang genug fuer die Spracherkennung,
+# und er kennt "sich", "verändern" und "und" klein -- daraus kommt die Satzschreibung.
+_FLIESSTEXT = (
+    "Wer etwas ändern will, muss sich Zeit nehmen und darf nicht zu viel",
+    "auf einmal wollen. Gewohnheiten verändern sich langsam, aber sie",
+    "verändern sich, wenn man jeden Tag ein wenig übt und dabei auf die",
+    "kleinen Erfolge achtet, die sich mit der Zeit einstellen.",
+)
+
+
+def _mit_fliesstext(pfad, *kopfzeilen, schrift="helv"):
+    """Kopfzeilen eng untereinander (ein Block), darunter mit Abstand der Fliesstext."""
+    zeilen = [_zeile(100 + 14 * i, z, schrift=schrift) for i, z in enumerate(kopfzeilen)]
+    zeilen += [_zeile(170 + 14 * i, z) for i, z in enumerate(_FLIESSTEXT)]
+    return _pdf(pfad, [zeilen])
+
+
+def test_pdf_versalien_ueber_zwei_zeilen_mit_trennstrich(tmp_path):
+    """Versalien-Zeilen ohne Satzende sind EINE Ueberschrift; der Trennstrich heilt.
+
+    In derselben Schrift wie der Fliesstext gesetzt: die Versalien allein sind der Beleg.
+    """
+    pfad = _mit_fliesstext(tmp_path / "v.pdf", "WENN SICH GEWOHNHEITEN VER-", "ÄNDERN")
+
+    (kapitel,) = lies(pfad, textmodell=None).kapitel
+
+    assert kapitel.absaetze[0] == "Wenn sich Gewohnheiten verändern"
+    assert kapitel.absaetze[1].startswith("Wer etwas ändern will")
+    assert len(kapitel.absaetze) == 2
+    assert kapitel.arten == ("ueberschrift", "wortlaut")
+
+
+def test_pdf_versalien_mit_eszett_sind_eine_ueberschrift(tmp_path):
+    """`ß` zaehlt in einer Versalien-Zeile nicht als Kleinbuchstabe (Critic A, N1)."""
+    pfad = _mit_fliesstext(tmp_path / "s.pdf", "DIE GROßE WENDE")
+
+    (kapitel,) = lies(pfad, textmodell=None).kapitel
+
+    assert kapitel.absaetze[0] == "Die Große Wende"
+    assert kapitel.arten[0] == "ueberschrift"
+
+
+def test_pdf_versalien_vor_bindewort_behaelt_strich(tmp_path):
+    pfad = _mit_fliesstext(tmp_path / "b.pdf", "EIN-", "UND AUSGANG")
+
+    (kapitel,) = lies(pfad, textmodell=None).kapitel
+
+    assert kapitel.absaetze[0] == "Ein- und Ausgang"
+    assert kapitel.arten[0] == "ueberschrift"
+
+
+def test_pdf_fett_ohne_versalien_bleibt_text(tmp_path):
+    """Grenze der Heuristik: Fettdruck allein macht keine Ueberschrift (kein Beleg)."""
+    pfad = _mit_fliesstext(tmp_path / "f.pdf", "Ein fetter Zwischentitel", schrift="hebo")
+
+    (kapitel,) = lies(pfad, textmodell=None).kapitel
+
+    assert kapitel.absaetze[0] == "Ein fetter Zwischentitel"
+    assert "ueberschrift" not in kapitel.arten
+
+
+def test_pdf_seitenzahl_unten_bleibt_schmuck(tmp_path):
+    """Die Seitenzahl unten bleibt Schmuck: weder Titel noch Absatz, auch mit Seitentiteln."""
+    dok = lies(muster_pdf_seitentitel(tmp_path / "z.pdf", seitenzahlen=True), textmodell=None)
+
+    assert len(dok.kapitel) == 2
+    for kapitel in dok.kapitel:
+        assert not kapitel.titel.strip().isdigit()
+        assert not [a for a in kapitel.absaetze if a.strip().isdigit()]
+    assert any("Seitenzahlen" in w for w in dok.warnungen)

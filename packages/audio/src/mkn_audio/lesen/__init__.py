@@ -14,6 +14,11 @@ auffaellt. Darum erkennt `lies` sie am Text (`sprache.erkenne`); bei einem EPUB 
 Angabe der Quelle, und ein deutlich anderer Text steht als Warnung im Dokument. Bleibt sie
 unklar, gilt Deutsch -- und das steht ebenfalls als Warnung im Dokument.
 
+**Versalien-Ueberschriften schreibt `lies` am Ende in Satzschreibung** (`wende_satzschreibung`):
+erst jetzt sind Sprache und Fliesstext des ganzen Dokuments bekannt, aus denen die Schreibweisen
+kommen. Kapiteltitel und Absaetze der Art `ueberschrift` ohne Kleinbuchstaben werden so gesetzt;
+gemischt geschriebene Titel bleiben.
+
 **Private und unsichtbare Zeichen raeumt `lies` fuer alle Leser aus** (Unicode-Kategorien
 `Co` und `Cf`): Symbolschriften setzen sie als Bildzeichen vor Rubriken und Titel, Textverarbeitung
 als Richtungs- und Formatmarken. Vorgelesen wird nichts davon, aber jeder Vergleich ("ist das
@@ -35,7 +40,7 @@ from defusedxml import ElementTree as DefusedET
 from mkn_audio.lesen.bild import lies_bild
 from mkn_audio.lesen.epub import lies_epub
 from mkn_audio.lesen.pdf import lies_pdf
-from mkn_audio.lesen.text import KeinText, lies_text
+from mkn_audio.lesen.text import KeinText, lies_text, wende_satzschreibung
 from mkn_audio.sprache import erkenne
 from mkn_audio.typen import Dokument, Kapitel, Mp4Fehler, Textmodell
 
@@ -118,9 +123,22 @@ def _entferne_unsichtbares(dok: Dokument) -> Dokument:
     """Raeumt Titel, Autor, Kapiteltitel und Absaetze auf; was dabei leer wird, faellt weg."""
     kapitel = []
     for k in dok.kapitel:
-        absaetze = [a for a in (_ohne_unsichtbares(x) for x in k.absaetze) if a]
-        if absaetze:
-            kapitel.append(Kapitel(_ohne_unsichtbares(k.titel), tuple(absaetze)))
+        arten = k.arten or ("wortlaut",) * len(k.absaetze)
+        behalten = [
+            (a, art)
+            for a, art in (
+                (_ohne_unsichtbares(x), art) for x, art in zip(k.absaetze, arten, strict=True)
+            )
+            if a
+        ]
+        if behalten:
+            kapitel.append(
+                Kapitel(
+                    _ohne_unsichtbares(k.titel),
+                    tuple(a for a, _art in behalten),
+                    tuple(art for _a, art in behalten) if k.arten else (),
+                )
+            )
     return replace(
         dok,
         titel=_ohne_unsichtbares(dok.titel),
@@ -145,27 +163,18 @@ def lies(
     if not quelle.is_file():
         raise Mp4Fehler(f"Quelle nicht gefunden: {quelle.name}")
     endung = quelle.suffix.lower()
+    angabe = None
     if endung == ".epub":
-        return _setze_sprache(_entferne_unsichtbares(lies_epub(quelle)), _opf_sprache(quelle))
-    if endung == ".pdf":
-        return _setze_sprache(
-            _entferne_unsichtbares(
-                lies_pdf(
-                    quelle,
-                    textmodell=textmodell,
-                    ocr_sprache=ocr_sprache,
-                    bild_seiten_max=bild_seiten_max,
-                )
-            ),
-            None,
+        dok, angabe = lies_epub(quelle), _opf_sprache(quelle)
+    elif endung == ".pdf":
+        dok = lies_pdf(
+            quelle, textmodell=textmodell, ocr_sprache=ocr_sprache, bild_seiten_max=bild_seiten_max
         )
-    if endung in _TEXT_ENDUNGEN:
-        return _setze_sprache(_entferne_unsichtbares(lies_text(quelle)), None)
-    if endung in _BILD_ENDUNGEN:
-        return _setze_sprache(
-            _entferne_unsichtbares(
-                lies_bild(quelle, textmodell=textmodell, ocr_sprache=ocr_sprache)
-            ),
-            None,
-        )
-    raise Mp4Fehler(f"nicht unterstuetzte Endung '{endung}' (moeglich: {', '.join(_ENDUNGEN)})")
+    elif endung in _TEXT_ENDUNGEN:
+        dok = lies_text(quelle)
+    elif endung in _BILD_ENDUNGEN:
+        dok = lies_bild(quelle, textmodell=textmodell, ocr_sprache=ocr_sprache)
+    else:
+        raise Mp4Fehler(f"nicht unterstuetzte Endung '{endung}' (moeglich: {', '.join(_ENDUNGEN)})")
+    # Satzschreibung zuletzt: sie braucht die Sprache und die Absaetze ohne unsichtbare Zeichen.
+    return wende_satzschreibung(_setze_sprache(_entferne_unsichtbares(dok), angabe))

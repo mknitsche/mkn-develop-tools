@@ -33,7 +33,7 @@ import unicodedata
 import wave
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from mkn_audio.stimmen import Stimme
 from mkn_audio.typen import Mp4Fehler, Stueck
@@ -199,7 +199,19 @@ def _lies_alles(pfad: Path) -> bytes:
 
 
 def _pause_nach(stueck: Stueck, folgendes: Stueck, stimme: Stimme) -> float:
-    """Pause hinter `stueck`: nach der Ueberschrift die laengere, im Absatz die kurze."""
+    """Pause hinter `stueck`: nach der Ueberschrift die laengere, im Absatz die kurze.
+
+    Reihenfolge: nach einer Zwischenueberschrift `pause_nach_ueberschrift`, vor einer
+    `pause_vor_ueberschrift` (ein Satz derselben Ueberschrift bleibt `pause_stueck`), nach dem
+    Kapiteltitel `pause_titel`, beim Absatzwechsel `pause_absatz`, sonst `pause_stueck`.
+    """
+    gleiche_ueberschrift = stueck.art == folgendes.art == "ueberschrift" and (
+        stueck.absatz == folgendes.absatz
+    )
+    if stueck.art == "ueberschrift" and not gleiche_ueberschrift:
+        return stimme.pause_nach_ueberschrift
+    if folgendes.art == "ueberschrift" and not gleiche_ueberschrift:
+        return stimme.pause_vor_ueberschrift
     if stueck.art == "titel":
         return stimme.pause_titel
     if folgendes.absatz == stueck.absatz:
@@ -232,7 +244,14 @@ def _atempo(daten: bytes, tempo: float) -> bytes:
     return lauf.stdout
 
 
-def _rate(ton: Mapping[int, dict[str, Any]], stueck: Stueck) -> float:
+class _HatNr(Protocol):
+    """Was `kapitel_ton` von einer Einheit braucht: die Nummer, unter der ihr Ton liegt."""
+
+    @property
+    def nr(self) -> int: ...
+
+
+def _rate(ton: Mapping[int, dict[str, Any]], stueck: _HatNr) -> float:
     try:
         rate = float(ton[stueck.nr]["sprechrate"])
     except (KeyError, TypeError, ValueError):
@@ -242,19 +261,22 @@ def _rate(ton: Mapping[int, dict[str, Any]], stueck: Stueck) -> float:
     return rate
 
 
-def kapitel_ton(
-    stuecke: Sequence[Stueck],
+def kapitel_ton[E: _HatNr](
+    stuecke: Sequence[E],
     ton: Mapping[int, dict[str, Any]],
     stimme: Stimme,
-    wav_pfad: Callable[[Stueck], Path],
+    wav_pfad: Callable[[E], Path],
     ziel: Path,
+    *,
+    pause_nach: Callable[[E, E], float] | None = None,
 ) -> Path:
-    """Setzt die Stuecke EINES Kapitels zu einer WAV zusammen (PCM16, 24 kHz, mono).
+    """Setzt die Einheiten EINES Kapitels zu einer WAV zusammen (PCM16, 24 kHz, mono).
 
-    Je Stueck wird das Tempo gegen den laufenden Median der Sprechraten angeglichen
-    (`stimme.tempo_angleich`, siehe `_angleich_faktor`). Pausen: nach der Ueberschrift
-    `pause_titel`, im selben Absatz `pause_stueck`, beim Absatzwechsel `pause_absatz`.
-    Nach dem letzten Stueck folgt keine Pause -- die Kapitelpause setzt `m4b` dazwischen.
+    Einheit ist ein `Stueck` (Pausen: `_pause_nach`) oder ein Block des Sprechers; fuer
+    Bloecke nennt der Aufrufer die Pause (`pause_nach`: Pause hinter dem letzten Stueck des
+    ersten gegenueber dem ersten des folgenden). Je Einheit wird das Tempo gegen den laufenden
+    Median der Sprechraten angeglichen (`stimme.tempo_angleich`, siehe `_angleich_faktor`).
+    Nach der letzten Einheit folgt keine Pause -- die Kapitelpause setzt `m4b` dazwischen.
     """
     if not stuecke:
         raise Mp4Fehler("Kapitel ohne Stuecke kann nicht zusammengesetzt werden")
@@ -272,7 +294,13 @@ def kapitel_ton(
                 daten = _atempo(daten, 1 / faktor)
             aus.writeframes(daten)
             if i + 1 < len(stuecke):
-                schreibe_stille(aus, _pause_nach(stueck, stuecke[i + 1], stimme))
+                folgt = stuecke[i + 1]
+                pause = (
+                    pause_nach(stueck, folgt)
+                    if pause_nach is not None
+                    else _pause_nach(stueck, folgt, stimme)  # type: ignore[arg-type]
+                )
+                schreibe_stille(aus, pause)
     return ziel
 
 

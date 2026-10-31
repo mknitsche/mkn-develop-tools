@@ -269,6 +269,38 @@ def test_leer_gewordene_ansage_nimmt_ihre_art_mit():
     assert (kapitel.absaetze, kapitel.arten) == (("Text hier.",), ("wortlaut",))
 
 
+def test_hoertext_ueberschrift_nur_regelstufe():
+    """Eine Zwischenueberschrift bekommt die Regeln (Zahlen), aber keine Glaettung."""
+    quelle = Dokument(
+        "Buch",
+        "Jemand",
+        "de",
+        (
+            Kapitel(
+                "Anfang",
+                (
+                    "Teil 2 beginnt",
+                    "Die Hunde liefen über die Weide.",
+                    "Der Hirte folgte ihnen langsam.",
+                ),
+                ("ueberschrift", "wortlaut", "wortlaut"),
+            ),
+        ),
+    )
+    gesehen: list[str] = []
+
+    def antwort(text: str) -> str:
+        gesehen.append(text)
+        return text.upper()
+
+    ergebnis, _ = hoertext(quelle, textmodell=Modell(antwort))
+
+    assert gesehen == ["Die Hunde liefen über die Weide.\n\nDer Hirte folgte ihnen langsam."]
+    kapitel = ergebnis.kapitel[0]
+    assert kapitel.absaetze[0] == "Teil zwei beginnt"
+    assert kapitel.arten == ("ueberschrift", "wortlaut", "wortlaut")
+
+
 def test_versalien_die_das_dokument_normal_kennt_werden_woerter():
     # Hoerbuch 24.10.: "DER GLAUBE", "Adam UND EVA", "GOTT" blieben als Kuerzel stehen.
     # Ein Wort, das im selben Dokument auch normal geschrieben steht, ist kein Kuerzel;

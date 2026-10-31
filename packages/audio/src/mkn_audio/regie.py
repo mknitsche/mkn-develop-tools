@@ -10,11 +10,12 @@ die Hoerfassung. Keine Regel in diesem Modul nennt eine Quelle oder einen Verlag
 Allgemeines aus dem Speziellen ableitet, scheitert nicht an der naechsten Vorlage.
 
 **Was neu formuliert werden darf und was nie.** Der Text der Rollen `haupttext` und
-`ueberschrift` wird UNVERAENDERT uebernommen (Art `wortlaut`); die Hoertext-Stufe danach
-prueft ihn weiter in beide Richtungen. Neu formuliert werden nur drei Ansagen:
-`vorspann`, `ueberleitung`, `abspann`. Sie stehen im Bericht im Wortlaut, damit sichtbar
-bleibt, was nicht aus der Quelle stammt, und sie duerfen keine Zahl enthalten, die die
-Quelle nicht kennt -- "vier" gegen "fuenf" ist der Fehler, der nie passieren darf.
+`ueberschrift` wird UNVERAENDERT uebernommen (Art `wortlaut`, die Rolle `ueberschrift` als
+Art `ueberschrift`); die Hoertext-Stufe danach prueft ihn weiter in beide Richtungen. Neu
+formuliert werden nur drei Ansagen: `vorspann`, `ueberleitung`, `abspann`. Sie stehen im
+Bericht im Wortlaut, damit sichtbar bleibt, was nicht aus der Quelle stammt, und sie duerfen
+keine Zahl enthalten, die die Quelle nicht kennt -- "vier" gegen "fuenf" ist der Fehler, der
+nie passieren darf.
 Ausnahmen sind Ordnungszahlwoerter, deren Zahl die Hoerfassung (bis zur Zahl der
 gesprochenen Kapitel: "das zweite Kapitel") oder die Quelle selbst nennt (steht dort "3."
 oder "3", darf "dritte" stehen) -- und kleine Zaehlwoerter.
@@ -90,7 +91,7 @@ from itertools import pairwise
 from mkn_audio.hoertext import deterministisch
 from mkn_audio.hoertext.pruefen import ist_zahl, woerter
 from mkn_audio.hoertext.zahlen import _MONATE, ausschreiben
-from mkn_audio.typen import Dokument, Kapitel, Mp4Fehler, Textmodell
+from mkn_audio.typen import QUELL_ARTEN, Dokument, Kapitel, Mp4Fehler, Textmodell
 
 ROLLEN = (
     "haupttext",
@@ -417,10 +418,8 @@ def pruefe_wortlaut(neu: Dokument, quelle: Dokument) -> None:
     for kapitel in neu.kapitel:
         arten = kapitel.arten or ("wortlaut",) * len(kapitel.absaetze)
         for absatz, art in zip(kapitel.absaetze, arten, strict=True):
-            if art == "wortlaut" and absatz not in bekannt:
-                raise Mp4Fehler(
-                    f"Regie: wortlaut-Absatz steht nicht in der Quelle: {absatz[:60]!r}"
-                )
+            if art in QUELL_ARTEN and absatz not in bekannt:
+                raise Mp4Fehler(f"Regie: {art}-Absatz steht nicht in der Quelle: {absatz[:60]!r}")
 
 
 def _quell_zahlen(dok: Dokument) -> set[str]:
@@ -861,7 +860,7 @@ def _wortlaut_woerter(sprechbar) -> int:
         len(woerter(text))
         for _, absaetze, arten in sprechbar.values()
         for text, art in zip(absaetze, arten, strict=True)
-        if art == "wortlaut"
+        if art in QUELL_ARTEN
     )
 
 
@@ -947,26 +946,31 @@ def inszeniere(
     # Ueberschrift hat Text, wenn der naechste gesprochene Absatz keine Ueberschrift ist --
     # folgt eine weitere Ueberschrift oder das Kapitelende, ist sie verwaist.
     sprechbar: dict[int, tuple[str, list[str], list[str]]] = {}
-    # Rolle je gesprochenem Absatz (gleiche Reihenfolge wie `absaetze` von vorn, vor den
-    # Ueberleitungen): Titel und Gliederung brauchen, was Ueberschrift war und was Text.
-    rollen_je_kapitel: dict[int, list[str]] = {}
     verwaist = 0
+
+    def ist_ueberschrift(k: int, a: int) -> bool:
+        # Vorrang: was der Leser aus dem Layout als Ueberschrift kennt, bleibt es (das
+        # Sprachmodell sieht nur Text); die Regie darf einen Leser-Wortlaut dazu machen.
+        arten = dok.kapitel[k].arten
+        vom_leser = arten[a] if arten else "wortlaut"
+        return rolle(k, a) == "ueberschrift" or vom_leser == "ueberschrift"
+
     for k, kapitel in enumerate(dok.kapitel):
         gesprochen = [
             (a, t) for a, t in enumerate(kapitel.absaetze) if rolle(k, a) in gesprochen_rollen
         ]
         behalten: list[str] = []
-        behaltene_rollen: list[str] = []
+        behaltene_arten: list[str] = []
+
         for i, (a, text) in enumerate(gesprochen):
-            hat_text = i + 1 < len(gesprochen) and rolle(k, gesprochen[i + 1][0]) != "ueberschrift"
-            if rolle(k, a) == "ueberschrift" and not hat_text:
+            hat_text = i + 1 < len(gesprochen) and not ist_ueberschrift(k, gesprochen[i + 1][0])
+            if ist_ueberschrift(k, a) and not hat_text:
                 verwaist += 1
             else:
                 behalten.append(text)
-                behaltene_rollen.append(rolle(k, a))
+                behaltene_arten.append("ueberschrift" if ist_ueberschrift(k, a) else "wortlaut")
         if behalten:
-            sprechbar[k] = (kapitel.titel, behalten, ["wortlaut"] * len(behalten))
-            rollen_je_kapitel[k] = behaltene_rollen
+            sprechbar[k] = (kapitel.titel, behalten, behaltene_arten)
         elif kapitel.absaetze:
             name = kapitel.titel or f"Kapitel {k + 1}"
             warnungen.append(f"weggelassen: Kapitel »{name}« (kein sprechbarer Text)")
@@ -982,7 +986,7 @@ def inszeniere(
             text
             for k, kapitel in enumerate(dok.kapitel)
             for a, text in enumerate(kapitel.absaetze)
-            if rolle(k, a) == "ueberschrift"
+            if ist_ueberschrift(k, a)
         ),
         "",
     )
@@ -1050,22 +1054,19 @@ def inszeniere(
         titel_ok = any(ist_titelzeile(absaetze[0], t) for t in (geprueft["titel"], dok.titel))
         ist_einzige = len(sprechbar) == 1 and len(absaetze) == 1
         if titel_ok and not ist_einzige:
-            del absaetze[0], arten[0], rollen_je_kapitel[erste][0]
+            del absaetze[0], arten[0]
             if not absaetze:
                 del sprechbar[erste]
-                del rollen_je_kapitel[erste]
             warnungen.append("weggelassen: Titelzeile (die Einleitung nennt den Titel)")
 
     # Gliederung: ein Kapitel ist kein Abschnittswechsel; gliedern dann seine gesprochenen
     # Zwischenueberschriften (zwei bis `GLIEDERUNG_MAX`), sonst die Kapitel wie bisher.
     abschnitte = [t for t, _, _ in sprechbar.values()]
     if len(sprechbar) == 1:
-        (_, absaetze, _), rollen_kapitel = (
-            next(iter(sprechbar.values())),
-            next(iter(rollen_je_kapitel.values())),
-        )
+        # Die Art (nicht die Rolle) gliedert: sie traegt den Vorrang der Leser-Ueberschrift.
+        (_, absaetze, arten) = next(iter(sprechbar.values()))
         zwischen = [
-            text for text, r in zip(absaetze, rollen_kapitel, strict=False) if r == "ueberschrift"
+            text for text, art in zip(absaetze, arten, strict=True) if art == "ueberschrift"
         ]
         if 2 <= len(zwischen) <= GLIEDERUNG_MAX:
             abschnitte = zwischen

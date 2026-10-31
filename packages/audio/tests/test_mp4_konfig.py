@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from mkn_kern.anfrage import AnfrageFehler
 
 from mkn_audio import konfig
 from mkn_audio.konfig import Konfig, lade
@@ -87,9 +88,10 @@ def test_fehlende_datei_ueber_umgebung_bricht_mit_ort():
 
 
 def test_pflichtschluessel_fehlt_bricht(tmp_path):
-    pfad = _schreibe(tmp_path / "k.toml", 'stimmen_tabelle = "t.toml"\n')
+    """`stimmen_tabelle` ist Pflicht; `arbeiter_python` seit Plan C4 nicht mehr."""
+    pfad = _schreibe(tmp_path / "k.toml", 'arbeiter_python = "/a/bin/python"\n')
 
-    with pytest.raises(Mp4Fehler, match="arbeiter_python"):
+    with pytest.raises(Mp4Fehler, match="stimmen_tabelle"):
         lade(pfad)
 
 
@@ -112,3 +114,22 @@ def test_falscher_typ_bricht(tmp_path):
 
     with pytest.raises(Mp4Fehler, match="whisper_modell"):
         lade(pfad)
+
+
+def test_mkn_kern_fehler_hat_status():
+    """Das Paket braucht mkn-kern >= 0.3: `AnfrageFehler` traegt den HTTP-Status (Plan B0.2).
+
+    Ohne Status kann der Gemini-Sprecher Sperre, Limit und Zugang nicht unterscheiden.
+    """
+    assert AnfrageFehler("x", status=400).status == 400
+
+
+def test_konfig_ohne_arbeiter_python_fuer_gemini_ok(tmp_path):
+    """Wer nur den Weg gemini nutzt, braucht keinen Arbeiter: `arbeiter_python` ist optional
+    (dann keine Whisper-Stichprobe, Spec 14.2) und fehlt als `None`, nie als Ersatzpfad."""
+    pfad = _schreibe(tmp_path / "k.toml", 'stimmen_tabelle = "/t/stimmen.toml"\n')
+
+    ergebnis = lade(pfad)
+
+    assert ergebnis.stimmen_tabelle == Path("/t/stimmen.toml")
+    assert ergebnis.arbeiter_python is None

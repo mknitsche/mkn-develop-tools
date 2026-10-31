@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from mkn_audio import typen
 from mkn_audio.gliedern import gliedere, waehle
 from mkn_audio.typen import Dokument, Kapitel, Mp4Fehler
 
@@ -160,7 +161,7 @@ def test_auswahl_ungueltig_bricht_laut(vier_kapitel, auswahl):
 
 
 def test_ansage_stuecke_markiert():
-    """Absaetze mit Art ausser `wortlaut` sind Ansagen; Titel und Wortlaut nie."""
+    """Absaetze mit Art ausser `wortlaut` und der Titel sind Ansagen; Wortlaut nie."""
     dok = Dokument(
         "T",
         None,
@@ -181,10 +182,10 @@ def test_ansage_stuecke_markiert():
     assert [(s.kapitel, s.art, s.ansage) for s in stuecke] == [
         (0, "text", True),  # Vorspann, zwei Saetze
         (0, "text", True),
-        (1, "titel", False),
+        (1, "titel", True),  # Titel spricht die Ansage-Stimme
         (1, "text", False),
         (1, "text", True),  # Ueberleitung
-        (2, "titel", False),
+        (2, "titel", True),
         (2, "text", False),  # Kapitel ohne Arten: alles Wortlaut
     ]
     assert not any(s.art == "titel" for s in stuecke if s.kapitel == 0)  # leerer Titel
@@ -203,3 +204,42 @@ def test_klein_weiter_ist_kein_satzende():
     # "Pius IX. zum Dogma" (roemische Zahl), "ca. zehn": geht es klein weiter, endet kein Satz.
     dok = _dok(Kapitel("K", ("Es war Pius IX. zum Dogma erklärt worden. Dann kam mehr.",)))
     assert _texte(dok) == ["Es war Pius IX. zum Dogma erklärt worden.", "Dann kam mehr."]
+
+
+# ---- Zwischenueberschriften und Titel in der Ansage-Stimme ----------------------------
+
+
+def test_ueberschrift_ist_art_und_ansage():
+    assert typen.ARTEN == ("vorspann", "wortlaut", "ueberschrift", "ueberleitung", "abspann")
+    assert typen.QUELL_ARTEN == ("wortlaut", "ueberschrift")
+    dok = _dok(
+        Kapitel(
+            "Erstes",
+            ("Ein kleiner Abschnitt", "Ein Satz. Noch einer."),
+            ("ueberschrift", "wortlaut"),
+        )
+    )
+
+    stuecke = gliedere(dok)
+
+    assert [(s.absatz, s.text, s.art, s.ansage) for s in stuecke] == [
+        (-1, "Erstes", "titel", True),
+        (0, "Ein kleiner Abschnitt", "ueberschrift", True),
+        (1, "Ein Satz.", "text", False),
+        (1, "Noch einer.", "text", False),
+    ]
+
+
+def test_titel_ist_ansage():
+    """Titel spricht die Ansage-Stimme (Spec E2), auch ohne Regie (Kapitel ohne Arten)."""
+    dok = _dok(Kapitel("Erstes", ("Ah. Be.",)), Kapitel("Zweites", ("Ce.",)))
+
+    stuecke = gliedere(dok)
+
+    assert [(s.art, s.ansage) for s in stuecke] == [
+        ("titel", True),
+        ("text", False),
+        ("text", False),
+        ("titel", True),
+        ("text", False),
+    ]
