@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from mkn_audio.mastern import kapitel_ton, master
+from mkn_audio.mastern import _pause_nach, kapitel_ton, master
 from mkn_audio.stimmen import Stimme
 from mkn_audio.typen import Mp4Fehler, Stueck
 
@@ -145,6 +145,28 @@ def test_kapitel_ton_pausen_je_ebene(tmp_path, sprache):
     assert ergebnis == ziel
     erwartet = 4 * 1.0 + sprache.pause_titel + sprache.pause_stueck + sprache.pause_absatz
     assert dauer(ziel) == pytest.approx(erwartet, abs=0.01)
+
+
+def test_pause_vor_und_nach_ueberschrift(tmp_path, sprache):
+    """Vor einer Zwischenueberschrift 1,0 s, danach 0,7 s (Vorgaben der Stimme)."""
+    assert (sprache.pause_vor_ueberschrift, sprache.pause_nach_ueberschrift) == (1.0, 0.7)
+
+    def st(absatz, art):
+        return Stueck(kapitel=0, absatz=absatz, nr=0, text="x", art=art)
+
+    # Jeder Fall hat einen anderen Wert, damit eine vertauschte Regel auffaellt.
+    assert _pause_nach(st(0, "text"), st(1, "ueberschrift"), sprache) == 1.0
+    assert _pause_nach(st(1, "ueberschrift"), st(2, "text"), sprache) == 0.7
+    assert _pause_nach(st(-1, "titel"), st(0, "text"), sprache) == sprache.pause_titel
+    assert _pause_nach(st(0, "text"), st(1, "text"), sprache) == sprache.pause_absatz
+    assert _pause_nach(st(0, "text"), st(0, "text"), sprache) == sprache.pause_stueck
+
+    # Im zusammengesetzten Kapitel: Titel | Text | Ueberschrift | Text
+    struktur = [(-1, "titel"), (0, "text"), (1, "ueberschrift"), (2, "text")]
+    stuecke, ton, pfad = _stuecke_mit_ton(tmp_path, [1.0] * 4, [10.0] * 4, struktur)
+    ziel = kapitel_ton(stuecke, ton, sprache, pfad, tmp_path / "kapitel.wav")
+
+    assert dauer(ziel) == pytest.approx(4 * 1.0 + sprache.pause_titel + 1.0 + 0.7, abs=0.01)
 
 
 def test_kapitel_ton_format_und_atomar(tmp_path, sprache):

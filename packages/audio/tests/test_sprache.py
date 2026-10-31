@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from mkn_audio import sprache
 from mkn_audio.lesen import lies
 from mkn_audio.sprache import erkenne
+from mkn_audio.typen import Kapitel
 from muster_quellen import epub_schreiben, opf, xhtml
 
 DEUTSCH = (
@@ -122,3 +124,97 @@ def test_epub_ohne_sprachangabe_wird_erkannt(tmp_path):
     dok = lies(_epub(tmp_path, ENGLISCH, sprache=""), textmodell=None)
 
     assert dok.sprache == "en"
+
+
+# ---- Satzschreibung fuer Ueberschriften in Versalien ---------------------------------
+# `satzschreibung` und `versal_belege` werden ueber das Modul angesprochen, nicht importiert:
+# solange es sie nicht gibt, sind nur diese Tests rot, nicht die ganze Datei.
+
+
+@pytest.mark.parametrize(
+    ("text", "formen", "code", "belegt", "erwartet"),
+    [
+        # bekannt -> Form des Dokuments, unbekannt -> gross, erstes Wort gross
+        (
+            "DAS GEDÄCHTNIS ALS WERKSTATT",
+            {"gedächtnis": "Gedächtnis", "als": "als"},
+            "de",
+            frozenset(),
+            "Das Gedächtnis als Werkstatt",
+        ),
+        # im Fliesstext belegtes Kuerzel bleibt in Versalien
+        (
+            "DIE ROLLE DER WHO",
+            {"rolle": "Rolle", "der": "der"},
+            "de",
+            frozenset({"WHO"}),
+            "Die Rolle der WHO",
+        ),
+        # ohne Beleg kein Kuerzel
+        (
+            "DIE ROLLE DER WHO",
+            {"rolle": "Rolle", "der": "der"},
+            "de",
+            frozenset(),
+            "Die Rolle der Who",
+        ),
+        # die Vokal-Faustregel hielte WERKSTATT und ALS fuer Kuerzel -- sie wird nicht benutzt
+        ("DAS GEDÄCHTNIS ALS WERKSTATT", {}, "de", frozenset(), "Das Gedächtnis Als Werkstatt"),
+        # roemische Zahl bleibt
+        ("KAPITEL XVIII", {}, "de", frozenset(), "Kapitel XVIII"),
+        # Bindestrich-Teile sind eigene Woerter
+        ("OST-WEST-GEFÄLLE", {}, "de", frozenset(), "Ost-West-Gefälle"),
+        # Englisch: unbekannt klein, erstes Wort und nach Doppelpunkt gross
+        ("THE GARDEN AS CLASSROOM", {}, "en", frozenset(), "The garden as classroom"),
+        ("PART ONE: A NEW START", {}, "en", frozenset(), "Part one: A new start"),
+    ],
+)
+def test_satzschreibung_regel(text, formen, code, belegt, erwartet):
+    assert sprache.satzschreibung(text, formen, sprache=code, versal_belegt=belegt) == erwartet
+
+
+def test_versal_belege_nur_aus_fliesstext():
+    """Waechter (LP-40): Versalien einer Ueberschrift belegen sich nicht selbst als Kuerzel.
+
+    Mutation: Absaetze der Art `ueberschrift` mitzaehlen -> rot.
+    """
+    kapitel = Kapitel(
+        titel="Probe",
+        absaetze=("Die WHO meldet.", "ÜBERSCHRIFT IN VERSALIEN"),
+        arten=("wortlaut", "ueberschrift"),
+    )
+
+    assert sprache.versal_belege([kapitel]) == frozenset({"WHO"})
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("Die Rolle der Eltern", "de"),
+        ("The Silent Garden", "en"),
+        ("Ein Leitfaden zur Praxis", "de"),
+        ("KAPITEL zwei", "de"),  # schon ein Kleinbuchstabe genuegt: keine reine Versalien-Zeile
+    ],
+)
+def test_satzschreibung_laesst_gemischte_schreibung_unveraendert(text, code):
+    """Nur Text OHNE Kleinbuchstaben wird umgeschrieben (Wahl main 2026-10-30, Plan A1).
+
+    Gemischt geschriebene Titel (EPUB, Markdown, Lesezeichen, englische Titel) sind schon
+    richtig gesetzt; Regel (3) wuerde sie zerstoeren ("The Silent Garden" -> "The silent garden").
+    """
+    assert sprache.satzschreibung(text, {}, sprache=code, versal_belegt=frozenset()) == text
+
+
+def test_satzschreibung_behandelt_eszett_als_versalie():
+    """`ß` ist in Versalien-Woertern neutral: "DIE GROßE WENDE" ist eine Versalien-Ueberschrift
+    (Critic A, N1) -- `str.islower()` hielte das `ß` fuer einen Kleinbuchstaben."""
+    erwartet = "Die Große Wende"
+
+    assert sprache.satzschreibung("DIE GROßE WENDE", {"die": "die"}, "de", frozenset()) == erwartet
+    assert sprache.satzschreibung("DIE GROẞE WENDE", {"die": "die"}, "de", frozenset()) == erwartet
+
+
+def test_versal_belege_zaehlt_versalwort_mit_eszett():
+    kapitel = Kapitel(titel="Probe", absaetze=("Das STRAßE-Signal meldet.",), arten=("wortlaut",))
+
+    assert "STRAßE" in sprache.versal_belege([kapitel])

@@ -165,7 +165,7 @@ wheels = [
 
 [[package]]
 name = "mkn-audio"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "packages/audio" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -216,7 +216,7 @@ dev = [
 
 [[package]]
 name = "mkn-foto"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "packages/foto" }
 dependencies = [
     { name = "mkn-kern" },
@@ -231,7 +231,7 @@ requires-dist = [
 
 [[package]]
 name = "mkn-kern"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "packages/kern" }
 
 [[package]]

@@ -23,10 +23,10 @@ from mkn_audio.hoertext.abkuerzungen import (
     ersetze_abkuerzungen,
     ersetze_woerter,
     saeubere,
-    wortformen,
 )
 from mkn_audio.hoertext.glaetten import glaette
 from mkn_audio.hoertext.zahlen import ausschreiben, trenne_ziffern
+from mkn_audio.sprache import wortformen
 from mkn_audio.typen import Dokument, Kapitel, Textmodell
 
 __all__ = ["deterministisch", "hoertext"]

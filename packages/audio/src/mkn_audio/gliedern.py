@@ -24,7 +24,7 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 
-from mkn_audio.typen import Dokument, Mp4Fehler, Stueck
+from mkn_audio.typen import QUELL_ARTEN, Dokument, Mp4Fehler, Stueck
 
 # Satzende = Folge aus . ! ? oder ... , danach beliebig viele schliessende Anfuehrungs-
 # zeichen/Klammern (`„Ja.“ Dann`), danach Leerraum. Ohne Leerraum danach ist es kein
@@ -93,8 +93,10 @@ def gliedere(dok: Dokument, *, max_zeichen: int = 400) -> tuple[Stueck, ...]:
     Absatz faellt weg, behaelt aber seinen Index, damit die Pausen zur Quelle passen.
     Das Titelstueck hat `absatz=-1`; ein Kapitel ohne Titel hat keins (so beginnt die
     Hoerfassung der Regie mit dem Vorspann, ohne dass eine leere Ueberschrift gesprochen
-    wird). `nr` zaehlt laufend ueber das ganze Dokument ab 0. Stuecke aus Absaetzen, die die
-    Regie neu formuliert hat (`Kapitel.arten` ausser `wortlaut`), tragen `ansage=True`.
+    wird). `nr` zaehlt laufend ueber das ganze Dokument ab 0. Titel und Zwischenueberschriften
+    (`Kapitel.arten` = `ueberschrift`, Stueck-Art `ueberschrift`) sowie Stuecke aus Absaetzen,
+    die die Regie neu formuliert hat (Art ausserhalb von `QUELL_ARTEN`), tragen `ansage=True`:
+    sie sprechen mit der Ansage-Stimme.
     """
     if max_zeichen < 1:
         raise Mp4Fehler(f"max_zeichen muss mindestens 1 sein, nicht {max_zeichen}")
@@ -107,11 +109,13 @@ def gliedere(dok: Dokument, *, max_zeichen: int = 400) -> tuple[Stueck, ...]:
     for k, kapitel in enumerate(dok.kapitel):
         titel = " ".join(kapitel.titel.split())
         if titel:
-            anhaengen(k, -1, "titel", titel)
+            anhaengen(k, -1, "titel", titel, True)
         for a, absatz in enumerate(kapitel.absaetze):
-            ansage = bool(kapitel.arten) and kapitel.arten[a] != "wortlaut"
+            herkunft = kapitel.arten[a] if kapitel.arten else "wortlaut"
+            ueberschrift = herkunft == "ueberschrift"
+            ansage = ueberschrift or herkunft not in QUELL_ARTEN
             for satz in _saetze(" ".join(absatz.split())):
-                anhaengen(k, a, "text", satz, ansage)
+                anhaengen(k, a, "ueberschrift" if ueberschrift else "text", satz, ansage)
     return tuple(stuecke)
 
 

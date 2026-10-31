@@ -33,7 +33,7 @@ KW = {"quelle": "/wo/auch/immer/Artikel.pdf", "sha256": "ab" * 32, "herkunft": "
 
 
 def _manifest(dok=DOK, rollenbild=ROLLEN_BILD, **zusatz):
-    return als_manifest(dok, rollenbild, leser="mkn-mp4", **{**KW, **zusatz})
+    return als_manifest(dok, rollenbild, leser="mkn-audio", **{**KW, **zusatz})
 
 
 def _bereiche(manifest):
@@ -85,7 +85,7 @@ def test_manifest_struktur_nach_schnittstelle():
         assert bereich["handschrift"] is False
         assert bereich["herkunft"] == "textschicht"
         assert bereich["seite"] is None and bereich["lage"] is None
-        assert bereich["leser"] == "mkn-mp4"
+        assert bereich["leser"] == "mkn-audio"
     # Es muss als JSON ausgebbar sein, ohne Sonderbehandlung.
     assert json.loads(json.dumps(m, ensure_ascii=False)) == m
 
@@ -210,3 +210,24 @@ def test_schreiben_laesst_alte_datei_bei_fehler_ganz(tmp_path):
 
     assert ziel.read_bytes() == vorher
     assert [p.name for p in tmp_path.iterdir()] == ["manifest.json"]
+
+
+def test_leser_heisst_mkn_audio(tmp_path):
+    """Das Manifest des Laufs nennt als Leser den Paketnamen `mkn-audio` (Cluster D1).
+
+    Seit 0.3.0 gibt es zwei Befehle (`mkn-mp4-local`, `mkn-mp4-gemini`), aber EINEN Leser:
+    die Lesestufe gehoert dem Paket, nicht einem Befehl. Der alte Befehlsname `mkn-mp4`
+    entfaellt ohne Alias und darf auch im Manifest nicht mehr erscheinen.
+    """
+    from types import SimpleNamespace
+
+    from mkn_audio import lauf
+
+    verz = SimpleNamespace(quelle_hash="cd" * 32, wurzel=tmp_path)
+    lauf._schreibe_manifest(
+        verz, DOK, ROLLEN_BILD, quelle=tmp_path / "Artikel.pdf", bildquelle=False
+    )
+
+    bereiche = _bereiche(json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8")))
+    assert bereiche  # Untergrenze (LP-36): es gibt Bereiche, die einen Leser nennen
+    assert {b["leser"] for b in bereiche} == {"mkn-audio"}

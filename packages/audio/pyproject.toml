@@ -14,17 +14,18 @@ dependencies = [
     "num2words>=0.5.13",
     "beautifulsoup4>=4.12",
     "defusedxml>=0.7",
-    "mkn-kern>=0.2",
+    "mkn-kern>=0.3",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
-mkn-mp4 = "mkn_audio.kommandozeile:haupt"
+mkn-mp4-local = "mkn_audio.kommandozeile:haupt_local"
+mkn-mp4-gemini = "mkn_audio.kommandozeile:haupt_gemini"
 
 # Im Arbeitsbereich kommt das Geschwisterpaket aus dem Repo, nicht aus einem Index; fuer einen
-# Build nach aussen bleibt die Anforderung `mkn-kern>=0.2` massgeblich.
+# Build nach aussen bleibt die Anforderung `mkn-kern>=0.3` massgeblich.
 [tool.uv.sources]
 mkn-kern = { workspace = true }
 

@@ -1,14 +1,19 @@
-"""Die Kommandozeile `mkn-mp4`.
+"""Die Kommandozeilen `mkn-mp4-local` und `mkn-mp4-gemini`.
 
-    mkn-mp4 <quelle> [--stimme NAME] [--ziel ORDNER] [--auswahl K] [--format m4b|mp3]
-                     [--regie voll|buch|aus]
-    mkn-mp4 vorlage <aufnahme> --ziel <wav> [--dauer 24]
-    mkn-mp4 stimmen
+    mkn-mp4-local  <quelle> [--stimme NAME] [--ansage NAME] [--ziel ORDNER] [--auswahl K]
+                            [--format m4b|mp3] [--regie voll|buch|aus]
+    mkn-mp4-local  vorlage <aufnahme> --ziel <wav> [--dauer 24]
+    mkn-mp4-gemini <quelle> [... wie local ...] [--cloud-ok] [--modell ID]
+    mkn-mp4-local | mkn-mp4-gemini  stimmen
+
+Beide Befehle sind Einstiege in EINEN Kern (`haupt(argv, weg=...)`); der Weg bestimmt den
+Sprecher, die Stimmen der Tabelle und die Optionen.
 
 **Exit-Codes.** 0 gut, 1 Fehler (Meldung auf stderr: die Quelle ist unbrauchbar, die
 Umgebung defekt, ein Dienst antwortet nicht ...), 2 Bedienfehler (falsche Eingabe: gleich
-neu aufrufen). Ein Skript soll den Unterschied sehen: bei 2 hilft Wiederholen nicht ohne
-Aenderung des Aufrufs, bei 1 nicht ohne Aenderung der Umgebung.
+neu aufrufen), 3 Rueckfrage noetig (Datenschutz-Hinweise bei gemini, weder Terminal noch
+`--cloud-ok`: nichts ist gesendet worden). Ein Skript soll den Unterschied sehen: bei 2 hilft
+Wiederholen nicht ohne Aenderung des Aufrufs, bei 1 nicht ohne Aenderung der Umgebung.
 
 **stdout und stderr.** stdout traegt nur das Ergebnis (eine Datei je Zeile), alles andere
 -- Fortschritt, Hinweise, Fehler -- geht nach stderr: so laesst sich der Aufruf in einer
@@ -25,20 +30,26 @@ stundenlang sprechen und erst bei der ersten Anfrage scheitern.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
 import tempfile
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from mkn_kern import anfrage, modelle
 
 from mkn_audio.arbeiter_client import Arbeiter
+from mkn_audio.arbeitsverzeichnis import Arbeitsverzeichnis
+from mkn_audio.gemini import SprecherGemini
 from mkn_audio.konfig import lade
-from mkn_audio.lauf import konvertiere
-from mkn_audio.stimmen import lade_tabelle
+from mkn_audio.lauf import konvertiere, lies_mit_zwischenstand
+from mkn_audio.sprecher import Sprecher, SprecherLokal
+from mkn_audio.stimmen import WEGE, Stimmentabelle, lade_tabelle
 from mkn_audio.typen import Mp4Fehler, Textmodell
+from mkn_audio.vertraulich import Hinweis, RueckfrageNoetig
 
 MAX_TOKENS = 8192
 """Obergrenze der Modell-Antwort: eine Aufbereitung von 6000 Zeichen oder eine Seite Text
@@ -57,16 +68,31 @@ _BILD_ENDUNGEN = {
 """Endung je Bildtyp. `baue_anfrage` leitet den Typ aus der Dateiendung ab; ein anderer als
 der echte wuerde vom Anbieter abgelehnt oder falsch gelesen."""
 
-_ZUSATZ = """\
-weitere Befehle:
-  mkn-mp4 vorlage <aufnahme> --ziel <wav> [--dauer 24]
-      schneidet aus einer Aufnahme die ausdrucksstaerkste Stelle als Stimmvorlage
-  mkn-mp4 stimmen
-      zeigt die Stimmen-Tabelle
-
+_ENDE = """\
 Das Sprachmodell kommt aus MKN_LLM_ANBIETER und MKN_LLM_MODELL (Schluessel je Anbieter);
-ohne sie wird der Hoertext nur nach Regeln aufbereitet. Exit: 0 gut, 1 Fehler, 2 Bedienfehler.
+ohne sie wird der Hoertext nur nach Regeln aufbereitet. Exit: 0 gut, 1 Fehler, 2 Bedienfehler,
+3 Rueckfrage noetig.
 """
+
+
+def _zusatz(weg: str) -> str:
+    """Der Hilfetext unter den Optionen: die Befehle des Wegs."""
+    befehl = WEGE[weg].befehl
+    zeilen = ["weitere Befehle:"]
+    if weg == "local":
+        zeilen += [
+            f"  {befehl} vorlage <aufnahme> --ziel <wav> [--dauer 24]",
+            "      schneidet aus einer Aufnahme die ausdrucksstaerkste Stelle als Stimmvorlage",
+        ]
+    zeilen += [f"  {befehl} stimmen", "      zeigt die Stimmen-Tabelle (* = Standard dieses Wegs)"]
+    if weg == "gemini":
+        zeilen += [
+            "",
+            "Der Text geht an Google (Gemini TTS). Der Schluessel kommt aus GEMINI_API_KEY oder",
+            "aus der Datei, auf die MKN_LLM_SCHLUESSEL_DATEI zeigt. Gibt es Datenschutz-Hinweise,",
+            "fragt der Befehl vorher (Terminal) oder bricht mit Exit 3 ab; --cloud-ok gibt frei.",
+        ]
+    return "\n".join(zeilen) + "\n\n" + _ENDE
 
 
 class _Bedienfehler(Exception):
@@ -179,16 +205,22 @@ def _meldung(text: str) -> None:
     print(text, file=sys.stderr, flush=True)
 
 
-def _parser_lauf() -> argparse.ArgumentParser:
+def _parser_lauf(weg: str) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="mkn-mp4",
+        prog=WEGE[weg].befehl,
         description="Verwandelt eine Quelle (EPUB, PDF, Text, Foto) in eine Hoerdatei.",
-        epilog=_ZUSATZ,
+        epilog=_zusatz(weg),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("quelle", help="EPUB, PDF, TXT, MD oder Bild (JPG, PNG, HEIC)")
     parser.add_argument(
         "--stimme", metavar="NAME", help="Stimme aus der Tabelle (Vorgabe: Standard)"
+    )
+    parser.add_argument(
+        "--ansage",
+        metavar="NAME",
+        help="Stimme der Ansagen (Titel, Zwischenueberschriften; Vorgabe: Standard, mit "
+        "--stimme diese)",
     )
     parser.add_argument(
         "--ziel", metavar="ORDNER", help="Ausgabeordner (Vorgabe: Ordner der Quelle)"
@@ -212,23 +244,86 @@ def _parser_lauf() -> argparse.ArgumentParser:
             "(alles lesen). Vorgabe: buch fuer ein EPUB, sonst voll"
         ),
     )
+    if weg == "gemini":
+        parser.add_argument(
+            "--cloud-ok",
+            action="store_true",
+            help="Datenschutz-Hinweise vorab bestaetigen: der Text darf an Google gehen "
+            "(fuer Skripte; ohne Terminal und ohne diese Option endet der Aufruf mit Exit 3)",
+        )
+        parser.add_argument(
+            "--modell",
+            metavar="ID",
+            help="Gemini-Modell fuer diesen Lauf (Vorgabe: [wege.gemini].modell der Tabelle)",
+        )
     return parser
 
 
-def _lauf(argumente: Sequence[str]) -> int:
-    a = _parser_lauf().parse_args(argumente)
+def _waehle_stimme(tabelle: Stimmentabelle, name: str | None, weg: str, rolle: str):
+    """Die benannte Stimme des Wegs; ein unbekannter oder fremder Name ist ein Bedienfehler."""
+    if name is None:
+        return None
+    if name not in tabelle.namen(weg):
+        raise _Bedienfehler(
+            f"unbekannte {rolle} '{name}' (Stimmen des Wegs {weg}: {', '.join(tabelle.namen(weg))})"
+        )
+    return tabelle.hole(name, weg=weg)
+
+
+def _schluessel_gemini(modell: str) -> str:
+    """Der Gemini-Schluessel aus Umgebung oder Schluesseldatei -- oder ein klarer Abbruch."""
+    try:
+        schluessel = modelle.waehle("gemini", modell).schluessel()
+    except modelle.KeinSchluessel as fehler:
+        raise Mp4Fehler(f"Gemini-Schlüssel: {fehler}") from fehler
+    if not schluessel:
+        raise Mp4Fehler(
+            "Gemini-Schlüssel fehlt: GEMINI_API_KEY setzen oder MKN_LLM_SCHLUESSEL_DATEI auf "
+            "eine JSON-Datei mit dem Schlüssel zeigen lassen"
+        )
+    return schluessel
+
+
+def _frage_cloud(a: argparse.Namespace) -> Callable[[tuple[Hinweis, ...]], bool]:
+    """Die Rueckfrage bei Datenschutz-Hinweisen: Hinweise auf stderr, dann `[j/N]` am Terminal."""
+
+    def frage(hinweise: tuple[Hinweis, ...]) -> bool:
+        _meldung("Datenschutz-Hinweise (die Erkennung ist eine Untergrenze, Namen fehlen):")
+        for h in hinweise:
+            _meldung(f"  {h.klasse}: {h.anzahl} (Beispiel: {h.beispiel})")
+        if a.cloud_ok:
+            _meldung("Freigabe durch --cloud-ok: der Text geht an Google.")
+            return True
+        if not sys.stdin.isatty():
+            return False
+        print("Trotzdem an Google senden? [j/N] ", end="", file=sys.stderr, flush=True)
+        return sys.stdin.readline().strip().lower() in ("j", "ja")
+
+    return frage
+
+
+def _lauf(argumente: Sequence[str], weg: str) -> int:
+    a = _parser_lauf(weg).parse_args(argumente)
     quelle = Path(a.quelle).expanduser()
     if not quelle.is_file():
         raise _Bedienfehler(f"Quelle nicht gefunden: {quelle}")
 
     konfig = lade()
     tabelle = lade_tabelle(konfig.stimmen_tabelle)
-    if a.stimme is not None and a.stimme not in tabelle.namen():
-        raise _Bedienfehler(
-            f"unbekannte Stimme '{a.stimme}' (verfuegbar: {', '.join(tabelle.namen())})"
-        )
-    stimme = tabelle.hole(a.stimme) if a.stimme is not None else tabelle.standard
+    gewaehlt = _waehle_stimme(tabelle, a.stimme, weg, "Stimme")
+    gewaehlt_ansage = _waehle_stimme(tabelle, a.ansage, weg, "Ansage-Stimme")
+    if weg not in tabelle.wege:
+        raise Mp4Fehler(f"Die Stimmen-Tabelle kennt den Weg '{weg}' nicht ([wege.{weg}] fehlt)")
     ziel = Path(a.ziel).expanduser() if a.ziel else quelle.parent
+
+    if weg == "local" and konfig.arbeiter_python is None:
+        raise Mp4Fehler(
+            "Der Weg local braucht arbeiter_python in der Konfiguration "
+            f"(nur der Weg gemini kommt ohne aus): {konfig.stimmen_tabelle.parent}"
+        )
+    schluessel = (
+        _schluessel_gemini(a.modell or tabelle.wege["gemini"].modell) if weg == "gemini" else ""
+    )
 
     textmodell = baue_textmodell()
     if textmodell is None:
@@ -237,18 +332,62 @@ def _lauf(argumente: Sequence[str]) -> int:
             "Regeln, Bilder per Texterkennung"
         )
 
-    with Arbeiter(konfig.arbeiter_python, whisper_modell=konfig.whisper_modell) as arbeiter:
+    # Ohne --stimme gilt [standard.<weg>.<dokumentsprache>] (Spec 7.1, wie im Dienst): die
+    # Sprache steht erst nach dem Lesen fest; die Quelle ist dafuer einmal gelesen.
+    if gewaehlt is None:
+        verz = Arbeitsverzeichnis.fuer_quelle(konfig.arbeitsort, quelle)
+        sprache = lies_mit_zwischenstand(quelle, verz, textmodell, _meldung).sprache
+        standard_text, standard_ansage, warnung = tabelle.standard_fuer(weg, sprache or "de")
+        if warnung:
+            _meldung(f"Hinweis: {warnung}")
+        stimme = standard_text
+        ansage = gewaehlt_ansage or standard_ansage
+    else:
+        stimme = gewaehlt
+        ansage = gewaehlt_ansage or stimme
+
+    with contextlib.ExitStack() as stapel:
+        arbeiter = (
+            stapel.enter_context(
+                Arbeiter(konfig.arbeiter_python, whisper_modell=konfig.whisper_modell)
+            )
+            if konfig.arbeiter_python is not None
+            else None
+        )
+        sprecher: Sprecher
+        if weg == "local":
+            assert arbeiter is not None  # oben geprueft
+            sprecher = SprecherLokal(arbeiter, tabelle.wege["local"])
+        else:
+            wegkonfig = tabelle.wege["gemini"]
+            if a.modell and a.modell != wegkonfig.modell:
+                # Die Preise der Tabelle gehoeren dem Tabellen-Modell (Spec 8.7): fuer ein
+                # anderes Modell gibt es keine Zahl statt einer falschen.
+                wegkonfig = replace(
+                    wegkonfig,
+                    preis_usd_je_1m_text_token=None,
+                    preis_usd_je_1m_audio_token=None,
+                    preisstand=None,
+                )
+            sprecher = SprecherGemini(
+                schluessel=schluessel,
+                konfig=wegkonfig,
+                modell=a.modell,
+                arbeiter=arbeiter,
+            )
         ergebnis = konvertiere(
             quelle,
             ziel,
             stimme,
-            arbeiter=arbeiter,
+            sprecher=sprecher,
+            ansage=ansage,
             textmodell=textmodell,
             konfig=konfig,
             auswahl=a.auswahl,
             format=a.format,
             fortschritt=_meldung,
             regie_modus=a.regie,
+            cloud_ok=_frage_cloud(a) if weg == "gemini" else False,
         )
     for datei in (*ergebnis.dateien, ergebnis.bericht):
         print(datei)
@@ -259,7 +398,7 @@ def _lauf(argumente: Sequence[str]) -> int:
 
 def _vorlage(argumente: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(
-        prog="mkn-mp4 vorlage",
+        prog="mkn-mp4-local vorlage",
         description="Schneidet aus einer Aufnahme die ausdrucksstaerkste Stelle als Vorlage.",
     )
     parser.add_argument("aufnahme", help="Aufnahme der Stimme (laenger als die Vorlage)")
@@ -270,6 +409,8 @@ def _vorlage(argumente: Sequence[str]) -> int:
     if not aufnahme.is_file():
         raise _Bedienfehler(f"Aufnahme nicht gefunden: {aufnahme}")
     konfig = lade()
+    if konfig.arbeiter_python is None:
+        raise Mp4Fehler("Die Vorlage braucht arbeiter_python in der Konfiguration")
     ziel = Path(a.ziel).expanduser()
     with Arbeiter(konfig.arbeiter_python, whisper_modell=konfig.whisper_modell) as arbeiter:
         messung = arbeiter.vorlage(aufnahme, ziel, a.dauer)
@@ -281,37 +422,57 @@ def _vorlage(argumente: Sequence[str]) -> int:
     return 0
 
 
-def _stimmen(argumente: Sequence[str]) -> int:
+def _stimmen(argumente: Sequence[str], weg: str) -> int:
     argparse.ArgumentParser(
-        prog="mkn-mp4 stimmen", description="Zeigt die Stimmen-Tabelle (* = Standard)."
+        prog=f"{WEGE[weg].befehl} stimmen",
+        description="Zeigt die Stimmen-Tabelle (* = Standard dieses Wegs).",
     ).parse_args(argumente)
     tabelle = lade_tabelle(lade().stimmen_tabelle)
+    standards = {
+        name
+        for (standard_weg, _sprache), rollen in tabelle.standards.items()
+        if standard_weg == weg
+        for name in rollen
+    }
     for name, stimme in tabelle.stimmen.items():
-        marke = "*" if name == tabelle.standard_name else " "
+        marke = "*" if name in standards else " "
         print(
-            f"{marke} {name}_v{stimme.version:02d}  {stimme.sprache}  {stimme.stand:<11}  "
-            f"{stimme.beschreibung}"
+            f"{marke} {name}_v{stimme.version:02d}  {stimme.weg:<6}  {stimme.sprache}  "
+            f"{stimme.stand:<11}  {stimme.beschreibung}"
         )
     return 0
 
 
-def haupt(argv: Sequence[str] | None = None) -> int:
-    """Einstieg. Gibt den Exit-Code zurueck (0 gut, 1 Fehler, 2 Bedienfehler)."""
+def haupt(argv: Sequence[str] | None = None, *, weg: str) -> int:
+    """Einstieg. Gibt den Exit-Code zurueck (0 gut, 1 Fehler, 2 Bedienfehler, 3 Rueckfrage)."""
+    if weg not in WEGE:
+        raise ValueError(f"unbekannter Weg {weg!r} (moeglich: {', '.join(WEGE)})")
     argumente = list(sys.argv[1:] if argv is None else argv)
-    befehle: dict[str, Callable[[Sequence[str]], int]] = {"vorlage": _vorlage, "stimmen": _stimmen}
+    befehl = WEGE[weg].befehl
     try:
         if not argumente:
-            _parser_lauf().print_usage(sys.stderr)
-            _meldung("Befehle: mkn-mp4 <quelle> | vorlage | stimmen (mkn-mp4 --help)")
+            _parser_lauf(weg).print_usage(sys.stderr)
+            hilfe = "vorlage | stimmen" if weg == "local" else "stimmen"
+            _meldung(f"Befehle: {befehl} <quelle> | {hilfe} ({befehl} --help)")
             return 2
-        return befehle.get(argumente[0], _lauf)(
-            argumente[1:] if argumente[0] in befehle else argumente
-        )
+        if argumente[0] == "vorlage":
+            if weg != "local":
+                raise _Bedienfehler(f"'vorlage' gibt es nur bei {WEGE['local'].befehl}")
+            return _vorlage(argumente[1:])
+        if argumente[0] == "stimmen":
+            return _stimmen(argumente[1:], weg)
+        return _lauf(argumente, weg)
     except SystemExit as ende:  # argparse: --help (0) und Bedienfehler (2)
         return ende.code if isinstance(ende.code, int) else 1
     except _Bedienfehler as fehler:
         _meldung(f"Fehler: {fehler}")
         return 2
+    except RueckfrageNoetig as fehler:
+        _meldung(f"Rückfrage nötig: {fehler}")
+        _meldung(
+            "Nichts wurde an Google gesendet. Mit --cloud-ok freigeben oder die Quelle ändern."
+        )
+        return 3
     except (Mp4Fehler, OSError) as fehler:
         _meldung(f"Fehler: {fehler}")
         return 1
@@ -320,5 +481,11 @@ def haupt(argv: Sequence[str] | None = None) -> int:
         return 130
 
 
-if __name__ == "__main__":
-    sys.exit(haupt())
+def haupt_local(argv: Sequence[str] | None = None) -> int:
+    """Einstieg `mkn-mp4-local`."""
+    return haupt(argv, weg="local")
+
+
+def haupt_gemini(argv: Sequence[str] | None = None) -> int:
+    """Einstieg `mkn-mp4-gemini`."""
+    return haupt(argv, weg="gemini")

@@ -1,7 +1,8 @@
 """Die eine Stelle, an der der Anwender sagt, wo seine Dinge liegen.
 
 **Warum es sie gibt.** Das Paket braucht drei Orte, die nur der Anwender kennt: die
-Stimmen-Tabelle, den Python des Arbeiter-Prozesses (eine eigene Umgebung, weil die
+Stimmen-Tabelle, den Python des Arbeiter-Prozesses (optional, nur fuer den Weg local und die
+Abschrift-Pruefung; eine eigene Umgebung, weil die
 Stimm-Software eine andere Python-Version verlangt als das Paket) und einen Ort fuer
 Zwischenergebnisse. Stuenden sie als Aufrufparameter verteilt, muesste jeder Aufruf
 sie wiederholen.
@@ -26,17 +27,22 @@ from mkn_audio.typen import Mp4Fehler
 DATEI_VARIABLE = "MKN_MP4_KONFIG"
 STANDARD_ORT = Path.home() / ".config" / "mkn-mp4" / "konfig.toml"
 
-_PFLICHT = {"stimmen_tabelle", "arbeiter_python"}
-_ERLAUBT = _PFLICHT | {"arbeitsort", "whisper_modell"}
+_PFLICHT = {"stimmen_tabelle"}
+_ERLAUBT = _PFLICHT | {"arbeiter_python", "arbeitsort", "whisper_modell"}
 
 
 @dataclass(frozen=True)
 class Konfig:
-    """Was der Anwender festgelegt hat."""
+    """Was der Anwender festgelegt hat.
+
+    `arbeiter_python` ist nur fuer den Weg local Pflicht (der Arbeiter spricht und hoert); wer
+    nur den Weg gemini nutzt, laesst es weg -- dann gibt es keine Whisper-Stichprobe. Es fehlt
+    als `None`, nie als Ersatzpfad.
+    """
 
     stimmen_tabelle: Path
     arbeitsort: Path
-    arbeiter_python: Path
+    arbeiter_python: Path | None = None
     whisper_modell: str = "small"
 
 
@@ -66,7 +72,11 @@ def lade(pfad: Path | None = None) -> Konfig:
         return Konfig(
             stimmen_tabelle=_pfad(daten["stimmen_tabelle"], "stimmen_tabelle", basis),
             arbeitsort=arbeitsort,
-            arbeiter_python=_pfad(daten["arbeiter_python"], "arbeiter_python", basis),
+            arbeiter_python=(
+                _pfad(daten["arbeiter_python"], "arbeiter_python", basis)
+                if "arbeiter_python" in daten
+                else None
+            ),
             whisper_modell=_toml.text(
                 daten.get("whisper_modell", "small"), "whisper_modell", "Konfiguration"
             ),

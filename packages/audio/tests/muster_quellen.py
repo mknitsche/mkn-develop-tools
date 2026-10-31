@@ -270,6 +270,52 @@ def muster_pdf_mit_gliederung(pfad: Path) -> Path:
     return pfad
 
 
+SEITENTITEL_SEITEN: tuple[tuple[tuple[str, ...], str, str], ...] = (
+    (
+        ("EIN ANFANG IM GARTEN",),
+        "Im Frühjahr beginnt die Arbeit im Garten mit dem Umgraben der Beete. "
+        "Wer früh anfängt, hat später weniger Mühe.",
+        "Die ersten Pflanzen wachsen langsam, und man muss sich in Geduld üben. "
+        "Nicht jede Saat geht auf.",
+    ),
+    (
+        (),
+        "Im Sommer ist der Garten voller Leben. Bienen fliegen von Blüte zu Blüte.",
+        "Am Abend gießt man die Beete, damit sie die Hitze des Tages überstehen.",
+    ),
+    (
+        ("WENN SICH GEWOHNHEITEN", "VERÄNDERN"),
+        "Gewohnheiten verändern sich nur langsam. Wer sie verändern will, braucht einen Plan.",
+        "Kleine Schritte helfen dabei, sich selbst nicht zu überfordern.",
+    ),
+)
+"""Je Seite: Kopfbloecke (Versalien, mittig ueber beide Spalten), linke und rechte Spalte.
+
+Die Woerter der Kopfzeilen stehen auch klein im Fliesstext ("im", "sich", "verändern"): daraus
+kennt die Satzschreibung ihre Form. Seite 3 hat zwei Kopfbloecke, die EIN Titel sind.
+"""
+
+
+def muster_pdf_seitentitel(pfad: Path, *, seitenzahlen: bool = False) -> Path:
+    """Zweispaltiges PDF ohne Lesezeichen; Seite 1 und 3 tragen einen Titel ueber beide Spalten.
+
+    `seitenzahlen` setzt unten mittig die Seitennummer (Schmuck, nie Titel oder Text).
+    """
+    doc = _neue_pdf()
+    for nr, (kopf, links, rechts) in enumerate(SEITENTITEL_SEITEN, start=1):
+        seite = doc.new_page()
+        for i, zeile in enumerate(kopf):
+            # mittig um die Seitenmitte; 50 Punkte Abstand, damit MuPDF zwei Bloecke bildet
+            breite = pymupdf.get_text_length(zeile, fontsize=18)
+            seite.insert_text((seite.rect.width / 2 - breite / 2, 100 + 50 * i), zeile, fontsize=18)
+        seite.insert_textbox(pymupdf.Rect(50, 250, 280, 420), links, fontsize=11)
+        seite.insert_textbox(pymupdf.Rect(320, 250, 550, 420), rechts, fontsize=11)
+        if seitenzahlen:
+            seite.insert_text((295, 815), str(nr), fontsize=10)
+    doc.save(pfad)
+    return pfad
+
+
 def muster_pdf_leer(pfad: Path) -> Path:
     """Ein PDF aus einer einzigen leeren Seite."""
     doc = _neue_pdf()

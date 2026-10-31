@@ -13,7 +13,7 @@ bricht laut ab, statt eine Abkuerzung still nicht zu treffen.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
 from importlib import resources
@@ -146,33 +146,6 @@ def _umschreiben(wort: str, bekannt: set[str]) -> bool:
         return False
     vokale = sum(1 for z in wort if z in "AEIOUÄÖÜY")
     return vokale >= 2 and vokale * 4 >= len(wort)
-
-
-def wortformen(texte: Iterable[str]) -> dict[str, str]:
-    """Die normal geschriebenen Woerter eines Dokuments: klein -> haeufigste Schreibweise.
-
-    Grundlage fuer `ersetze_abkuerzungen(formen=...)`: ein Wort in Versalien, das hier steht,
-    ist kein Kuerzel ("UND", "GOTT", "EVA"); ein echtes Kuerzel (WHO, CERN) steht nie klein.
-    Gezaehlt wird nur mitten im Satz -- am Satzanfang ist jedes Wort gross ("Die Liebe" gegen
-    "ich liebe"); ein Wort, das nur am Satzanfang steht, zaehlt als Notbehelf trotzdem.
-    """
-    zaehler: dict[str, dict[str, int]] = {}
-    notbehelf: dict[str, str] = {}
-    for text in texte:
-        for m in re.finditer(r"[^\W\d_]+", text):
-            wort = m[0]
-            if wort.isupper():
-                continue
-            davor = text[: m.start()].rstrip(' \t\u201e\u00bb"(')
-            if not davor or davor[-1] in ".!?:":
-                notbehelf.setdefault(wort.lower(), wort)
-                continue
-            formen = zaehler.setdefault(wort.lower(), {})
-            formen[wort] = formen.get(wort, 0) + 1
-    ergebnis = dict(notbehelf)
-    for klein, formen in zaehler.items():
-        ergebnis[klein] = max(formen, key=lambda f: (formen[f], f.islower()))
-    return ergebnis
 
 
 # Kurze Funktionswoerter, die als Betonung in Versalien stehen ("auf DIE gemeinsame", "das ICH

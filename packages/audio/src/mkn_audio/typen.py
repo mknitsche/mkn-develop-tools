@@ -23,8 +23,14 @@ class Mp4Fehler(RuntimeError):
     """
 
 
-ARTEN = ("vorspann", "wortlaut", "ueberleitung", "abspann")
+ARTEN = ("vorspann", "wortlaut", "ueberschrift", "ueberleitung", "abspann")
 """Die Herkunft eines Absatzes in der Hoerfassung (`Kapitel.arten`)."""
+
+QUELL_ARTEN = ("wortlaut", "ueberschrift")
+"""Die Arten, die aus der Quelle stammen: `wortlaut` und die Zwischenueberschrift.
+
+Wo eine Stufe "ist Quelltext" fragt (Uebernahmepruefung und Wortzaehlung der Regie,
+Ansage-Kapitel im Lauf), gilt diese Menge -- nie `== "wortlaut"` allein."""
 
 
 @dataclass(frozen=True)
@@ -32,7 +38,8 @@ class Kapitel:
     """Ein Abschnitt der Quelle mit Titel und seinen Absaetzen in Lesereihenfolge.
 
     `arten` sagt je Absatz, woher er stammt (Regie): `wortlaut` steht so in
-    der Quelle, `vorspann`, `ueberleitung` und `abspann` hat ein Sprachmodell NEU
+    der Quelle, `ueberschrift` ist eine Zwischenueberschrift der Quelle (vom Leser oder der
+    Regie erkannt), `vorspann`, `ueberleitung` und `abspann` hat ein Sprachmodell NEU
     formuliert. Leer heisst "alles Wortlaut" -- so bleibt jede Stufe ohne Regie, wie
     sie war. Die Laenge wird geprueft: eine Art, die zu keinem Absatz gehoert (oder
     umgekehrt), wuerde beim Sprechen einem falschen Absatz die Ansage-Stimme geben.
@@ -79,17 +86,18 @@ class Stueck:
 
     `kapitel` und `absatz` zaehlen ab 0 und bestimmen die Pause danach; `nr` zaehlt
     ueber das ganze Dokument und ist der Schluessel, unter dem die Aufnahme liegt.
-    `art="titel"` ist die Kapitelueberschrift, die vor dem Text gesprochen wird.
-    `ansage` ist wahr, wenn das Stueck aus einem Absatz stammt, den die Regie neu
-    formuliert hat (Vorspann, Ueberleitung, Abspann): es wird mit der Ansage-Stimme
-    gesprochen. Titel sind nie Ansagen -- sie stehen so in der Quelle.
+    `art="titel"` ist die Kapitelueberschrift, die vor dem Text gesprochen wird,
+    `art="ueberschrift"` eine Zwischenueberschrift im Text.
+    `ansage` ist wahr, wenn das Stueck mit der Ansage-Stimme gesprochen wird: Titel und
+    Zwischenueberschriften (sie gliedern das Hoerstueck) sowie Stuecke aus einem Absatz, den
+    die Regie neu formuliert hat (Vorspann, Ueberleitung, Abspann).
     """
 
     kapitel: int
     absatz: int
     nr: int
     text: str
-    art: Literal["text", "titel"]
+    art: Literal["text", "titel", "ueberschrift"]
     ansage: bool = False
 
 

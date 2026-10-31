@@ -21,6 +21,17 @@ Fliesstext ohne Einzug, ist eine Ueberschrift und kein halber Satz.
 und deutlich groesser als der Fliesstext), sonst der Dateiname -- ohne Zahlenanhang
 ("...-44179"), der sonst als "vierundvierzigtausend..." vorgelesen wuerde.
 
+**Zweispaltige PDF ohne Lesezeichen**: ein Block oben auf der Seite, der beide Spalten ueber-
+spannt, ist ein Kapiteltitel (`_seitentitel`); mehrere solche Bloecke einer Seite werden ein
+Titel, die Seite beginnt ein Kapitel. Zweispaltig heisst: auf mehr als der Haelfte der Seiten
+stehen Bloecke links UND rechts der Mitte.
+
+**Ueberschriften** erkennt nur der Versalien-Lauf (`_segmente`): Zeilen ganz in Versalien am
+Anfang eines Blocks, ohne Satzende dazwischen, sind EINE Ueberschrift (Art `ueberschrift`),
+ueber Blockgrenzen derselben Spalte hinweg; ein Trennstrich am Zeilenende darin ist Silben-
+trennung. Schriftgroesse und Fettdruck werden dafuer nicht ausgewertet -- es gibt keinen Beleg,
+dass sie in Sachbuechern verlaesslich sind (`_setzt_fort` nutzt sie nur gegen halbe Saetze).
+
 **Spalten** werden nach Position geordnet: Bloecke, die ueber die Seitenmitte reichen,
 trennen Baender; in einem Band folgt die rechte Spalte der linken. Reicht das bei einem
 Zeitungslayout nicht, ist das Bildmodell der bessere Leser -- das entscheidet
@@ -34,7 +45,7 @@ import re
 from bisect import bisect_right
 from collections import Counter
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import pymupdf
@@ -42,11 +53,13 @@ import pymupdf
 from mkn_audio.lesen import bild
 from mkn_audio.lesen.text import (
     Befunde,
+    Ueberschrift,
     baue_kapitel,
     normalisiere,
     pruefe_text_da,
     verbinde_zeilen,
 )
+from mkn_audio.sprache import hat_kleinbuchstaben
 from mkn_audio.typen import Dokument, Mp4Fehler, Textmodell
 
 RAND = 0.08
@@ -62,6 +75,7 @@ _SEITENZAHL = re.compile(
 )
 _ZIFFERN = re.compile(r"\d+")
 _SATZENDE = (".", "!", "?", "…", ":", '"', "»", "“", "”", ")")
+_VERSAL_SATZENDE = (".", "!", "?", "…")
 # Ein Zahlenanhang im Dateinamen ("...-44179", "..._2026-10"): eine Kennung, kein Titel. Erst ab
 # vier Ziffern, damit "Kapitel-12" seine Zahl behaelt.
 _ZAHLENANHANG = re.compile(r"(?:[-_\s]+\d{4,})+$")
@@ -77,6 +91,9 @@ TITEL_FAKTOR = 1.15
 
 TITEL_ZEILEN_MAX = 2
 TITEL_ZEICHEN_MAX = 200
+
+SEITENKOPF_ANTEIL = 0.25
+"""Ein Block ueber beide Spalten ist ein Seitentitel, wenn er im oberen Viertel beginnt."""
 
 
 @dataclass(frozen=True)
@@ -104,6 +121,7 @@ class _Absatz:
     seite: int
     text: str
     block: _Block | None
+    ueberschrift: bool = False
 
 
 def _oeffne(pfad: Path) -> pymupdf.Document:
@@ -246,7 +264,7 @@ def _setzt_fort(alt: _Absatz, neu: _Absatz) -> bool:
     es dieselbe Spalte, dieselbe Schrift und ein Anfang ohne Einzug sein: Einzug ist das
     Zeichen fuer einen neuen Absatz, eine andere Schrift das fuer eine Ueberschrift.
     """
-    if alt.text.endswith(_SATZENDE):
+    if alt.ueberschrift or neu.ueberschrift or alt.text.endswith(_SATZENDE):
         return False
     if neu.text[0].islower() or _OFFENES_ENDE.search(alt.text):
         return True
@@ -297,6 +315,104 @@ def _kapitelstarts(doc: pymupdf.Document, befunde: Befunde) -> list[tuple[int, s
             befunde.warne(f"weggelassen: Ueberschrift ohne Text: {starts.pop()[1]}")
         starts.append((seite - 1, normalisiere(titel)))
     return sorted(starts)
+
+
+def _ist_versalzeile(zeile: str) -> bool:
+    """Eine Zeile ganz in Versalien: mindestens zwei Buchstaben, kein Kleinbuchstabe."""
+    buchstaben = [z for z in zeile if z.isalpha()]
+    return len(buchstaben) >= 2 and not hat_kleinbuchstaben("".join(buchstaben))
+
+
+def _seitentitel(
+    inhalt: list[_Block], hoehen: dict[int, float]
+) -> tuple[list[tuple[int, str]], set[_Block]]:
+    """Seitentitel eines zweispaltigen PDF: `[(Seite ab 0, Titel)]` und die Bloecke dahinter.
+
+    Gesucht wird pro Seite der Block, der oben (`SEITENKOPF_ANTEIL`) beide Spalten ueberspannt;
+    mehrere untereinander sind EIN Titel. Ist das PDF nicht zweispaltig (Bloecke links UND
+    rechts auf mehr als der Haelfte der Seiten), gibt es keinen -- in einem einspaltigen Text
+    ist ein breiter Block nur ein Absatz.
+    """
+    seiten = sorted({b.seite for b in inhalt})
+    zweispaltig = sum(
+        1 for s in seiten if {"links", "rechts"} <= {b.spalte for b in inhalt if b.seite == s}
+    )
+    if zweispaltig * 2 <= len(seiten):
+        return [], set()
+    starts: list[tuple[int, str]] = []
+    bloecke: set[_Block] = set()
+    for s in seiten:
+        kopf = sorted(
+            (
+                b
+                for b in inhalt
+                if b.seite == s and b.spalte == "ganz" and b.y0 < SEITENKOPF_ANTEIL * hoehen[s]
+            ),
+            key=lambda b: b.y0,
+        )
+        if not kopf:
+            continue
+        zeilen = [z for b in kopf for z in b.text.splitlines()]
+        titel = verbinde_zeilen(zeilen, versalien=all(_ist_versalzeile(z) for z in zeilen))
+        starts.append((s, normalisiere(titel)))
+        bloecke.update(kopf)
+    return starts, bloecke
+
+
+def _segmente(block: _Block) -> list[tuple[str, bool]]:
+    """Zerlegt einen Block in `(Text, ist_ueberschrift)`: Versalien-Zeilen am Anfang, dann Text.
+
+    Versalien-Zeilen am Blockanfang sind eine Ueberschrift; nach einer Zeile mit Satzende beginnt
+    eine neue. Folgt kleingeschriebener Text, war die Versalien-Zeile ein Kuerzel am Satzanfang
+    ("WHO" / "meldet ..."): dann ist alles Text. Versalien-Zeilen mitten im Block bleiben Text
+    -- ein Kuerzel allein auf einer Zeile ist keine Ueberschrift.
+    """
+    zeilen = [z.strip() for z in block.text.splitlines() if z.strip()]
+    n = 0
+    while n < len(zeilen) and _ist_versalzeile(zeilen[n]):
+        n += 1
+    if n and n < len(zeilen) and zeilen[n][0].islower():
+        n = 0
+    if not n:
+        return [(verbinde_zeilen(zeilen), False)]
+    segmente: list[tuple[str, bool]] = []
+    lauf: list[str] = []
+    for zeile in zeilen[:n]:
+        lauf.append(zeile)
+        if zeile.endswith(_VERSAL_SATZENDE):
+            segmente.append((verbinde_zeilen(lauf, versalien=True), True))
+            lauf = []
+    if lauf:
+        segmente.append((verbinde_zeilen(lauf, versalien=True), True))
+    if n < len(zeilen):
+        segmente.append((verbinde_zeilen(zeilen[n:]), False))
+    return segmente
+
+
+def _seitenabsaetze(seite: int, geordnet: list[_Block]) -> list[_Absatz]:
+    """Die Absaetze einer Seite in Lesereihenfolge; Versalien-Laeufe werden EINE Ueberschrift.
+
+    Aufeinanderfolgende Ueberschriften derselben Spalte ohne Satzende dazwischen gehoeren zusammen
+    (MuPDF beginnt bei grossem Zeilenabstand einen neuen Block, auch mitten in einer Ueberschrift).
+    """
+    absaetze: list[_Absatz] = []
+    for block in geordnet:
+        for text, ueberschrift in _segmente(block):
+            alt = absaetze[-1] if absaetze else None
+            if (
+                ueberschrift
+                and alt is not None
+                and alt.ueberschrift
+                and alt.block is not None
+                and alt.block.spalte == block.spalte
+                and not alt.text.endswith(_VERSAL_SATZENDE)
+            ):
+                absaetze[-1] = _Absatz(
+                    seite, verbinde_zeilen([alt.text, text], versalien=True), block, True
+                )
+            else:
+                absaetze.append(_Absatz(seite, text, block, ueberschrift))
+    return absaetze
 
 
 def _titel_aus_schrift(bloecke: list[_Block]) -> str | None:
@@ -407,21 +523,23 @@ def lies_pdf(
             else {}
         )
 
+        # Lesezeichen gliedern; fehlen sie, gliedern die Seitentitel eines zweispaltigen PDF.
+        starts = _kapitelstarts(doc, befunde)
+        titelbloecke: set[_Block] = set()
+        if not starts:
+            starts, titelbloecke = _seitentitel([b for b in alle if b not in schmuck], hoehen)
+
         absaetze: list[_Absatz] = []
         for i, seite in enumerate(seiten):
             if i in gelesen:
                 absaetze.extend(_Absatz(i, a, None) for a in gelesen[i])
                 continue
-            inhalt = [b for b in alle if b.seite == i and b not in schmuck]
-            absaetze.extend(
-                _Absatz(i, verbinde_zeilen(b.text.splitlines()), b)
-                for b in _ordne(inhalt, seite.rect.width)
-            )
+            inhalt = [
+                b for b in alle if b.seite == i and b not in schmuck and b not in titelbloecke
+            ]
+            absaetze.extend(_seitenabsaetze(i, _ordne(inhalt, seite.rect.width)))
         # Erst bereinigen (Webadressen, Zierzeichen), dann Saetze ueber Bloecke verbinden.
-        absaetze = [
-            _Absatz(a.seite, t, a.block) for a in absaetze if (t := befunde.reinige(a.text))
-        ]
-        starts = _kapitelstarts(doc, befunde)
+        absaetze = [replace(a, text=t) for a in absaetze if (t := befunde.reinige(a.text))]
         absaetze = _fuege_fortsetzungen(absaetze, [s for s, _t in starts])
 
         meta = doc.metadata or {}
@@ -435,7 +553,8 @@ def lies_pdf(
     rohe: list[tuple[str | None, list[str]]] = [(None, []), *[(t, []) for _s, t in starts]]
     seitenstarts = [s for s, _t in starts]
     for absatz in absaetze:
-        rohe[bisect_right(seitenstarts, absatz.seite)][1].append(absatz.text)
+        text = Ueberschrift(absatz.text) if absatz.ueberschrift else absatz.text
+        rohe[bisect_right(seitenstarts, absatz.seite)][1].append(text)
     kapitel = baue_kapitel(rohe, vorspann=titel, befunde=befunde)
     dok = Dokument(
         titel=titel, autor=autor, sprache="de", kapitel=kapitel, warnungen=befunde.alle()
