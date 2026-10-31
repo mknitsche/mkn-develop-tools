@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/mknitsche/mkn-develop-tools/compare/audio-v0.3.0...audio-v0.3.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **audio:** M4B und MP3 bleiben nach der Kodierung unter 0 dBTP, Bericht misst den Fliesstext, Trace je Quelle ([#48](https://github.com/mknitsche/mkn-develop-tools/issues/48)) ([af49a5c](https://github.com/mknitsche/mkn-develop-tools/commit/af49a5c4645c1e9901883b4a1f5bb0d25e1c7d3e))
+
 ## [0.3.0](https://github.com/mknitsche/mkn-develop-tools/compare/audio-v0.2.0...audio-v0.3.0) (2026-10-31)
 
 
