@@ -14,9 +14,10 @@ from pathlib import Path
 
 import pytest
 
+from mkn_audio.mastern import master
 from mkn_audio.typen import Dokument, Kapitel, Mp4Fehler
 from mkn_audio.verpacken import ausgabe_name, m4b, mp3
-from test_mastern import dauer, ffprobe, schreibe_sinus
+from test_mastern import dauer, ffprobe, lautheit, mache_stimme, schreibe_sinus
 
 
 def mache_png() -> bytes:
@@ -62,6 +63,31 @@ def zwei_kapitel(tmp_path):
 
 
 # -- m4b ------------------------------------------------------------------------------
+
+
+def test_m4b_bleibt_nach_der_kodierung_unter_null_dbtp(tmp_path):
+    """Die Kapitel kommen gemastert (True Peak <= -1,5 dBTP), der AAC-Kodierer setzt
+    Ueberschwinger obendrauf -- bei harten Hochton-Einsaetzen (hier 8-kHz-Stoesse wie Zischlaute
+    der Sprachsynthese) bis ueber 0 dBTP. Nach dem Verpacken bleibt die Spitze darunter und die
+    Lautheit beim Master. Schutzgut: falsche Ausgabe (Uebersteuerung im Player)."""
+    roh = tmp_path / "roh.wav"
+    stoesse = "0.2*sin(2*PI*180*t)+0.8*sin(2*PI*8000*t)*lt(mod(t\\,0.5)\\,0.03)"
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+         "-i", f"aevalsrc='{stoesse}':s=24000", "-t", "10", "-c:a", "pcm_s16le", str(roh)],
+        check=True,
+    )  # fmt: skip
+    gemastert = tmp_path / "kapitel.wav"
+    master(roh, mache_stimme(), gemastert)
+    lautheit_master, spitze_master = lautheit(gemastert)
+    assert spitze_master <= -1.4  # Untergrenze: die Quelle ist regelgerecht gemastert
+    ziel = tmp_path / "buch.m4b"
+
+    m4b([("Eins", gemastert)], mache_dok(), ziel, pause_kapitel=0.0)
+
+    lautheit_m4b, spitze_m4b = lautheit(ziel)
+    assert spitze_m4b < 0.0
+    assert lautheit_m4b == pytest.approx(lautheit_master, abs=1.0)
 
 
 def test_m4b_kapitelmarken_und_titel(tmp_path, zwei_kapitel):

@@ -30,9 +30,10 @@ sondern seine Unterbrechung -- der Aufrufer legt ihn zurueck in die Warteschlang
   Verpacken scheitern, nach Stunden Sprechen; es kostet das Hoerstueck nichts, also wird
   es mit Warnung weggelassen.
 - Die Stimmqualitaet im Bericht (Tonlage, Melodie) misst `miss` an einem Ausschnitt des
-  ersten Kapitels, nicht an dessen ganzer Laenge: die Messung braucht Minuten je Stunde
-  Ton, und der Bericht ist es nicht wert, einen Lauf am Ende zu verzoegern oder an der
-  Zeitgrenze des Arbeiters scheitern zu lassen.
+  ersten Kapitels mit Fliesstext der Text-Stimme (nicht der Einleitung, die die Ansage-Stimme
+  spricht; dasselbe Kapitel liefert das Sprechtempo), nicht an dessen ganzer Laenge: die
+  Messung braucht Minuten je Stunde Ton, und der Bericht ist es nicht wert, einen Lauf am
+  Ende zu verzoegern oder an der Zeitgrenze des Arbeiters scheitern zu lassen.
 - Zeitstempel auffaelliger Stellen sind aus den Dauern der Stuecke auf die fertige
   Kapitellaenge umgerechnet: auf wenige Sekunden genau, nicht auf das Bild.
 - Ohne Sprachmodell wird der Hoertext nur nach Regeln aufbereitet; das steht im Bericht.
@@ -841,12 +842,14 @@ def konvertiere(
     dauer_s = sum(dauern) + stimme.pause_kapitel * (len(dauern) - 1)
 
     # -- Messwerte und Zeitstempel fuer den Bericht -------------------------------------
-    erstes = kapitel_nummern[0]
-    woerter = sum(len(_WORT.findall(b.text)) for b in gruppen[erstes])
-    messwerte = {"woerter_je_minute": woerter / (dauern[0] / 60)}
+    # Gemessen wird das erste Kapitel mit Fliesstext der Text-Stimme: davor stehen Kapitel nur
+    # aus Ansagen (Einleitung), die die Ansage-Stimme spricht.
+    i = next((i for i, k in enumerate(kapitel_nummern) if any(not b.ansage for b in gruppen[k])), 0)
+    woerter = sum(len(_WORT.findall(b.text)) for b in gruppen[kapitel_nummern[i]])
+    messwerte = {"woerter_je_minute": woerter / (dauern[i] / 60)}
     if sprecher.arbeiter is not None:  # Tonlage und Melodie misst nur der Arbeiter
         messung = sprecher.arbeiter.miss(
-            _ausschnitt(kapitel_wavs[0][1], verz.wurzel / "messung.wav", MESS_AUSSCHNITT_S)
+            _ausschnitt(kapitel_wavs[i][1], verz.wurzel / "messung.wav", MESS_AUSSCHNITT_S)
         )
         messwerte = {
             "f0_median": float(messung["f0_median"]),

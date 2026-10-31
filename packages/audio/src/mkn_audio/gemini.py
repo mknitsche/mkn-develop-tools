@@ -565,8 +565,6 @@ class SprecherGemini:
                     daten, mime, token = self.lies_antwort(antwort or {})
                     self._buche(token)
                     dauer = self.schreibe_ton(daten, mime, ziel)
-                    if dauer <= 0:
-                        raise SprecherFehler("Audio ohne Länge", "Fehlerantwort")
                 except SprecherFehler as ursache:
                     fehler = ursache
                 else:
