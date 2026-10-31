@@ -1,6 +1,6 @@
 [project]
 name = "mkn-audio"
-version = "0.2.0"
+version = "0.3.0"
 description = "Quelle (EPUB, PDF, Text, Foto) in eine Hoerdatei mit Kapiteln verwandeln"
 requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
