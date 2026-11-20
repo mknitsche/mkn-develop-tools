@@ -32,6 +32,15 @@
       "extra-files": [
         "src/mkn_audio/__init__.py"
       ]
+    },
+    "packages/dokument": {
+      "release-type": "python",
+      "package-name": "mkn-dokument",
+      "component": "dokument",
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        "src/mkn_dokument/__init__.py"
+      ]
     }
   },
   "signoff": "Matthias Nitsche <266421433+mknitsche@users.noreply.github.com>"

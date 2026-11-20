@@ -1,5 +1,6 @@
 {
   "packages/foto": "0.3.0",
   "packages/kern": "0.3.0",
-  "packages/audio": "0.3.1"
+  "packages/audio": "0.3.1",
+  "packages/dokument": "0.1.0"
 }
