@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/mknitsche/mkn-develop-tools/compare/dokument-v0.1.0...dokument-v0.2.0) (2026-11-20)
+
+
+### Features
+
+* **dokument:** mkn-dokument 0.2.0 - read documents without trusting a single model ([ed484ba](https://github.com/mknitsche/mkn-develop-tools/commit/ed484ba1ad1032066c6d3cfd07366ccc38aacdb3))
+
 ## 0.2.0 (2026-11-16)
 
 ### Features
