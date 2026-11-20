@@ -1,11 +1,12 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.12"
 
 [manifest]
 members = [
     "mkn-audio",
     "mkn-develop-tools",
+    "mkn-dokument",
     "mkn-foto",
     "mkn-kern",
 ]
@@ -165,7 +166,7 @@ wheels = [
 
 [[package]]
 name = "mkn-audio"
-version = "0.2.0"
+version = "0.3.1"
 source = { editable = "packages/audio" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -213,6 +214,32 @@ dev = [
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.6" },
 ]
+
+[[package]]
+name = "mkn-dokument"
+version = "0.2.0"
+source = { editable = "packages/dokument" }
+dependencies = [
+    { name = "mkn-kern" },
+    { name = "pymupdf" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pillow" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mkn-kern", editable = "packages/kern" },
+    { name = "pillow", marker = "extra == 'dev'", specifier = ">=10" },
+    { name = "pymupdf", specifier = ">=1.24" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "mkn-foto"
