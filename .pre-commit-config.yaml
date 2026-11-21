@@ -33,6 +33,15 @@ repos:
 
   - repo: local
     hooks:
+      # This repository is public: no private paths, no internal session,
+      # ticket or rule numbers. See CONTRIBUTING.md.
+      - id: private-markers
+        name: no private paths or internal identifiers
+        entry: scripts/check-private-markers.sh
+        language: script
+        pass_filenames: false
+        always_run: true
+
       - id: conventional-commit
         name: conventional commit message
         entry: scripts/check-commit-message.sh
