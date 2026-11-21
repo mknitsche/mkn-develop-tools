@@ -140,7 +140,7 @@ def test_auch_der_bogen_bleibt_auf_modellmass(tmp_path) -> None:
     schlechter als eine gerechnete, und die Kacheln werden unnoetig unscharf.
 
     Aufgefallen nur, weil die Fix-Liste gegen das SYSTEM abgehakt wurde und
-    nicht gegen die eigene Fertigmeldung (LP-33).
+    nicht gegen die eigene Fertigmeldung.
     """
     from mkn_foto import vorschau
     from PIL import Image

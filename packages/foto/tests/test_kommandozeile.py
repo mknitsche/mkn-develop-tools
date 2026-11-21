@@ -1,4 +1,4 @@
-"""TODO-664 — mkn-foto braucht einen Kommandozeilen-Einstieg.
+"""mkn-foto braucht einen Kommandozeilen-Einstieg.
 
 Ohne ihn bekommt `pip install mkn-foto` eine Bibliothek und kein Werkzeug: jeder
 bisherige Lauf lief ueber ein von Hand geschriebenes Skript, das `sys.path`
@@ -34,7 +34,7 @@ def _LaufAttrappe() -> pipeline.Lauf:
     waehrend alle Tests gruen waren.
 
     Eine Attrappe, die grosszuegiger ist als die Sache, beweist ueber die Sache
-    nichts (LP-34). Der echte Typ kann das nicht: faellt ein Feld weg oder aendert
+    nichts. Der echte Typ kann das nicht: faellt ein Feld weg oder aendert
     sich sein Default, faellt es hier auf.
     """
     bilder = [object(), object(), object(), object()]
@@ -161,7 +161,7 @@ def test_probelauf_schreibt_nichts(quelle: Path, tmp_path: Path):
 
 
 def test_ohne_probelauf_wird_geschrieben(quelle: Path, tmp_path: Path):
-    """Untergrenze (LP-36): sonst waere „nie schreiben" eine gruene Loesung."""
+    """Untergrenze: sonst waere „nie schreiben" eine gruene Loesung."""
     with (
         patch.object(kommandozeile.pipeline, "anker_sammeln", return_value=[]),
         patch.object(kommandozeile.pipeline, "fahre", return_value=_LaufAttrappe()) as m_fahre,
@@ -286,7 +286,7 @@ def test_kaputte_konfiguration_ist_laut(quelle: Path, tmp_path: Path, capsys):
 def test_leere_quelle_meldet_das_klar_statt_abzustuerzen(quelle: Path, tmp_path: Path, capsys):
     """Findet die Pipeline nichts, ist `lauf.geschrieben` None — und der Bericht flog.
 
-    FIRSTHAND macb-S316: der erste echte Probelauf ueber einen leeren Ordner endete
+    FIRSTHAND: der erste echte Probelauf ueber einen leeren Ordner endete
     in `AttributeError: 'NoneType' object has no attribute 'kopiert'`. Alle 13 Tests
     waren zu diesem Zeitpunkt gruen — die Attrappe setzte `geschrieben` immer, die
     Wirklichkeit laesst es bei leerer Quelle auf dem Default `None`

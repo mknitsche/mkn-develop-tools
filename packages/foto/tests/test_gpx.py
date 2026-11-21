@@ -125,7 +125,7 @@ def test_eine_zonenlose_zeit_bleibt_unveraendert(monkeypatch) -> None:
     Kommentar, der den Fehler beschreibt. Zwei Funktionen fuer dieselbe
     Aufgabe, eine mit Schutz, eine ohne.
 
-    **Die Bedingung wird HERGESTELLT, nicht vorausgesetzt** (LP-40): der Test
+    **Die Bedingung wird HERGESTELLT, nicht vorausgesetzt**: der Test
     setzt die Zone selbst, sonst prueft er die Maschine und nicht den Code.
     """
     import os

@@ -81,7 +81,7 @@ DREI_429 = 3
 """Nach so vielen 429 in einem Lauf halbiert die Vergabe ihre Gleichzeitigkeit dauerhaft."""
 
 STAND_ALLE = 10
-"""Alle so viele Bloecke meldet das Sprechen einen Stand (LP-30)."""
+"""Alle so viele Bloecke meldet das Sprechen einen Stand."""
 
 AUDIO_TOKEN_JE_S = 25
 TOKEN_TOLERANZ = 0.05

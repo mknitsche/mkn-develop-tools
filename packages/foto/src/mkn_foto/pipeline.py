@@ -13,7 +13,7 @@ beim Zusammenstecken schief und nirgends sonst:
   einzelner 935-m-Ausreisser aus einem belegten Ort einen blossen Vorschlag
   machte.
 - **Was keinen belegten Ort hat, wird nicht geschrieben**, sondern vorgelegt.
-  Das ist KT-1s oberste Regel: im Zweifel nicht schreiben, sondern fragen.
+  Das ist die oberste Regel des Autors: im Zweifel nicht schreiben, sondern fragen.
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ class Lauf:
     "ist schwarz - falsch belichtet". Das sind VOLLSTAENDIGE Antworten, sie
     liefern nur keine Koordinate.
 
-    Die Unterscheidung fehlte und hat KT-1 am 2026-08-30 elf von zwoelf Ordnern
+    Die Unterscheidung fehlte und hat der Autor am 2026-08-30 elf von zwoelf Ordnern
     erneut vorgelegt: "da sind aber die drin, die ich schon beantwortet habe".
     OFFEN hiess damals NICHT VERORTET — und das ist nicht dasselbe."""
     geschrieben: schreiben.Ergebnis | None = None
@@ -174,7 +174,7 @@ def anker_sammeln(
         # gemischt bricht schon das Sortieren -- "can't compare offset-naive and
         # offset-aware datetimes", firsthand beim ersten echten Lauf ueber 283
         # Handybilder. Der Test dafuer hatte einen handgebauten naiven Anker
-        # benutzt und konnte den Fall deshalb nicht sehen (LP-34).
+        # benutzt und konnte den Fall deshalb nicht sehen.
         gesammelt.extend(
             _in_kamerazeit_anker(a) for a in mediathek.lies_album(Path(bibliothek), album)
         )
@@ -253,7 +253,7 @@ def _notizen_lesen(
                 )
             continue
         # Diese Anfragen kosten Geld und standen in keiner Messung. Aufgefallen
-        # ist es an KT-1s Kontostand: die Lauf-Zahl stimmte mit der Plattform
+        # ist es am Kontostand des Autors: die Lauf-Zahl stimmte mit der Plattform
         # auf 0,16 % ueberein -- bis auf rund 74.000 Tokens, und ein Teil davon
         # war genau das hier. Die schlechteste Art von Luecke: sie faellt nicht
         # auf, weil alles andere stimmt.
@@ -316,7 +316,7 @@ def fahre(
         # die Anker eine Session einrahmen -- bei EINEM Anker aus einer Notiz
         # reicht das nie, und der Spot bliebe `vorschlag`. Firsthand trugen vier
         # Spots nach dem Einlesen den richtigen Namen und standen trotzdem wieder
-        # auf der Liste; KT-1 haette dieselbe Frage zweimal beantwortet.
+        # auf der Liste; der Autor haette dieselbe Frage zweimal beantwortet.
         aus_notiz = _passende_antwort(s, beantwortet)
         if aus_notiz is not None:
             lauf.orte[id(s)] = aus_notiz
@@ -327,7 +327,7 @@ def fahre(
         # "belegt" -- der Zweifel steht als `vorschlag` darin. Die erste Fassung
         # verglich gegen "belegt" und haette damit JEDEN Spot als offen behandelt:
         # nichts verortet, alles vorgelegt, und der Lauf haette das fehlerfrei
-        # gemeldet. Ein Enum-Wert aus dem Gedaechtnis statt aus der Quelle (HC-10).
+        # gemeldet. Ein Enum-Wert aus dem Gedaechtnis statt aus der Quelle.
         if gefunden is not None and gefunden.quelle != OFFEN:
             lauf.orte[id(s)] = gefunden
         elif (antwort := _antwort_text(s, alle_antworten)) is not None:
@@ -400,13 +400,13 @@ def fahre(
                 schreibbar = urteil.zum_schreiben()
                 if not schreibbar:
                     # Regel A: unsicher wird nicht geschrieben, sondern
-                    # gekennzeichnet -- KT-1s Violett.
+                    # gekennzeichnet -- das Violett des Autors.
                     #
                     # Der GRUND unterscheidet die beiden Faelle, und er ist das,
                     # wonach gefiltert wird: bei einer gemessenen Kandidaten-
                     # Gruppe steht die Serienfrage offen, sonst die Motivfrage.
                     # Beides violett, aber `Pruefen|Serie` sammelt genau die
-                    # Panorama-Vorschlaege, die KT-1 ansehen soll.
+                    # Panorama-Vorschlaege, die der Autor ansehen soll.
                     unklar[id(aufnahme)] = "Serie" if id(aufnahme) in in_kandidat else "Motiv"
                     continue
                 if schreibbar.get("beschreibung"):
@@ -420,12 +420,12 @@ def fahre(
                     # Bildern -- das ist ihr Zweck, kein Mangel.
                     #
                     # Ohne diese Ausnahme meldet das Modell folgerichtig
-                    # "unterbelichtet", Violett schlaegt Blau (KT-1s Rangfolge,
+                    # "unterbelichtet", Violett schlaegt Blau (die Rangfolge des Autors,
                     # richtig), und die Serie wird unsichtbar. Gemessen an
                     # seinem Baum vom 2026-08-30: 394 Bilder mit `Technik|hdr`,
                     # davon 156 blau und **238 violett**. Der Fehler traf die
                     # Mehrheit, und kein Test konnte ihn finden -- das Werkzeug
-                    # tat genau, was ihm gesagt wurde. Gefunden hat es KT-1, im
+                    # tat genau, was ihm gesagt wurde. Gefunden hat es der Autor, im
                     # Bildbetrachter.
                     unklar[id(aufnahme)] = "Belichtung"
 
@@ -457,7 +457,7 @@ def fahre(
 
     if entscheidungen is not None and lauf.offen:
         entscheidung.bereite_vor(lauf.offen, Path(entscheidungen))
-        # Die Eingabe zentral, die Bilder verteilt -- so herum, weil KT-1 EINE
+        # Die Eingabe zentral, die Bilder verteilt -- so herum, weil der Autor EINE
         # Stelle zum Schreiben braucht und die Bilder nun einmal je Fall liegen.
         lauf.entscheidungsdatei = bericht.entscheidungsdatei(Path(entscheidungen), lauf.offen)
 
@@ -596,7 +596,7 @@ def _messbefund(gruppe) -> str:
 
     **Ohne diesen Text sieht das Modell nur den Kontaktbogen** und urteilt ueber
     Bilder, deren Verschiebung gegeneinander bereits gemessen ist. Firsthand am
-    2026-08-30: KT-1s Panorama von der Sebalduskirche besteht aus einem Schwenk
+    2026-08-30: das Panorama des Autors von der Sebalduskirche besteht aus einem Schwenk
     (36 % Versatz) und einer Wiederholung derselben Stelle. Auf dem blossen
     Bogen sind zwei der drei Bilder fast gleich — das Modell nannte die Gruppe
     folgerichtig `wiederholung`, mit `sicher: true`. Es hatte nicht unrecht;
@@ -756,7 +756,7 @@ def _vermesse_fenster(lauf: Lauf) -> list:
 def ort_fuer_bild(aufnahme: Aufnahme, lauf: Lauf) -> Ort | None:
     """Die Position DIESES Bildes — interpoliert, sonst der Ort seiner Session.
 
-    Die Reihenfolge ist der Kern von KT-1s Geotagging-Klage (2026-08-30): die
+    Die Reihenfolge ist der Kern der Geotagging-Klage des Autors (2026-08-30): die
     Spur gibt bei 63 s Median-Abstand fuer jedes Bild eine eigene Position her.
     Der Session-Ort ist nur der RUECKFALL fuer die Faelle, in denen sie das nicht
     tut — am 25.08. gibt es null Spurpunkte, dort traegt er alles.

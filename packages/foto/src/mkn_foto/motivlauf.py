@@ -3,7 +3,7 @@
 **Die Wiederaufnahme laeuft ueber das ERGEBNIS, nicht ueber ein Journal.** Wer
 schon ein Urteil hat, wird uebersprungen. Ein Journal waere ein zweiter Zustand
 neben dem Ergebnis, und die beiden driften, sobald ein Lauf abbricht — genau in
-dem Moment, in dem man sich auf die Wiederaufnahme verlassen muss (HC-1).
+dem Moment, in dem man sich auf die Wiederaufnahme verlassen muss.
 
 **Ein Abbruch ist der Normalfall.** 630 Modellaufrufe dauern Stunden; dazwischen
 faellt das Netz aus, greift ein Limit, geht der Deckel zu. Der Lauf macht danach
@@ -93,7 +93,7 @@ class Ergebnis:
     messung: messung.Protokoll = field(default_factory=messung.Protokoll)
     """Tokens, Dauer und Kosten je Aufruf. Die Zahlen liefert die API frei Haus
     -- sie wegzuwerfen und hinterher zu schaetzen waere die teuerste Art, an
-    Daten zu kommen, die man schon hatte (KT-1 vor dem ersten Lauf)."""
+    Daten zu kommen, die man schon hatte (der Autor vor dem ersten Lauf)."""
 
     def fuer(self, bild: Path) -> bildurteil.Urteil | bildurteil.Serienurteil | None:
         """Das Urteil zu diesem Bild — auch, wenn es Mitglied einer Serie ist."""
@@ -205,7 +205,7 @@ def _fortschritt(getan: int, offen: int, ergebnis: Ergebnis, begonnen: float) ->
 
     "Bild 400 von 969" allein ist eine Zahl ohne Folge. Erst mit Verbrauch und
     Hochrechnung kann jemand entscheiden, ob er den Lauf weiterlaufen laesst --
-    und genau das ist der Sinn einer Zwischenmeldung (KT-1: "zeit auch messen
+    und genau das ist der Sinn einer Zwischenmeldung (der Autor: "zeit auch messen
     und auch fortschritt").
     """
     vergangen = time.monotonic() - begonnen
@@ -303,8 +303,8 @@ Fortschrittsmeldung -- die Abrechnung macht der Anbieter.
 der Bildurteil-Prompt ist bei jedem Aufruf identisch, und der Anbieter
 berechnet wiederholte Eingaben deutlich guenstiger.
 
-Gemessen am 2026-08-30: der Lauf rechnete sich auf 14,24 USD hoch, KT-1s
-Guthaben sank im selben Zeitraum um 13,05 USD -- und darin steckte noch ein
+Gemessen am 2026-08-30: der Lauf rechnete sich auf 14,24 USD hoch, das Guthaben
+des Autors sank im selben Zeitraum um 13,05 USD -- und darin steckte noch ein
 fremder Mail-Lauf. Die Schaetzung lag also um mindestens 12 Prozent zu hoch.
 
 Das ist die richtige Richtung fuer einen Schaetzwert (lieber zu teuer
@@ -327,7 +327,7 @@ ausleiht, aber ihre Zeichenkette nachbaut, hat die Haelfte des Fehlers behalten.
 MOTIV_MARKE = "Motiv|"
 """Woran ein bereits beurteiltes Bild zu erkennen ist. Der Baum IST der Zustand
 — ein Journal daneben waere ein zweiter, und die beiden driften genau dann,
-wenn ein Lauf abbricht (HC-1)."""
+wenn ein Lauf abbricht."""
 
 
 def _merke(bild: Path, urteil: bildurteil.Urteil) -> None:

@@ -1,6 +1,6 @@
 """Die Abnahme eines Laufs: ist der Zielbaum vollstaendig und widerspruchsfrei?
 
-**Warum dieses Modul existiert.** KT-1 vor dem Lauf ueber die Karwendeltage:
+**Warum dieses Modul existiert.** Der Autor vor dem Lauf ueber die Karwendeltage:
 *"dabei ist sichergestellt, dass es vollstaendig ist und keine falschen anzahlen
 gibt, oder das jpeg und raw keine paeaerchen mehr sind usw usw"*.
 
@@ -63,7 +63,7 @@ class Bericht:
 
     zerrissen: list[str] = field(default_factory=list)
     """Eine Aufnahme, die im Ziel weniger Dateien hat als in der Quelle -- das
-    Paar ist zerbrochen. KT-1s Direktive: *"die gepaarten bilder sind als paar zu
+    Paar ist zerbrochen. Die Direktive des Autors: *"die gepaarten bilder sind als paar zu
     behandeln"*. Einer Aufnahmezahl sieht man das nicht an."""
 
     doppelter_traeger: list[str] = field(default_factory=list)
@@ -79,7 +79,7 @@ class Bericht:
     ungleich: list[str] = field(default_factory=list)
     """Ein Paar, dessen Haelften verschiedene Stichworte tragen.
 
-    KT-1s Direktive: *"auch alle inhalte muessen bei jpeg und raw gleich sein"*.
+    Die Direktive des Autors: *"auch alle inhalte muessen bei jpeg und raw gleich sein"*.
     Das ist die Haelfte, die eine reine Dateizaehlung NICHT sieht -- gegen den
     Zielbaum vor dem Traeger-Fix, in dem 29 von 42 Sidecars ihre Stichworte
     doppelt trugen, meldete die erste Fassung dieser Pruefung `sauber=True`."""
@@ -144,8 +144,8 @@ def pruefe(quelle: Path, ziel: Path) -> Bericht:
         if fehlt:
             bericht.zerrissen.append(f"{k[2]}: {', '.join(sorted(fehlt))} fehlt im Ziel")
 
-    # Sidecars, die schon in der QUELLE neben einem JPEG lagen, sind KT-1s
-    # eigene Arbeit aus Capture One -- das Werkzeug hat sie nur mitkopiert, und
+    # Sidecars, die schon in der QUELLE neben einem JPEG lagen, sind die
+    # eigene Arbeit des Autors aus Capture One -- das Werkzeug hat sie nur mitkopiert, und
     # sie zu melden waere ein Befund ueber einen vorgefundenen Zustand. Im
     # Karwendel-Bestand sind es sechs, mit seinen Bewertungen darin.
     schon_in_quelle = {
@@ -213,7 +213,7 @@ def _stichworte(traeger: Path) -> frozenset[str]:
     """Die Stichworte einer Datei -- als MENGE, mit ihrer Vielfachheit.
 
     Ein doppeltes Stichwort ist ein Unterschied: genau daran erkennt man die
-    Verdopplung, die KT-1s Direktive verletzte. Ein reines `set` haette sie
+    Verdopplung, die gegen die Direktive des Autors verstieß. Ein reines `set` haette sie
     verschluckt, weil beide Seiten dieselben WORTE tragen.
     """
     roh = subprocess.run(

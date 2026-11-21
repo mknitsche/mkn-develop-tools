@@ -237,7 +237,7 @@ def test_unbekannter_mime_type_bricht(tmp_path):
 
 
 def test_token_felder_fehlen_ist_none(tmp_path):
-    """Ohne Nutzungsangabe stehen die Token als `None` -- nie 0 als Ersatz (LP-32)."""
+    """Ohne Nutzungsangabe stehen die Token als `None` -- nie 0 als Ersatz."""
     schein = ScheinGoogle()  # Antworten ohne `usage`
     s = sprecher(schein)
     _, antwort_roh = schein.ton(0.5)
@@ -510,7 +510,7 @@ def test_drossel_und_halbierung_melden_sich(tmp_path):
 
 
 def test_stand_alle_zehn_bloecke(tmp_path):
-    """Alle 10 Bloecke ein Stand (LP-30) -- nicht je Block, aber auch nicht stumm."""
+    """Alle 10 Bloecke ein Stand -- nicht je Block, aber auch nicht stumm."""
     s = sprecher(ScheinGoogle(), konfig=WegKonfig(modell=MODELL, parallel=3))
     meldungen: list[str] = []
 

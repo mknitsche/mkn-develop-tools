@@ -171,9 +171,9 @@ def test_ohne_bilder_bleibt_die_anfrage_reiner_text():
 _MINI_JPEG = bytes.fromhex("ffd8ffe000104a46494600010100000100010000ffd9")
 
 
-# --- Gemini (KT-1, 2026-08-30) ---------------------------------------------
+# --- Gemini (der Autor, 2026-08-30) ---------------------------------------------
 #
-# KT-1: "da ich ja mehrere api keys in den credential habe, kannst du sogar fuer
+# Der Autor: "da ich ja mehrere api keys in den credential habe, kannst du sogar fuer
 # die sw testen, ob es mit anthropic bzw. mit gemini funktioniert (kimi hatten
 # wir ja ausgeschlossen / und ok, gemini noch gar nicht probiert)".
 #
@@ -225,7 +225,7 @@ def test_gemini_traegt_den_text_mit(tmp_path):
     assert "Die Frage." in texte
 
 
-# --- Wo der Schluessel liegt (KT-1s Loesungsgedanke, 2026-08-30) ------------
+# --- Wo der Schluessel liegt (Loesungsgedanke des Autors, 2026-08-30) ------------
 #
 # Sein Konzept, woertlich: *"es braucht eh eine beschreibung der sw ... meine
 # idee ist, dass in diesem how-to dann auch drinsteht, dass der anwender an einem
@@ -298,7 +298,7 @@ def test_ohne_jede_quelle_wird_die_umgebungsvariable_genannt(monkeypatch):
 
 
 def test_der_schluessel_wird_nirgends_gespeichert(tmp_path, monkeypatch):
-    """KT-1s 1.5, und es ist die wichtigste der Zusicherungen: die Software
+    """Punkt 1.5 des Autors, und es ist die wichtigste der Zusicherungen: die Software
     liest den Schluessel, sie behaelt ihn nicht.
 
     Geprueft an der Wahl selbst — sie ist eingefroren und traegt nur Anbieter

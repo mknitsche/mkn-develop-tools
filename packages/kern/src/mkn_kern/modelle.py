@@ -74,7 +74,7 @@ ANBIETER: dict[str, _Anbieter] = {
         bildform="anthropic",
     ),
     # Gemini spricht eine dritte Form -- weder Anthropics `source` noch OpenAIs
-    # `image_url`, sondern `inline_data`. Aufgenommen auf KT-1s Anregung
+    # `image_url`, sondern `inline_data`. Aufgenommen auf Anregung des Autors
     # (2026-08-30): fuer ein veroeffentlichtes Werkzeug ist ein zweiter Anbieter
     # die ehrlichere Probe. Was nur bei EINEM laeuft, hat die Schnittstelle
     # nicht verstanden, sondern eine Eigenheit.
@@ -129,7 +129,7 @@ class Wahl:
     def schluessel(self, *, ablage: Path | None = None) -> str | None:
         """Liest den Schluessel des GEWAEHLTEN Anbieters — Umgebung, dann Datei.
 
-        **Die Software kennt den ORT, nicht den Schluessel** (KT-1s Konzept,
+        **Die Software kennt den ORT, nicht den Schluessel** (das Konzept des Autors,
         2026-08-30): der Anwender sagt einmal, wo seiner liegt; gelesen wird zur
         Laufzeit, gespeichert wird nichts. Der Pfad gehoert ihm, nicht dem
         Werkzeug — deshalb steht er in ``MKN_LLM_SCHLUESSEL_DATEI`` und nicht

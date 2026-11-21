@@ -301,7 +301,7 @@ def _meldung(pfad: Path) -> str:
     """Die Fehlermeldung von `lade_tabelle(pfad)` OHNE den Pfad.
 
     Der Pfad unter `tmp_path` traegt den Testnamen ("..._ohne_vorlage0"); ein `match` auf die
-    ganze Meldung faende das Feld sonst im Pfad statt in der Diagnose (LP-35).
+    ganze Meldung faende das Feld sonst im Pfad statt in der Diagnose.
     """
     with pytest.raises(Mp4Fehler) as fehler:
         lade_tabelle(pfad)
@@ -327,7 +327,7 @@ def test_beispieltabelle_standards():
     charon = tabelle.hole("deutsch-gemini-charon")
     assert (charon.weg, charon.stimme) == ("gemini", "Charon")
     assert tabelle.hole("deutsch-gemini-kore").stimme == "Kore"
-    assert tabelle.hole("deutsch-gemini-sulafat").stimme == "Sulafat"  # KT-1 2026-10-31: Ansage
+    assert tabelle.hole("deutsch-gemini-sulafat").stimme == "Sulafat"  # Vorgabe 2026-10-31
     assert charon.exaggeration is None  # Chatterbox-Felder gibt es an einer Gemini-Zeile nicht
     assert tabelle.hole("beispiel").weg == "local"
 

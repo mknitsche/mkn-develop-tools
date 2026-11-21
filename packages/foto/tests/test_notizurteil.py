@@ -1,6 +1,6 @@
 """Die Antworten des Menschen werden GELESEN, nicht abgetippt.
 
-**Der Anlass, woertlich (KT-1, 2026-08-30):** *"dann wurden auch meine antworten
+**Der Anlass, woertlich (der Autor, 2026-08-30):** *"dann wurden auch meine antworten
 nicht intelligent interpretiert, sondern 1:1 uebernommen - da steht dann kein
 ort - obwohl genannt war 'gehoert zu granau' oder 'zu vorordner' usw ... das ist
 doch bloedsinn"* und *"ich hatte einfach in die datei unten reingeschrieben -
@@ -15,7 +15,7 @@ wegen eines fehlenden Stichworts.
 Eine Wortsuche kann "gehoert zu Grainau" nicht von "auf der Rueckfahrt VON
 Grainau" unterscheiden. Ein Leser kann es. Deshalb liest hier ein Modell.
 
-**Die Faelle unten sind KT-1s echte Notizen**, nicht ausgedachte. Ein Test aus
+**Die Faelle unten sind die echten Notizen des Autors**, nicht ausgedachte. Ein Test aus
 erfundenen Saetzen beweist ueber diese Aufgabe nichts.
 """
 
@@ -25,7 +25,7 @@ import json
 
 from mkn_foto import notizurteil
 
-# --- KT-1s echte Antworten, gekuerzt auf das Wesentliche --------------------
+# --- Die echten Antworten des Autors, gekuerzt auf das Wesentliche --------------------
 
 ORT_KLAR = "Tag 1 - erster spot - Montag, 24. August 2026 um 07:23 / Lenggries im findpinguines"
 ORT_OHNE_STICHWORT = "Schon Zugspitze ganz oben ... erste Bilder"
@@ -91,7 +91,7 @@ def test_kein_ort_bleibt_kein_ort() -> None:
 
 
 def test_eine_belichtungsaussage_wird_uebernommen() -> None:
-    """ "ist schwarz - falsch belichtet" ist genau die Kennzeichnung, die KT-1
+    """ "ist schwarz - falsch belichtet" ist genau die Kennzeichnung, die der Autor
     verlangt hat -- und die Wortsuche warf sie weg."""
     urteil = notizurteil.aus_antwort(
         json.dumps({"art": "kein_ort", "belichtung": "unterbelichtet", "sicher": True})

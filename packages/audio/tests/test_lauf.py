@@ -915,7 +915,7 @@ def _teile_von(konstante: str) -> tuple[str, ...]:
 
 
 def test_lesen_importiert_nur_was_stand_lesen_deckt():
-    """Waechter (LP-40): die Lesestufe haengt nur an Code, den `STAND_LESEN` mitrechnet.
+    """Waechter: die Lesestufe haengt nur an Code, den `STAND_LESEN` mitrechnet.
 
     Sonst aendert sich ihr Ergebnis, ohne dass ihr Fingerabdruck es merkt, und ein alter
     Zwischenstand wird weiterverwendet. Geprueft wird jede Datei, die `STAND_LESEN` deckt
@@ -1287,7 +1287,7 @@ def test_lauf_prueft_die_kapitelmarken_der_m4b(umgebung, epub, monkeypatch):
 
 
 def test_kapitelmarken_waechter_liest_die_marken_der_fertigen_datei(umgebung, epub, monkeypatch):
-    """Waechter (LP-40): sitzt die Marke in der M4B mitten im Ton, ist das ein Befund.
+    """Waechter: sitzt die Marke in der M4B mitten im Ton, ist das ein Befund.
 
     Die Marken kommen aus der FERTIGEN Datei (ffprobe), nicht aus der Rechnung des Laufs: wird
     die Rechnung in `verpacken._kapitel_zeiten` um 8 s verschoben, stimmt die Rechnung des Laufs
@@ -1311,7 +1311,7 @@ def test_kapitelmarken_waechter_liest_die_marken_der_fertigen_datei(umgebung, ep
 
 
 def test_mp3_kapitelmarken_stehen_als_ungeprueft_im_bericht(umgebung, epub):
-    """Ein Format ohne Kapitel hat nichts zu pruefen -- und das steht da (LP-32), nie still ok."""
+    """Ein Format ohne Kapitel hat nichts zu pruefen -- und das steht da, nie still ok."""
     with Zaehler() as arbeiter:
         ergebnis = lauf(umgebung, epub, arbeiter, format="mp3")
 
@@ -1320,7 +1320,7 @@ def test_mp3_kapitelmarken_stehen_als_ungeprueft_im_bericht(umgebung, epub):
 
 
 def test_m4b_ohne_kapitel_in_der_datei_steht_als_ungeprueft(umgebung, epub, monkeypatch):
-    """Liefert ffprobe fuer eine M4B keine Kapitel, ist die Pruefung nicht gelaufen (LP-32)."""
+    """Liefert ffprobe fuer eine M4B keine Kapitel, ist die Pruefung nicht gelaufen."""
     monkeypatch.setattr(lauf_modul, "lies_kapitelmarken", lambda *a, **kw: ())
     with Zaehler() as arbeiter:
         ergebnis = lauf(umgebung, epub, arbeiter)
@@ -1546,7 +1546,7 @@ def _fuchs_regel(erster: float, zweiter: float):
     ids=["zweimal-ausserhalb", "im-band", "neu-gesprochen-im-band"],
 )
 def test_ausreisser_neu_dann_laut(umgebung_gemini, tmp_path, erster, zweiter, laut):
-    """Waechter (LP-40): ein Block ausserhalb 0,75-1,3 des Lauf-Medians wird einmal neu
+    """Waechter: ein Block ausserhalb 0,75-1,3 des Lauf-Medians wird einmal neu
     gesprochen; liegt er wieder ausserhalb, bricht der Lauf laut mit Stelle ab.
 
     Schutzgut: falsche Information (ein 140-s-Block ist Wiederholungs- oder
@@ -1672,7 +1672,7 @@ def test_verbrauch_je_antwort_mit_audio(umgebung_gemini, tmp_path):
 def _mit_token(faktor: float = 1.0):
     """Laesst `lies_antwort` Token melden: Audio-Token = 25 je Sekunde x `faktor`.
 
-    Die Feldnamen der echten Antwort liest C1 aus einer echten Antwort (HC-10); der Test haengt
+    Die Feldnamen der echten Antwort liest C1 aus einer echten Antwort; der Test haengt
     darum an der Schnittstelle `lies_antwort -> (daten, mime, token)`, nicht an Feldnamen.
     """
 
@@ -1692,7 +1692,7 @@ def _mit_token(faktor: float = 1.0):
 
 def test_kosten_schaetzung_und_ausweis(umgebung_gemini, tmp_path):
     """Schaetzung vor dem Sprechen, Ausweis nach dem Lauf mit Preisstand -- und ohne Preise
-    oder ohne Token-Angabe ein Satz statt einer Zahl (LP-32)."""
+    oder ohne Token-Angabe ein Satz statt einer Zahl."""
     from datetime import date
 
     from mkn_audio.gemini import schaetze_kosten_usd

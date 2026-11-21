@@ -1,6 +1,6 @@
 """Was das Modell im Bild sieht — und die Regel, die es zaehmt.
 
-**Regel A** (Spec § 10a, KT-1-Entscheid 2026-08-29): nur was das Modell `sicher`
+**Regel A** (Spec § 10a, Entscheid des Autors 2026-08-29): nur was das Modell `sicher`
 nennt, wird geschrieben. Die Herleitung ist gemessen (§ 4 Stufe 3): Sonnet lag
 bei 15/20 und war einmal falsch UND selbstsicher, Opus bei 17/20 mit **14/14
 Praezision auf seiner eigenen Sicherheitsangabe**. Einem Modell, dessen
@@ -22,7 +22,7 @@ from typing import Any
 
 BELICHTUNG = ("gut", "unterbelichtet", "ueberbelichtet", "unklar")
 """Die vier Werte, die der Prompt zulaesst. `unklar` ist kein Mangel, sondern
-eine Aussage — KT-1s "gruselig" faellt unter die mittleren beiden."""
+eine Aussage — das „gruselig“ des Autors faellt unter die mittleren beiden."""
 
 
 @dataclass(frozen=True)
@@ -204,7 +204,7 @@ def serien_prompt(messbefund: str = "") -> str:
 
     **`messbefund` traegt, was die Messung schon weiss.** Ohne ihn sieht das
     Modell nur den Kontaktbogen -- und urteilt dann ueber Bilder, deren
-    Verschiebung gegeneinander bereits gemessen ist. Firsthand: KT-1s Panorama
+    Verschiebung gegeneinander bereits gemessen ist. Firsthand: das Panorama des Autors
     von der Sebalduskirche besteht aus einem Schwenk (36 % Versatz) und einer
     Wiederholung derselben Stelle; auf dem blossen Bogen sind zwei der drei
     Bilder fast gleich, und das Modell nannte die Gruppe folgerichtig

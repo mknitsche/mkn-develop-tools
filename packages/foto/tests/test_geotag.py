@@ -1,6 +1,6 @@
 """Position je BILD statt je Session — echtes Geotagging.
 
-KT-1 am 2026-08-30: *"eigentlich hatte ich gehofft, du machst sinnvolle gpx (gps)
+Der Autor am 2026-08-30: *"eigentlich hatte ich gehofft, du machst sinnvolle gpx (gps)
 informationen, die man auf einer karte sieht"*.
 
 Er hat recht, und die Messung zeigt, wie sehr: die Spur hat einen Median von

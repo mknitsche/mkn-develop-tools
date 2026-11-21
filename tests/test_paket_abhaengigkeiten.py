@@ -1,12 +1,12 @@
 """Was ein Paket importiert, muss es auch fordern.
 
-FIRSTHAND macb-S316: `mkn-foto` deklarierte `Pillow` als einzige Abhaengigkeit und
+FIRSTHAND: `mkn-foto` deklarierte `Pillow` als einzige Abhaengigkeit und
 importierte `mkn_kern` auf Modulebene. Im Repo faellt das nie auf — `pythonpath` in
 der pytest-Konfiguration blendet BEIDE Paketquellen ein, also war die Suite gruen.
 In einer frischen Umgebung brach schon `--help` mit
 `ModuleNotFoundError: No module named 'mkn_kern'`.
 
-Genau die Klasse „Tests gruen, Werkzeug kaputt" (LP-18): der Testlauf bewies die
+Genau die Klasse „Tests gruen, Werkzeug kaputt": der Testlauf bewies die
 Entwicklungsumgebung, nicht das ausgelieferte Paket. Gefunden wurde es nicht von
 einem Test, sondern durch echtes Installieren in eine leere Umgebung.
 
@@ -80,7 +80,7 @@ def test_jedes_geschwisterpaket_das_importiert_wird_ist_auch_gefordert(paket: Pa
 
 
 def test_der_riegel_sieht_ueberhaupt_etwas():
-    """Untergrenze (LP-36): ueber einer leeren Menge ist der Ausschluss trivial wahr.
+    """Untergrenze: ueber einer leeren Menge ist der Ausschluss trivial wahr.
 
     Findet die Sammelfunktion keinen einzigen Geschwister-Import mehr — weil sich
     die Ordnerstruktur geaendert hat oder das AST-Muster nicht mehr passt —, waere

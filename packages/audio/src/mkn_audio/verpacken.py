@@ -88,7 +88,7 @@ def ausgabe_name(ordner: Path, datum: str, titel: str, endung: str, zusatz: str 
 
     Titel auf 120 Zeichen gekuerzt; der Zusatz (etwa Kapitelnummer und -titel im MP3-Namen)
     bekommt den Rest bis zur Byte-Grenze des Dateisystems. `datum` reicht der Aufrufer aus
-    einem Werkzeug herein (HC-11), hier wird nur seine Form geprueft.
+    einem Werkzeug herein, hier wird nur seine Form geprueft.
     """
     if not _DATUM.fullmatch(datum):
         raise Mp4Fehler(f"Datum muss JJJJ-MM-TT sein (ist {datum!r})")

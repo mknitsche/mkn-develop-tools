@@ -127,7 +127,7 @@ def test_fremde_dateien_werden_exiftool_gar_nicht_erst_vorgelegt(tmp_path, monke
 
     Die urspruengliche Fassung dieses Tests prueste einen LEEREN Baum — dort
     ist die Zusicherung trivial erfuellt, weil schon `exif.lies` bei leerer
-    Liste nichts tut (LP-34: ein Beweis muss seinen Gegenstand enthalten)."""
+    Liste nichts tut (ein Beweis muss seinen Gegenstand enthalten)."""
     _lege_an(tmp_path, "2026-08-27/X-E5/DSCF3541.xmp")
     _lege_an(tmp_path, "2026-08-27/X-E5/.DS_Store")
     _lege_an(tmp_path, "2026-08-27/Katalog.cosessiondb")
