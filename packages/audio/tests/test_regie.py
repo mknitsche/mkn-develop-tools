@@ -1,7 +1,7 @@
 """Dokument-Verstehen und Regie: Rollen bestimmen, Hoerfassung bauen, Erfinden abfangen.
 
 Alle Tests laufen mit einem Schein-Modell, das feste JSON-Antworten liefert; die Inhalte
-sind erfunden (HC-3). Zwei Muster-Dokumente tragen die Faelle: eine zweispaltige
+sind erfunden. Zwei Muster-Dokumente tragen die Faelle: eine zweispaltige
 Programmseite und eine Zusammenfassung mit Bewertungs- und Kaufknopf-Zeilen.
 """
 

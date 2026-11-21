@@ -3,7 +3,7 @@
 Die Erkennung ist deterministisch und eine Untergrenze: Kontaktdaten und Kennziffern zaehlen
 immer, Briefform nur mit Personen-Anrede UND Grussformel, Lebensdaten nur ausserhalb von
 Buechern und nur in kurzen Dokumenten. Alle Werte sind erfunden; PII-foermige entstehen zur
-Laufzeit aus Teilen (`pii_bausteine`), weil der PII-Riegel auch erfundene sperrt (HC-3).
+Laufzeit aus Teilen (`pii_bausteine`), weil der PII-Riegel auch erfundene sperrt.
 `mkn_audio.vertraulich` entsteht mit Plan C3; der Import steht darum in den Tests.
 """
 

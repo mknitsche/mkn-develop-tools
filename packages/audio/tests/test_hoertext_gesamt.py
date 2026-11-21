@@ -209,7 +209,7 @@ def test_absatz_der_nur_aus_fussnotenzeichen_besteht_faellt_weg():
 
 
 def test_paket_code_nennt_keinen_modellnamen():
-    # HC-14 / Plan: Anbieter und Modell kommen nur aus der Konfiguration.
+    # Plan: Anbieter und Modell kommen nur aus der Konfiguration.
     ordner = Path(hoertext_modul.__file__).parent
     dateien = sorted(ordner.glob("*.py"))
     assert len(dateien) >= 5  # Untergrenze: es wurde wirklich etwas durchsucht

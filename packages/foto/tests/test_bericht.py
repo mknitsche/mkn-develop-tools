@@ -1,4 +1,4 @@
-"""Protokoll und Rueckweg — die zwei Dinge, die KT-1 am 2026-08-30 verlangt hat.
+"""Protokoll und Rueckweg — die zwei Dinge, die der Autor am 2026-08-30 verlangt hat.
 
 > *"so dass klar ist, was durch ist (also nach capONE koennte) und was offen ist,
 > mit einer eindeutigen protokolldatei und einer sinnvolen moeglichkeit die
@@ -63,8 +63,8 @@ def test_protokoll_trennt_durch_von_offen(tmp_path):
 
     # Nicht "kommt vor", sondern "steht im richtigen Abschnitt". Die erste
     # Fassung prueste nur die Anwesenheit der Zahlen -- und blieb gruen, als die
-    # Mutation die Trennung ganz entfernte. Genau die Trennung ist aber KT-1s
-    # Anforderung: "so dass klar ist, was durch ist und was offen ist".
+    # Mutation die Trennung ganz entfernte. Genau die Trennung ist aber die
+    # Anforderung des Autors: "so dass klar ist, was durch ist und was offen ist".
     durch = text.index("## Durch")
     offen_ab = text.index("## Offen")
     assert durch < offen_ab, "die Abschnitte stehen in der falschen Reihenfolge"
@@ -86,7 +86,7 @@ def test_protokoll_trennt_durch_von_offen(tmp_path):
 
 
 def test_protokoll_nennt_die_gesamtzahlen(tmp_path):
-    """Ohne Summen muss KT-1 selbst zaehlen, um zu wissen, wo er steht."""
+    """Ohne Summen muss der Autor selbst zaehlen, um zu wissen, wo er steht."""
     pfad = bericht.protokoll(
         tmp_path,
         verortet=[(_spot(26, (6, 7), (6, 57), 141), ORT)],
@@ -99,7 +99,7 @@ def test_protokoll_nennt_die_gesamtzahlen(tmp_path):
 
 
 def test_entscheidungsdatei_hat_je_offenem_fall_ein_feld(tmp_path):
-    """EINE Datei, nicht zwoelf Ordner. Das war KT-1s eigentliche Klage."""
+    """EINE Datei, nicht zwoelf Ordner. Das war eigentliche Klage des Autors."""
     a = _spot(24, (7, 39), (8, 9), 27)
     b = _spot(25, (19, 14), (19, 58), 57)
 
@@ -115,7 +115,7 @@ def test_entscheidungsdatei_hat_je_offenem_fall_ein_feld(tmp_path):
 
 
 def test_der_rueckweg_liest_die_eingetragenen_antworten(tmp_path):
-    """Ohne diese Haelfte waere die Datei eine Sackgasse: KT-1 traegt ein, und
+    """Ohne diese Haelfte waere die Datei eine Sackgasse: der Autor traegt ein, und
     niemand liest es je."""
     pfad = bericht.entscheidungsdatei(
         tmp_path,

@@ -2,7 +2,7 @@
 
 **Die Wiederaufnahme laeuft ueber den BAUM selbst, nicht ueber ein Journal.**
 Wer schon ein `Motiv |`-Stichwort traegt, wird uebersprungen. Das ist kein
-Sparzwang, sondern HC-1: ein Journal waere ein zweiter Zustand neben dem
+Sparzwang, sondern aus Prinzip: ein Journal waere ein zweiter Zustand neben dem
 Ergebnis, und die beiden driften, sobald ein Lauf abbricht — genau in dem
 Moment, in dem man sich auf die Wiederaufnahme verlassen muss.
 
@@ -30,7 +30,7 @@ from PIL import Image
 
 # Ohne exiftool schreibt `_merke` nichts -- und ein Test, der die ABWESENHEIT
 # einer Datei behauptet, wird dann vakuum gruen: er besteht, ohne je etwas
-# geprueft zu haben (LP-36, Untergrenze). `test_anreichern.py` hatte den Riegel
+# geprueft zu haben (Untergrenze). `test_anreichern.py` hatte den Riegel
 # von Anfang an, diese Datei nicht.
 pytestmark = pytest.mark.skipif(
     shutil.which("exiftool") is None, reason="exiftool nicht verfuegbar"
@@ -143,7 +143,7 @@ def test_ein_zweiter_lauf_macht_keinen_einzigen_aufruf(tmp_path):
     erste_runde = len(aufrufe)
 
     # Der Zustand des ersten Laufs geht in den zweiten -- er IST der Zustand,
-    # daneben gibt es keinen (HC-1). Die Pipeline baut ihn aus dem Baum.
+    # daneben gibt es keinen. Die Pipeline baut ihn aus dem Baum.
     motivlauf.fahre(eintraege, _wahl(), transport=transport, schluessel="x", vorhandene=erstes)
 
     assert erste_runde == 3
@@ -215,7 +215,7 @@ def test_der_zustand_laesst_sich_aus_dem_baum_lesen(tmp_path):
     Wer schon ein `Motiv |`-Stichwort in seinem Sidecar traegt, ist beurteilt.
     Ein Journal daneben waere ein zweiter Zustand ueber dieselbe Sache — und die
     beiden driften, sobald ein Lauf abbricht, also genau dann, wenn man sich auf
-    die Wiederaufnahme verlassen muss (HC-1).
+    die Wiederaufnahme verlassen muss.
     """
     fertig = _bild(tmp_path, "fertig.jpg")
     offen = _bild(tmp_path, "offen.jpg")
@@ -254,7 +254,7 @@ def test_ein_sidecar_ohne_motiv_gilt_als_offen(tmp_path):
 
 
 def test_der_lauf_misst_jeden_aufruf(tmp_path):
-    """KT-1s Frage vor dem Start: „nicht dass wir durchlaufen und uns dann
+    """Die Frage des Autors vor dem Start: „nicht dass wir durchlaufen und uns dann
     messwerte token pro aktion, pro bild usw fehlen".
 
     Die Zahlen liefert die API frei Haus; sie wegzuwerfen und hinterher zu
@@ -316,7 +316,7 @@ def test_serien_und_einzelbilder_werden_getrennt_gemessen(tmp_path):
 
 
 def test_der_lauf_meldet_fortschritt(tmp_path):
-    """KT-1 vor dem Start: "zeit auch messen und auch fortschritt".
+    """Der Autor vor dem Start: "zeit auch messen und auch fortschritt".
 
     969 Aufrufe dauern Stunden. Ein Lauf ohne Zwischenmeldung ist ein blinder
     Fleck, kein Fortschritt — man weiss nicht, ob er arbeitet, wo er steht und
@@ -347,7 +347,7 @@ def test_der_lauf_meldet_fortschritt(tmp_path):
 
 def test_die_meldung_nennt_verbrauch_und_hochrechnung(tmp_path):
     """Ohne beides ist "Bild 400 von 969" eine Zahl ohne Folge. Mit beidem
-    kann KT-1 entscheiden, ob er den Lauf weiterlaufen laesst."""
+    kann der Autor entscheiden, ob er den Lauf weiterlaufen laesst."""
     bilder = [_bild(tmp_path, f"h{i}.jpg") for i in range(4)]
     meldungen = []
 
@@ -508,7 +508,7 @@ def test_ein_unsicheres_urteil_wird_nicht_gemerkt(tmp_path) -> None:
     """Regel A gilt auch fuer die Zwischenspeicherung.
 
     Wuerde ein unsicheres Urteil in den Baum geschrieben, haette es zwei
-    Wirkungen, und beide sind falsch: es stuende als Stichwort in KT-1s Datei,
+    Wirkungen, und beide sind falsch: es stuende als Stichwort in der Datei des Autors,
     obwohl das Modell selbst zweifelt -- und `aus_baum` haelte das Bild beim
     naechsten Lauf fuer erledigt, sodass es NIE eine bessere Antwort bekaeme.
 
@@ -540,7 +540,7 @@ def test_ein_unsicheres_urteil_wird_nicht_gemerkt(tmp_path) -> None:
 
 
 def test_neben_einem_jpeg_entsteht_kein_sidecar(tmp_path) -> None:
-    """**KT-1s 71 ueberzaehlige Dateien -- der Mechanismus.**
+    """**Die 71 ueberzaehligen des Autors Dateien -- der Mechanismus.**
 
     Die Traeger-Regel der Spec Paragraf 10 kennt eine Stelle je Format: RAW
     bekommt einen Sidecar, JPEG traegt seine Angaben eingebettet. `_merke` kannte
@@ -552,7 +552,7 @@ def test_neben_einem_jpeg_entsteht_kein_sidecar(tmp_path) -> None:
     vorhandenem Sidecar diesen -- angezeigt wird moeglicherweise etwas anderes,
     als in der Datei steht.
 
-    Gemessen am 2026-08-30: der Bestand traegt 65 JPEG ohne RAW, KT-1 zaehlte 71
+    Gemessen am 2026-08-30: der Bestand traegt 65 JPEG ohne RAW, der Autor zaehlte 71
     ueberzaehlige Dateien. Firsthand nachgestellt an drei D850-JPEGs: zwei
     bekamen einen Sidecar, den `anreichern` nie geschrieben hatte (es meldete
     „1 Sidecars, 4 eingebettet" bei vier Aufnahmen).
@@ -580,7 +580,7 @@ def test_neben_einem_jpeg_entsteht_kein_sidecar(tmp_path) -> None:
     # Die Untergrenze: ohne sie besteht dieser Test auch dann, wenn gar nichts
     # geschrieben wurde. "Keine Datei daneben" ist ueber dem Nichts trivial wahr
     # -- die Aussage lautet "eingebettet STATT daneben", und die Haelfte davon
-    # steht sonst nirgends in diesem Test (LP-36).
+    # steht sonst nirgends in diesem Test.
     assert bild in motivlauf.aus_baum([bild]).urteile, (
         "die Marke wurde weder daneben noch eingebettet geschrieben -- "
         "der Test ueber die Abwesenheit des Sidecars beweist so gar nichts"
@@ -789,7 +789,7 @@ def test_serie_keine_markiert_den_vertreter_nicht_als_beurteilt(tmp_path):
 
 def test_serie_panorama_markiert_den_vertreter_als_beurteilt(tmp_path):
     """Untergrenze zum Test daneben: ohne diese Gegenprobe waere ein `_merke`,
-    das NIE aufgerufen wird, genauso gruen (LP-36)."""
+    das NIE aufgerufen wird, genauso gruen."""
     mitglieder = [_bild(tmp_path, f"p{i}.jpg") for i in range(3)]
 
     def transport(url, koerper, kopf, zeitgrenze):
@@ -939,7 +939,7 @@ def test_ein_doppelt_genanntes_motiv_wird_auch_beim_merken_nur_einmal_geschriebe
     dem Fall, fuer den `_merke` ueberhaupt existiert: `aus_baum` liefert
     `Urteil(sicher=True, fehler="aus dem Baum")` OHNE Motive, `anreichern`
     schreibt fuer diese Aufnahme also nie ein `Motiv|Bruecke`, und das `-=`
-    laeuft auf dem Wert nie. Die Dublette steht dauerhaft im Baum, den KT-1
+    laeuft auf dem Wert nie. Die Dublette steht dauerhaft im Baum, den der Autor
     ansieht. Der Modul-Docstring sagt "Ein Abbruch ist der Normalfall" -- damit
     ist das nicht der Ausnahme-, sondern der Regelfall.
 

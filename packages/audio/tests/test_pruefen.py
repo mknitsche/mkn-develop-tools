@@ -482,7 +482,7 @@ def test_fremde_sprache_wird_nicht_nach_deutschen_regeln_ausgeschrieben(
 
 @pytest.mark.parametrize(("anteil", "befund"), [(0.40, True), (0.70, False)])
 def test_pruefband_local_fest(arbeiter, stimme, tmp_path, monkeypatch, anteil, befund):
-    """Waechter (LP-40): local prueft gegen sein festes Band aus `WEGE` (0,55-2,5 bei 14 Z/s).
+    """Waechter: local prueft gegen sein festes Band aus `WEGE` (0,55-2,5 bei 14 Z/s).
 
     Schutzgut: falsche Information -- ein verschluckter Block klaenge im Hoerbuch weiter.
     Mutation (nach B2 GREEN, Auftrag 06): `WEGE["local"].pruefband` auf (0.3, 2.5) -> der Fall
@@ -539,7 +539,7 @@ class OhneOhr:
 
 
 def test_verdaechtiger_block_ohne_hoerer_ist_befund(stimme, tmp_path):
-    """Waechter (LP-40): kann der Sprecher nicht hoeren, ist jeder verdaechtige Block ein Befund.
+    """Waechter: kann der Sprecher nicht hoeren, ist jeder verdaechtige Block ein Befund.
 
     Schutzgut: falsche Information -- ein zu kurzer Block gaelte sonst still als in Ordnung.
     Mutation: im Zweig `not kann_hoeren` den Befund weglassen (`pass`) -> dieser Test wird rot.
@@ -585,7 +585,7 @@ def test_kapitelmarke_in_pause_ohne_befund(tmp_path):
 
 
 def test_kapitelmarke_3s_verschoben_ist_befund(tmp_path):
-    """Waechter (LP-40): eine Kapitelmarke mitten im Ton ist Befund.
+    """Waechter: eine Kapitelmarke mitten im Ton ist Befund.
 
     Schutzgut: falsche Information -- ein Kapitelsprung landet mitten in einem Wort; Eintritt
     belegt durch die Block-Umstellung des Masterns (Plan B3). Mutation (nach B3 GREEN,
@@ -603,7 +603,7 @@ def test_kapitelmarke_3s_verschoben_ist_befund(tmp_path):
 
 
 def test_kapitelmarke_3s_vor_der_stille_ist_befund(tmp_path):
-    """Waechter (LP-40): die Bedingung gilt beidseitig -- eine zu frueh gerechnete Marke liegt im
+    """Waechter: die Bedingung gilt beidseitig -- eine zu frueh gerechnete Marke liegt im
     Ton des vorigen Kapitels und ist derselbe Fehler wie eine zu spaete.
 
     Schutzgut: falsche Information (Kapitelsprung mitten in ein Wort). Mutation: in
@@ -738,7 +738,7 @@ def test_ausreisser_median_je_stimme_nach_dem_sprechen(tmp_path):
 
 def test_band_ungeprueft_unter_fuenf_bloecken(tmp_path):
     """Unter 5 pruefbaren Bloecken je Stimme ist der Median kein Mass: Warnung "ungeprueft",
-    kein Neusprechen (LP-32: ungeprueft ist nie in Ordnung, aber auch kein Befund)."""
+    kein Neusprechen (ungeprueft ist nie in Ordnung, aber auch kein Befund)."""
     bloecke = [g_block(nr) for nr in range(1, 5)]
     ton = {b.nr: messwerte(b, 16.0) for b in bloecke}
     ton[4] = messwerte(bloecke[3], 16.0, faktor=0.6)
@@ -778,7 +778,7 @@ STIL = "ruhig und warm"
 
 
 def test_stilwort_in_abschrift_ist_befund():
-    """Waechter (LP-40): ein Inhaltswort der Stilvorgabe in der Abschrift ist Befund.
+    """Waechter: ein Inhaltswort der Stilvorgabe in der Abschrift ist Befund.
 
     Schutzgut: falsche Information -- eine Regieanweisung im Hoerstueck (PoC, Spec 4).
     Mutation (nach C5 GREEN, Auftrag 08): Vergleich gegen eine leere Wortmenge (Rueckgabe

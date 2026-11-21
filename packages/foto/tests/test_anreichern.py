@@ -6,7 +6,7 @@ angereichert". Darin lagen 1.227 RAW-Dateien und **139 XMP-Sidecars** — die 13
 die schon vorher existierten. Kein einziger neuer. Die gesamte Ortsarbeit lag im
 Arbeitsspeicher und war mit dem Prozessende weg.
 
-KT-1: *"bei den dateien auf 1tb fehlen systemisch die xmps ... es müsste ja zu
+Der Autor: *"bei den dateien auf 1tb fehlen systemisch die xmps ... es müsste ja zu
 jeder raw ein jpeg und ein xmp geben"*. Er hat recht, und die Spec sagt es auch
 (§ 6, § 10): RAW bekommt einen Sidecar, JPEG bekommt die Daten eingebettet.
 
@@ -134,7 +134,7 @@ def test_der_ort_steht_wirklich_drin(tmp_path):
         tmp_path / "DSCF3541.xmp", "GPSLatitude", "GPSLongitude", "GPSHPositioningError", "Location"
     )
     # Der Spot gehoert nach iptcCore:Location, nicht nach City -- das traegt das
-    # GEBIET (Spec § 6 Traeger-Tabelle, seit macb-S314 richtig gebaut).
+    # GEBIET (Spec § 6 Traeger-Tabelle).
     assert f["Location"] == "Lenggries"
     assert "47" in f["GPSLatitude"] and "40" in f["GPSLatitude"]
     assert f["GPSHPositioningError"].startswith("250")
@@ -232,7 +232,7 @@ def test_der_urheber_landet_an_jeder_datei(tmp_path: Path, monkeypatch) -> None:
 
 
 def test_jede_datei_nennt_den_stand_der_sie_geschrieben_hat(tmp_path, monkeypatch) -> None:
-    """Provenienz — KT-1s eigentliche Sorge hinter der Versionsfrage.
+    """Provenienz — eigentliche Sorge des Autors hinter der Versionsfrage.
 
     Woertlich (2026-08-30): *"nicht das alte staende der sw die duemmer waren
     als die aktuellen versionen die gesamte arbeit negativ beeinflussen"* --
@@ -263,13 +263,13 @@ def test_jede_datei_nennt_den_stand_der_sie_geschrieben_hat(tmp_path, monkeypatc
 
 
 def test_neben_dem_sidecar_bleibt_keine_kopie_liegen(tmp_path) -> None:
-    """**KT-1s Verzeichnis, 2026-08-30: 1.228 Dateien Muell.**
+    """**Das Verzeichnis des Autors, 2026-08-30: 1.228 Dateien Muell.**
 
     Beim Schreiben in einen VORHANDENEN Sidecar fehlte `-overwrite_original` --
     also legte exiftool jedes Mal eine `.xmp_original` daneben. Nach einem Lauf
     ueber 1.234 Aufnahmen lagen 1.228 Sicherungskopien zwischen den Bildern.
 
-    Klein (2,5 MB), aber genau das, was KT-1 verboten hatte: *"und muelle nicht
+    Klein (2,5 MB), aber genau das, was der Autor verboten hatte: *"und muelle nicht
     den mac oder die 1tb hdd zu"*. Und schlimmer als ihre Groesse ist die
     Verwirrung: wer den Ordner oeffnet, sieht doppelt so viele Dateien wie
     Bilder.
@@ -298,7 +298,7 @@ def test_die_farbnamen_werden_bis_in_die_datei_durchgereicht(tmp_path, monkeypat
 
     Der Weg geht ueber vier Stationen: Konfigurationsdatei -> `Konfig` ->
     `pipeline.fahre` -> `anreichern.schreibe` -> exiftool. Reisst er an EINER,
-    sieht KT-1 weiterhin weisse Kaesten -- und die Einstellung, die er gesetzt
+    sieht der Autor weiterhin weisse Kaesten -- und die Einstellung, die er gesetzt
     hat, waere ein Feld ohne Wirkung.
     """
     aufnahme = _aufnahme(tmp_path, "DSCF8", (".RAF",))
@@ -332,7 +332,7 @@ def test_auch_die_unklar_farbe_ist_einstellbar(tmp_path, monkeypatch) -> None:
 
 
 def test_ein_vorhandenes_stichwort_wird_nicht_verdoppelt(tmp_path) -> None:
-    """**KT-1s Direktive: „alle inhalte muessen bei jpeg und raw gleich sein."**
+    """**Die Direktive des Autors: „alle inhalte muessen bei jpeg und raw gleich sein."**
 
     Sie waren es nicht. Firsthand am Lauf ueber die 42 Nuernberger Aufnahmen
     (2026-08-30): **29 von 42 Sidecars (69 %) trugen ihre Motiv-Stichworte
@@ -345,7 +345,7 @@ def test_ein_vorhandenes_stichwort_wird_nicht_verdoppelt(tmp_path) -> None:
 
     Angehaengt wird also gegen einen Stand, den ein frueherer Schritt schon
     geschrieben hat. Genau deshalb genuegt es nicht, `_merke` zu aendern: die
-    Verdopplung entsteht HIER und muss hier aufhoeren -- auch dann, wenn KT-1
+    Verdopplung entsteht HIER und muss hier aufhoeren -- auch dann, wenn der Autor
     dasselbe Stichwort von Hand in Capture One vergeben hat.
 
     Fremde Stichworte bleiben unberuehrt; das ist der Grund fuer `+=` und wird
@@ -382,7 +382,7 @@ def test_ein_vorhandenes_stichwort_wird_nicht_verdoppelt(tmp_path) -> None:
 def test_handarbeit_im_sidecar_bleibt_stehen(tmp_path) -> None:
     """Die Gegenprobe -- und sie ist die eigentliche Schranke.
 
-    Ein Sidecar traegt oft KT-1s Arbeit aus Capture One. Wer die Verdopplung
+    Ein Sidecar traegt oft die Arbeit des Autors aus Capture One. Wer die Verdopplung
     dadurch behebt, dass er den Zweig vor dem Schreiben leert, loescht sie --
     und der Test darueber bliebe gruen. Deshalb steht hier ein fremdes
     Stichwort, das kein Lauf je vergeben wuerde.
@@ -416,7 +416,7 @@ def test_ein_stichwort_mit_sonderzeichen_loescht_keine_handarbeit(tmp_path) -> N
     Ein Cross-Modell-Review meldete, `*` und `?` wuerden in `-TAG-=WERT` als
     Platzhalter gelesen und `${...}` als Tag-Referenz -- ein modellgeneriertes
     Stichwort mit diesen Zeichen loeschte beim `-=` dann MEHR als sich selbst,
-    und das Erste, was es traefe, waere KT-1s Handarbeit aus Capture One.
+    und das Erste, was es traefe, waere die Handarbeit des Autors aus Capture One.
 
     **Nachgeprueft trifft das nicht zu.** Alle drei werden woertlich genommen,
     auch ein fuehrendes `-`; Platzhalter gelten bei exiftool fuer Tag-NAMEN,
@@ -468,7 +468,7 @@ def test_ein_doppelt_genanntes_motiv_steht_einmal_da(tmp_path) -> None:
     Kette dedupliziert an keiner Station (`bildurteil.aus_antwort`,
     `Urteil.zum_schreiben`, `pipeline._motive_je_aufnahme`, `_argumente`). Der
     Schaden heilt auch nicht von selbst -- ein zweiter Lauf laesst die Dubletten
-    stehen. Damit erzeugt genau der Fix, der KT-1s doppelte Stichworte beheben
+    stehen. Damit erzeugt genau der Fix, der doppelten Stichworte des Autors beheben
     sollte, sie auf einem anderen Weg weiter.
 
     Zweiter Weg zur selben Wurzel, ganz ohne doppelte Eingabe: `wort.split("|")`

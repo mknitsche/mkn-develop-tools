@@ -174,7 +174,7 @@ def test_satzschreibung_regel(text, formen, code, belegt, erwartet):
 
 
 def test_versal_belege_nur_aus_fliesstext():
-    """Waechter (LP-40): Versalien einer Ueberschrift belegen sich nicht selbst als Kuerzel.
+    """Waechter: Versalien einer Ueberschrift belegen sich nicht selbst als Kuerzel.
 
     Mutation: Absaetze der Art `ueberschrift` mitzaehlen -> rot.
     """

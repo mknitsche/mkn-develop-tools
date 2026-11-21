@@ -8,7 +8,7 @@ nach der Träger-Tabelle das Feld fuer das **Gebiet**; der Spot gehoert nach
 Dazu die Farbe, die ganz fehlte: **Blau gehoert dem Werkzeug** und heisst „gehoert
 zu einer Serie". Sie muss ZWEIMAL geschrieben werden — Capture One liest
 `xmp:Label` nicht, sondern die aeltere Notation `photoshop:Urgency`, und dort ist
-**3** die blaue (an KT-1s Capture One 16.8.5 abgelesen). Ein Design, das nur
+**3** die blaue (an Capture One 16.8.5 des Autors abgelesen). Ein Design, das nur
 `xmp:Label` setzt, zeigt in Lightroom Farben und in Capture One nichts.
 
 Firsthand geprueft (2026-08-30): alle Felder nehmen die Werte an und lesen sich
@@ -127,7 +127,7 @@ def test_serienbilder_bekommen_blau_in_beiden_notationen(tmp_path):
 
 def test_ein_einzelbild_bekommt_keine_farbe(tmp_path):
     """Untergrenze: Blau heisst „gehoert zu einer Serie". Wer alles einfaerbt,
-    sagt nichts mehr — und nimmt KT-1 die Farbe fuer seine eigene Bewertung weg."""
+    sagt nichts mehr — und nimmt der Autor die Farbe fuer seine eigene Bewertung weg."""
     a = _raw(tmp_path, "DSCF9004")
 
     anreichern.schreibe([(a, SPOT)])
@@ -166,9 +166,9 @@ def test_eine_beschreibung_wird_geschrieben(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Violett — die Kennzeichnung von Unklarheit (KT-1, 2026-08-30)
+# Violett — die Kennzeichnung von Unklarheit (der Autor, 2026-08-30)
 #
-# Violett war in der Spec die einzige bewusst unbelegte Farbe. KT-1 hat ihr eine
+# Violett war in der Spec die einzige bewusst unbelegte Farbe. Der Autor hat ihr eine
 # Bedeutung gegeben: "immer wenn etwas unklar oder fehlerhaft identifiziert ist,
 # bekommt es ein stichwort und diese farbe - dann kann ich schnell nachsehen, was
 # unklar war - ein stichwort kann ich zwar filtern, aber die farbe zeigt es
@@ -214,7 +214,7 @@ def test_das_pruefen_stichwort_ist_immer_gleich(tmp_path):
 
 
 def test_violett_schlaegt_blau(tmp_path):
-    """KT-1s Vorrang-Regel, und der Fall, den er selbst gefunden hat.
+    """Die Vorrang-Regel des Autors, und der Fall, den er selbst gefunden hat.
 
     Ein Bild traegt nur eine Farbe. Eine unklare Aufnahme IN einer Serie muss
     violett sein, nicht blau: die Serienzugehoerigkeit steht dreifach in der

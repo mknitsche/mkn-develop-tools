@@ -1,6 +1,6 @@
 """Die Abnahme eines Laufs: ist der Zielbaum vollstaendig und widerspruchsfrei?
 
-**Warum es diese Datei gibt.** KT-1 vor dem Lauf ueber die Karwendeltage:
+**Warum es diese Datei gibt.** Der Autor vor dem Lauf ueber die Karwendeltage:
 *"dabei ist sichergestellt, dass es vollstaendig ist und keine falschen anzahlen
 gibt, oder das jpeg und raw keine paeaerchen mehr sind usw usw"*. Ein Lauf, der
 "FERTIG" meldet, hat damit noch nichts belegt -- am 2026-08-30 meldete einer
@@ -74,7 +74,7 @@ def _paar(ordner: Path, stamm: str, **kw) -> Path:
     # Die Untergrenze fuer den Helfer selbst: eine fruehere Fassung liess auf
     # macOS nur EINE der beiden Dateien zurueck, und kein Test sah es. Ein
     # Helfer, der die Vorbedingung nicht herstellt, macht jeden Test darueber
-    # zur Behauptung (LP-36).
+    # zur Behauptung.
     assert jpg.exists() and raf.exists(), f"Paar unvollstaendig angelegt: {stamm}"
     return raf
 
@@ -135,7 +135,7 @@ def test_eine_fehlende_aufnahme_wird_gemeldet(tmp_path) -> None:
 
 
 def test_ein_zerrissenes_paar_wird_gemeldet(tmp_path) -> None:
-    """**KT-1s Direktive: das Paar ist die Einheit.**
+    """**Die Direktive des Autors: das Paar ist die Einheit.**
 
     *"die gepaarten bilder sind als paar zu behandeln - so wie es jede
     bildbearbeitungssw macht"*. Kommt nur die eine Haelfte im Ziel an, ist die
@@ -185,7 +185,7 @@ def test_eine_unerklaerte_datei_wird_gemeldet(tmp_path) -> None:
 
 
 def test_ungleiche_inhalte_bei_raw_und_jpeg_werden_gemeldet(tmp_path) -> None:
-    """**Die andere Haelfte von KT-1s Direktive — und ohne sie ist die Pruefung blind.**
+    """**Die andere Haelfte der Direktive des Autors — und ohne sie ist die Pruefung blind.**
 
     *"auch alle inhalte muessen bei jpeg und raw gleich sein"*. Eine Pruefung,
     die nur Dateien zaehlt, meldet einen Lauf als sauber, in dem 29 von 42
@@ -194,7 +194,7 @@ def test_ungleiche_inhalte_bei_raw_und_jpeg_werden_gemeldet(tmp_path) -> None:
     Fassung dieser Pruefung `sauber=True`.
 
     Das ist die teuerste Art Luecke: das Werkzeug antwortet, es antwortet
-    zuversichtlich, und es hat die Frage nie gestellt (LP-32).
+    zuversichtlich, und es hat die Frage nie gestellt.
     """
     quelle, ziel = tmp_path / "q", tmp_path / "z"
     _paar(quelle, "DSCF0001")
@@ -275,8 +275,8 @@ def test_ein_sidecar_aus_der_quelle_ist_kein_befund(tmp_path) -> None:
     """**Was schon vorher dalag, hat das Werkzeug nicht verursacht.**
 
     Ein JPEG ohne RAW traegt seine Angaben eingebettet; ein Sidecar daneben ist
-    normalerweise "zwei Traeger". Liegt er aber schon in der QUELLE, ist er KT-1s
-    eigene Arbeit aus Capture One — im Karwendel-Bestand sechs solche Faelle, mit
+    normalerweise "zwei Traeger". Liegt er aber schon in der QUELLE, ist er die
+    eigene Arbeit des Autors aus Capture One — im Karwendel-Bestand sechs solche Faelle, mit
     seinen Bewertungen darin. Das Werkzeug hat sie korrekt mitkopiert (RAW und
     Sidecar nie getrennt bewegen); sie als Befund zu melden waere falsch, und sie
     zu loeschen waere schlimmer.

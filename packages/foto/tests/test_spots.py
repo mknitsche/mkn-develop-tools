@@ -51,7 +51,7 @@ def test_eine_lange_pause_beginnt_eine_neue_session():
 
 
 def test_zwoelf_minuten_am_selben_ort_zerschneiden_nichts():
-    """Der Fall, der die Regel gebaut hat: KT-1 war teils Stunden an einem
+    """Der Fall, der die Regel gebaut hat: der Autor war teils Stunden an einem
     Spot, und zwischen zwei Bildern koennen zwoelf Minuten liegen. Eine
     Schwelle unter dieser Dauer wuerde eine Session in Stuecke schneiden."""
     aufnahmen = [_bild(0), _bild(720), _bild(740)]

@@ -1,7 +1,7 @@
 """Holt das eingebettete JPEG aus einer RAW-Datei — fuer den Blick des Modells.
 
 Eine RAW-Datei zu dekodieren kostet Sekunden; das eingebettete JPEG liegt fertig
-darin und ist in Millisekunden da. KT-1 hat darauf hingewiesen, die Spec § 10
+darin und ist in Millisekunden da. Der Autor hat darauf hingewiesen, die Spec § 10
 nennt es, und es ist die Grundlage der ganzen Bildanalyse.
 
 **Drei Fallen, alle firsthand belegt:**
@@ -16,9 +16,9 @@ nennt es, und es ist die Grundlage der ganzen Bildanalyse.
    die den Rueckgabewert prueft, meldet Erfolg ueber einer 0-Byte-Datei. Geprueft
    wird die GROESSE und die JPEG-Klammer — und zwar beide Enden: ein
    abgeschnittener Auszug traegt den Kopf `ffd8ff` ebenso wie ein ganzer und
-   besteht jede reine Groessenpruefung (cld1, 2026-08-30).
+   besteht jede reine Groessenpruefung (2026-08-30).
 
-3. **Die Extraktion wirft alle Aufnahmedaten weg** (cld1, 2026-08-30): von zehn
+3. **Die Extraktion wirft alle Aufnahmedaten weg** (2026-08-30): von zehn
    Testbildern trug die Vorschau danach genau EINES eine Brennweite. Ein leeres
    Feld sieht aus wie „kein Treffer", nicht wie Datenverlust. Die Herkunft wird
    deshalb zurueckgeschrieben — **ohne die Ausrichtung**, sonst dreht der
@@ -137,7 +137,7 @@ def _uebernimm_herkunft(quelle: Path, ziel: Path) -> None:
     """Schreibt die Aufnahmedaten aus dem Original in die Vorschau.
 
     **Die Ausrichtung bleibt ausgenommen — aber aus einem feineren Grund, als
-    zunaechst angenommen.** cld1s Warnung lautete: ein uebernommener
+    zunaechst angenommen.** Die Warnung lautete: ein uebernommener
     Orientation-Wert dreht ein bereits gedrehtes Bild ein zweites Mal. Gemessen
     ist die Lage anders: der Fuji-Auszug eines Hochformat-Bildes ist QUER
     gespeichert (4416x2944) und traegt seine Drehungsangabe bereits SELBST. Sie

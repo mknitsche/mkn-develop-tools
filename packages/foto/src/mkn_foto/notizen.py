@@ -29,7 +29,7 @@ from mkn_foto.modell import Anker
 NOTIZ = "ort.md"
 
 _UEBERSCHRIFTEN = ("## Ort", "## Gehoert zusammen mit")
-"""BEIDE. Die Vorlage bietet zwei Felder, und KT-1 hat ueberwiegend unter dem
+"""BEIDE. Die Vorlage bietet zwei Felder, und der Autor hat ueberwiegend unter dem
 zweiten geschrieben — ein Leser, der nur das erste kennt, findet fast nichts und
 meldet das als "keine Notizen" statt als eigenen Fehler. Firsthand passiert."""
 
@@ -39,7 +39,7 @@ _BELEG = ("footprint", "findpinguin", "findpenguin")
 """Ein Ortsname im Text macht noch keinen Ort. Erst der ausdrueckliche Verweis
 auf einen Footprint macht ihn zur ZUORDNUNG statt zur blossen Erwaehnung.
 
-Firsthand an KT-1s 20 Notizen gemessen — ohne diese Bedingung entstanden drei
+Firsthand an 20 Notizen des Autors gemessen — ohne diese Bedingung entstanden drei
 falsche Anker, und alle drei aus Saetzen, die das Gegenteil sagen:
 
   "ganz spontan ... irgendwo im nirgendwo ... auf der Rueckfahrt VON Grainau"
@@ -65,7 +65,7 @@ class Notiz:
 def lies(wurzel: Path) -> list[Notiz]:
     """Sammelt alle ausgefuellten Notizen unterhalb von `wurzel`.
 
-    Auch verschachtelt: KT-1 verschiebt beantwortete Ordner in einen
+    Auch verschachtelt: der Autor verschiebt beantwortete Ordner in einen
     Unterordner (`erl/`), sobald er sie abgearbeitet hat. Wer nur eine Ebene
     tief sucht, findet ausgerechnet die BEANTWORTETEN nicht.
     """
@@ -84,7 +84,7 @@ def lies(wurzel: Path) -> list[Notiz]:
                 # Bis zum ENDE der Minute. Der Ordnername traegt Minuten, ein
                 # Spot Sekunden -- bei einer Einzelaufnahme um 18:41:23 und einem
                 # Ordner `1841-1841` ueberlappen die Fenster sonst nicht, und die
-                # Antwort geht verloren. Firsthand: fuenf von KT-1 beantwortete
+                # Antwort geht verloren. Firsthand: fuenf vom Autor beantwortete
                 # Sessions standen nach dem Lauf wieder auf der Frageliste --
                 # genau das, was er zwei Stunden zuvor beanstandet hatte.
                 bis=datetime.strptime(f"{tag} {bis}", "%Y-%m-%d %H%M") + timedelta(seconds=59),
@@ -107,13 +107,13 @@ def zu_ankern(
     Session liegen, die er beantwortet — sonst beantwortet er die Nachbarsession
     mit. Genommen wird die Mitte des Fensters.
 
-    **`urteile` loest die Wortsuche ab** (KT-1, 2026-08-30: *"meine antworten
+    **`urteile` loest die Wortsuche ab** (der Autor, 2026-08-30: *"meine antworten
     wurden nicht intelligent interpretiert, sondern 1:1 uebernommen ... das ist
     doch bloedsinn"*). Liegt zu einer Notiz ein gelesenes Urteil vor, entscheidet
     es — sonst greift die alte Stichwortsuche weiter, damit ein Lauf ohne Modell
     nicht schlechter wird als vorher.
 
-    Gemessen an KT-1s 20 echten Notizen: die Wortsuche erkannte neun und warf
+    Gemessen an 20 echten Notizen des Autors: die Wortsuche erkannte neun und warf
     "Schon Zugspitze ganz oben", "also Stubaier Gletscher", "zu Hause" und jedes
     "vorheriger Ordner" weg. Das gelesene Urteil erkennt sie.
     """

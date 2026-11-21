@@ -1,6 +1,6 @@
 """Was ein Lauf ueber 969 Aufrufe hinterlassen muss, damit man ihn auswerten kann.
 
-KT-1 vor dem Start, 2026-08-30: *"hast du eine umfangreiche, stabile
+Der Autor vor dem Start, 2026-08-30: *"hast du eine umfangreiche, stabile
 observibility ... nicht dass wir durchlaufen und uns dann messwerte token pro
 aktion, pro bild usw fehlen?"*
 
@@ -88,7 +88,7 @@ def test_ein_gescheiterter_aufruf_wird_mitgezaehlt():
 
 
 def test_der_vergleich_gegen_die_schaetzung_steht_im_protokoll():
-    """Der eigentliche Zweck dieses Laufs (KT-1s Billing-Test): stimmte die
+    """Der eigentliche Zweck dieses Laufs (der Billing-Test des Autors): stimmte die
     Vorhersage? Ohne den Vergleich im Protokoll muss man ihn von Hand
     nachrechnen — und dann tut es niemand."""
     p = messung.Protokoll(geschaetzt_eur=16.25)

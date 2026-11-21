@@ -161,9 +161,9 @@ def test_der_ordnername_traegt_nur_datum_und_zeit(tmp_path):
 
 
 def test_in_jedem_ordner_liegen_nur_noch_die_bilder(tmp_path):
-    """Seit macb-S314 steht die Eingabe zentral in EINER Datei.
+    """Die Eingabe steht zentral in EINER Datei.
 
-    Zwoelf Ordner mit je einem Formular waren genau die Form, bei der KT-1 nicht
+    Zwoelf Ordner mit je einem Formular waren genau die Form, bei der der Autor nicht
     mehr wusste, was er tun soll — und zwei Wege fuer dieselbe Eingabe waeren
     ausserdem zwei Zustaende ueber eine Sache. Hier liegen deshalb nur noch die
     Bilder zum Ansehen; die Zusicherungen ueber das Eingabeformular leben in
@@ -185,7 +185,7 @@ def test_in_jedem_ordner_liegen_nur_noch_die_bilder(tmp_path):
 def test_ein_neuer_lauf_zerstoert_keine_geschriebene_notiz(tmp_path):
     """Der gefaehrlichste Fall des ganzen Moduls.
 
-    Geprueft wird die ZENTRALE Eingabedatei — seit macb-S314 traegt sie die
+    Geprueft wird die ZENTRALE Eingabedatei — sie traegt die
     Antworten, nicht mehr eine Notiz je Ordner. Die vier Tests ueber den Inhalt
     einer Einzelnotiz sind mit ihrem Gegenstand nach `test_bericht.py` gewandert;
     hier bleibt der Schutz, weil er zum Raeumen gehoert und nicht zum Schreiben.
@@ -200,7 +200,7 @@ def test_ein_neuer_lauf_zerstoert_keine_geschriebene_notiz(tmp_path):
     spot = Spot(aufnahmen=tuple(_bild(n, quelle) for n in range(3)))
     entscheidung.bereite_vor([(spot, None)], ziel)
 
-    # Seit macb-S314 steht die Eingabe zentral: EINE Datei statt einer Notiz je
+    # Die Eingabe steht zentral: EINE Datei statt einer Notiz je
     # Ordner. Die Zusicherung ist dieselbe geblieben, nur ihr Gegenstand ist neu.
     zentral = ziel / entscheidung.SAMMELDATEI
     zentral.write_text(

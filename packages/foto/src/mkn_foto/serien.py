@@ -141,14 +141,14 @@ eines Rasters ist real, und dort waere der Schaden nicht mehr gutzumachen."""
 _KANDIDAT_MIN_LAENGE = 2
 """Die kleinste Gruppe, die ein Fenster bildet.
 
-**Die Mindestlaenge ist kein Entscheider mehr.** Sie war es, und sie hat KT-1s
-Panorama verworfen: `DSCF3894`-`3896` entstand als Gruppe voellig korrekt
+**Die Mindestlaenge ist kein Entscheider mehr.** Sie war es, und sie hat das
+Panorama des Autors verworfen: `DSCF3894`-`3896` entstand als Gruppe voellig korrekt
 (Brennweite und Blende konstant, Luecken 5 s und 7 s, davor 442 s und dahinter
 187 s Trennung) und fiel einzig an der Zahl 4 durch.
 
 Die Auswahl uebernimmt jetzt die Deckungsmessung, die ohnehin Schwenk von
 Wiederholung trennt. Was die 4 an Schutz leistete, leisten Deckungs-Schwelle und
-Regel A. KT-1 woertlich: *"ggf. sind 2 bilder bereits der anfang des
+Regel A. Der Autor woertlich: *"ggf. sind 2 bilder bereits der anfang des
 panoramas"*."""
 
 # Was konstant bleiben MUSS. Die Belichtungszeit steht bewusst NICHT hier:

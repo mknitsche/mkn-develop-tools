@@ -29,7 +29,7 @@ ANZAHL = 5
 """Wie viele Bilder je Session gezeigt werden."""
 
 SAMMELDATEI = "_offene-orte.md"
-"""Die zentrale Eingabedatei seit macb-S314 (erzeugt von `bericht`). Sie wird
+"""Die zentrale Eingabedatei (erzeugt von `bericht`). Sie wird
 hier nur GELESEN -- geschrieben wird sie dort, und der Riegel darf nicht von
 ihrem Erzeuger abhaengen."""
 
@@ -104,9 +104,9 @@ def bereite_vor(
                     shutil.copy2(pfad, ordner / pfad.name)
                     kopiert += 1
 
-        # KEINE Notiz je Ordner mehr: die Eingabe steht seit macb-S314 zentral in
+        # KEINE Notiz je Ordner mehr: die Eingabe steht zentral in
         # EINER Datei (`bericht.entscheidungsdatei`). Zwoelf Ordner mit je einem
-        # Formular waren genau die Form, bei der KT-1 nicht mehr wusste, was er
+        # Formular waren genau die Form, bei der der Autor nicht mehr wusste, was er
         # tun soll -- und zwei Wege fuer dieselbe Eingabe waeren ausserdem zwei
         # Zustaende ueber eine Sache. Hier liegen nur noch die Bilder zum Ansehen.
         _ = kopiert
@@ -180,7 +180,7 @@ def _raeume_frueheren_lauf(ziel: Path) -> None:
     if not inhalt:
         return
     # Zwei Formen, weil zwei Zeitalter: die Einzelnotizen aus der ersten Fassung
-    # (KT-1 hat zwanzig davon ausgefuellt) und die zentrale Datei seit macb-S314.
+    # (der Autor hat zwanzig davon ausgefuellt) und die zentrale Datei.
     # Beide muessen den Lauf anhalten -- wer seine Orte eingetragen hat, verliert
     # die Arbeit unwiederbringlich, wenn das Ziel geraeumt wird. Ein Warnsatz in
     # einer Datei ist kein Schutz: er wird gelesen, nachdem es passiert ist.

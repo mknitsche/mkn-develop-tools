@@ -1,6 +1,6 @@
 """Position je BILD, interpoliert aus allen Ankerquellen — echtes Geotagging.
 
-KT-1 am 2026-08-30: *"eigentlich hatte ich gehofft, du machst sinnvolle gpx (gps)
+Der Autor am 2026-08-30: *"eigentlich hatte ich gehofft, du machst sinnvolle gpx (gps)
 informationen, die man auf einer karte sieht"*.
 
 Die erste Fassung gab ganzen Sessions eine Sammelkoordinate: 141 Bilder mit

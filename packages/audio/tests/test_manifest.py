@@ -229,5 +229,5 @@ def test_leser_heisst_mkn_audio(tmp_path):
     )
 
     bereiche = _bereiche(json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8")))
-    assert bereiche  # Untergrenze (LP-36): es gibt Bereiche, die einen Leser nennen
+    assert bereiche  # Untergrenze: es gibt Bereiche, die einen Leser nennen
     assert {b["leser"] for b in bereiche} == {"mkn-audio"}

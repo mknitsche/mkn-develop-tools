@@ -1,4 +1,4 @@
-"""KT-1s handschriftliche Antworten als dritte Ortsquelle.
+"""Die handschriftlichen Antworten des Autors als dritte Ortsquelle.
 
 Was das Werkzeug nicht belegen konnte, hat ein Mensch beantwortet — 18 von 20
 offenen Sessions. Diese Antworten sind die belastbarste Quelle im ganzen System
@@ -8,7 +8,7 @@ wieder da.
 Drei Dinge, an denen dieses Modul haengt:
 
 1. **Beide Abschnitte lesen.** Die Vorlage bietet `## Ort` und `## Gehoert
-   zusammen mit`. KT-1 hat ueberwiegend unter der ZWEITEN geschrieben. Ein
+   zusammen mit`. Der Autor hat ueberwiegend unter der ZWEITEN geschrieben. Ein
    Leser, der nur `## Ort` kennt, findet fast nichts — und meldet das als
    "keine Notizen" statt als eigenen Fehler. Firsthand passiert.
 2. **Der Ortsname ist der Schluessel, nicht der Text.** Die Notizen sind
@@ -48,7 +48,7 @@ def _notiz(wurzel: Path, ordner: str, *, ort: str = "", zusammen: str = "") -> P
 
 
 def test_text_unter_der_zweiten_ueberschrift_wird_gefunden(tmp_path):
-    """Der Fall, der real vorkommt: KT-1 hat fast alles dort hingeschrieben."""
+    """Der Fall, der real vorkommt: der Autor hat fast alles dort hingeschrieben."""
     _notiz(
         tmp_path,
         "2026-08-24_0619-0716",
@@ -127,7 +127,7 @@ def test_ein_name_der_in_einem_laengeren_steckt_ist_kein_zweiter_treffer(tmp_pat
 
 
 def test_ein_name_ohne_footprint_bezug_ist_keine_zuordnung(tmp_path):
-    """Der teuerste Fehler dieses Moduls, firsthand an KT-1s Notizen gemessen.
+    """Der teuerste Fehler dieses Moduls, firsthand an den Notizen des Autors gemessen.
 
     Drei seiner Antworten nennen einen Ortsnamen und sagen dabei das GEGENTEIL:
     *"auf der Rueckfahrt VON Grainau"*, *"wahrscheinlich irgendwie bei
@@ -153,7 +153,7 @@ def test_mehrdeutiger_text_erzeugt_keinen_anker(tmp_path):
 
 
 def test_verschobene_ordner_werden_gefunden(tmp_path):
-    """KT-1 schiebt beantwortete Ordner in einen Unterordner (`erl/`), sobald er
+    """Der Autor schiebt beantwortete Ordner in einen Unterordner (`erl/`), sobald er
     sie abgearbeitet hat. Wer nur eine Ebene tief sucht, findet ausgerechnet die
     BEANTWORTETEN nicht — also genau die, um die es geht.
 
@@ -267,7 +267,7 @@ def test_eine_unsichere_zuordnung_wird_nicht_geschrieben() -> None:
     Aufgefallen durch eine hohle Mutation: der Vermutungs-Test wurde von der
     Art-Pruefung gefangen, nicht von der Sicherheitspruefung. Haette jemand die
     Sicherheitspruefung entfernt, waere alles gruen geblieben -- und ein Ort,
-    den das Modell selbst anzweifelt, waere in KT-1s Bilder gewandert.
+    den das Modell selbst anzweifelt, waere in die Bilder des Autors gewandert.
     """
     from mkn_foto.notizurteil import Urteil
 

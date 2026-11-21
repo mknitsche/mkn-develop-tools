@@ -10,10 +10,10 @@ einen Namen fest verdrahtet, bekommt je nach Kamera etwas anderes oder nichts.
 **2. exiftool meldet bei fehlendem Tag Exit 0 mit leerer Ausgabe.** Eine Kette,
 die den Rueckgabewert prueft, meldet dann Erfolg ueber einer 0-Byte-Datei. Genau
 das ist mir am 2026-08-30 passiert. Geprueft wird deshalb die GROESSE und die
-JPEG-Klammer (ffd8ff … ffd9) — cld1s Verschaerfung: ein abgeschnittener Auszug
+JPEG-Klammer (ffd8ff … ffd9) — Verschaerfung: ein abgeschnittener Auszug
 traegt den Kopf ebenfalls und besteht jede reine Groessenpruefung.
 
-**3. Die Extraktion wirft alle Aufnahmedaten weg** (cld1, 2026-08-30): von zehn
+**3. Die Extraktion wirft alle Aufnahmedaten weg** (2026-08-30): von zehn
 Testbildern trug die Vorschau danach genau EINES eine Brennweite. Ein leeres Feld
 sieht aus wie „kein Treffer", nicht wie Datenverlust. Eine Vorschau traegt
 deshalb entweder ihre Herkunft oder sie ist ein Wegwerfstueck — kein
@@ -22,6 +22,7 @@ Zwischenzustand, in dem sie aussieht wie eine Aufnahme.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -34,22 +35,16 @@ pytestmark = pytest.mark.skipif(
 )
 
 #: Echte Reisebilder, eine je Hersteller. Sie liegen ausserhalb des Repos —
-#: fehlen sie, wird uebersprungen statt falsch bestanden.
-NIKON = Path(
-    "/Users/mkn1972/Pictures/01 Bilder von Camera/"
-    "2026-08-24.29 FotoUrlaubMittenwald/2026-08-26/D850/D85_2560.NEF"
-)
-FUJI = Path(
-    "/Users/mkn1972/Pictures/01 Bilder von Camera/"
-    "2026-08-24.29 FotoUrlaubMittenwald/2026-08-26/X-E5/DSCF3512.RAF"
-)
+#: fehlen sie, wird uebersprungen statt falsch bestanden. Den Wurzelordner nennt
+#: die Umgebungsvariable MKN_FOTO_TESTBESTAND; darin braucht `serie-a` die Nikon-
+#: Datei D85_2560.NEF, `serie-b` die Fuji-Dateien DSCF3512.RAF und DSCF3277.RAF.
+_WURZEL = Path(os.environ.get("MKN_FOTO_TESTBESTAND") or "/nicht-gesetzt/MKN_FOTO_TESTBESTAND")
+NIKON = _WURZEL / "serie-a" / "D85_2560.NEF"
+FUJI = _WURZEL / "serie-b" / "DSCF3512.RAF"
 #: HOCHFORMAT (Orientation=8). Nur an einem gedrehten Bild kann die
 #: Ausrichtungs-Falle zuschlagen -- bei Orientation=1 aendert ein
 #: mituebernommener Wert nichts, und der Test bleibt gruen, ohne etwas zu sagen.
-FUJI_HOCH = Path(
-    "/Users/mkn1972/Pictures/01 Bilder von Camera/"
-    "2026-08-24.29 FotoUrlaubMittenwald/2026-08-26/X-E5/DSCF3277.RAF"
-)
+FUJI_HOCH = _WURZEL / "serie-b" / "DSCF3277.RAF"
 
 
 def _ist_gueltiges_jpeg(p: Path) -> bool:
@@ -70,7 +65,7 @@ def test_beide_hersteller_liefern_eine_gueltige_vorschau(quelle, tmp_path):
 
 
 def test_ein_abgeschnittener_auszug_gilt_nicht_als_vorschau(tmp_path):
-    """cld1s Verschaerfung: der Kopf allein reicht nicht.
+    """Verschaerfung: der Kopf allein reicht nicht.
 
     Ein halbes Bild traegt `ffd8ff` genauso wie ein ganzes und besteht jede
     Groessenpruefung — nur die Endklammer `ffd9` fehlt.
@@ -101,7 +96,7 @@ def test_eine_fremde_datei_liefert_nichts_statt_zu_werfen(tmp_path):
 
 @pytest.mark.parametrize("quelle", [NIKON, FUJI], ids=["nikon", "fuji"])
 def test_die_vorschau_traegt_ihre_herkunft(quelle, tmp_path):
-    """cld1s Befund vom 2026-08-30: die reine Extraktion wirft ALLE
+    """Befund vom 2026-08-30: die reine Extraktion wirft ALLE
     Aufnahmedaten weg — von zehn Testbildern trug danach genau eines eine
     Brennweite. Ein Filter darueber faende 90 % nicht, und zwar lautlos.
     """
@@ -125,7 +120,7 @@ def test_die_vorschau_traegt_ihre_herkunft(quelle, tmp_path):
 
 
 def test_die_vorschau_wird_nicht_doppelt_gedreht(tmp_path):
-    """cld1s Hinweis, praezisiert an der Messung.
+    """Hinweis, praezisiert an der Messung.
 
     Sein Punkt: `-all:all` zurueckschreiben und die Ausrichtung nicht ausnehmen,
     dreht ein bereits gedrehtes Bild ein zweites Mal.

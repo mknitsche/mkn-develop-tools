@@ -1,6 +1,6 @@
 """Was der Mensch in seine Notiz geschrieben hat — gelesen, nicht abgetippt.
 
-**Der Anlass, woertlich (KT-1, 2026-08-30):** *"dann wurden auch meine antworten
+**Der Anlass, woertlich (der Autor, 2026-08-30):** *"dann wurden auch meine antworten
 nicht intelligent interpretiert, sondern 1:1 uebernommen - da steht dann kein
 ort - obwohl genannt war 'gehoert zu granau' oder 'zu vorordner' usw ... das ist
 doch bloedsinn"* -- und, unmissverstaendlich: *"ich hatte einfach in die datei
@@ -168,7 +168,7 @@ def _text_aus(antwort: dict[str, Any]) -> str:
         # ALLE Bloecke, nicht der erste: Opus 5 liefert `thinking` UND `text`.
         # Wer blind den ersten nimmt, liest die Signatur des Denkens statt der
         # Antwort -- und haelt eine einwandfreie Auskunft fuer unlesbar. Genau
-        # das ist beim ersten Lauf ueber KT-1s 20 Notizen passiert: alle 20
+        # das ist beim ersten Lauf ueber 20 Notizen des Autors passiert: alle 20
         # galten als unsicher, obwohl das Modell "Lenggries" sauber erkannt hat.
         return "".join(b.get("text", "") for b in inhalt if isinstance(b, dict))
     if isinstance(inhalt, str):

@@ -1,7 +1,7 @@
 """Protokoll und Rueckweg: was ist durch, was ist offen, und wie kommt die
 Antwort zurueck.
 
-KT-1 am 2026-08-30, nachdem er den ersten Lauf verworfen hatte:
+Der Autor am 2026-08-30, nachdem er den ersten Lauf verworfen hatte:
 
     "so dass klar ist, was durch ist (also nach capONE koennte) und was offen
     ist, mit einer eindeutigen protokolldatei und einer sinnvolen moeglichkeit
@@ -38,8 +38,8 @@ eindeutig sein.
 Die Anleitung in der Datei nennt ihn NICHT beim Namen -- `lies_entscheidungen`
 sucht Zeilen, die damit BEGINNEN, und ein Beispiel im Fliesstext waere eine
 zusaetzliche, leere Antwort. Wer ein Muster dokumentiert, schreibt es hin und
-faellt selbst durch (LP-35). Diese Begruendung gehoert hierher und nicht in die
-Datei, die KT-1 liest -- dort ist sie Werkzeug-Innensicht, die nur verwirrt."""
+faellt selbst durch. Diese Begruendung gehoert hierher und nicht in die
+Datei, die der Autor liest -- dort ist sie Werkzeug-Innensicht, die nur verwirrt."""
 
 _ORDNER = "%Y-%m-%d_%H%M"
 
@@ -127,7 +127,7 @@ def protokoll(
 def entscheidungsdatei(ziel: Path, offen: Sequence[tuple[Spot, Ort | None]]) -> Path:
     """EINE Datei mit einem Feld je offenem Fall.
 
-    Nicht zwoelf Ordner mit je einer Notiz: das war die Form, bei der KT-1 nicht
+    Nicht zwoelf Ordner mit je einer Notiz: das war die Form, bei der der Autor nicht
     mehr wusste, was er tun soll.
     """
     ziel = Path(ziel)

@@ -1,8 +1,8 @@
 """Der Urheber steht in der Datei des Anwenders, nie im Code.
 
 `mkn-develop-tools` ist ein OEFFENTLICHES Repository. Ein Name, ein Wohnort und
-eine Mailadresse im Quelltext waeren dort fuer jeden lesbar — und in KT-1s
-Regelwerk ist das ein HC-3-Verstoss (im Repo lebt Status, keine
+eine Mailadresse im Quelltext waeren dort fuer jeden lesbar — und im Regelwerk
+des Autors ist das ein Verstoss gegen den Personenbezug (im Repo lebt Status, keine
 personenbezogenen Daten). Die Loesung ist dieselbe wie beim API-Schluessel:
 **das Werkzeug kennt den Platz, nicht den Wert.**
 """
@@ -67,7 +67,7 @@ def test_der_rechtevermerk_bleibt_kurz(tmp_path: Path) -> None:
     Rechtssprache in `UsageTerms`. Ein vollgestopfter Vermerk ist fuer Menschen
     muehsam und fuer Maschinen wertlos, weil keine Auswertung ihn zerlegt.
 
-    (Meine erste Fassung schrieb Ort und Mailadresse in denselben String. KT-1
+    (Meine erste Fassung schrieb Ort und Mailadresse in denselben String. Der Autor
     fragte, wie es Fotografen halten -- und die Antwort war eine andere als
     meine Annahme.)
     """

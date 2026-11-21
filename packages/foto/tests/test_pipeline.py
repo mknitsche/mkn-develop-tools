@@ -10,7 +10,7 @@ Drei Dinge fallen genau hier durch und nirgends sonst:
 2. **Widerlegte Anker fliegen VOR der Ortsbestimmung raus.** Danach ist es zu
    spaet: der Ausreisser hat den Radius dann schon aufgeblaeht.
 3. **Was keinen belegten Ort hat, landet auf der Entscheidungsliste** — und
-   NICHT im Baum mit einem geratenen Ort. Das ist KT-1s oberste Regel: im
+   NICHT im Baum mit einem geratenen Ort. Das ist die oberste Regel des Autors: im
    Zweifel nicht schreiben.
 """
 
@@ -128,7 +128,7 @@ def test_ein_spot_mit_beleg_wird_verortet_der_andere_vorgelegt(tmp_path, monkeyp
 def test_zwei_sessions_am_selben_ort_werden_ein_spot(tmp_path, monkeypatch):
     """Der Scheibum-Fall, und er ist der haeufigste der ganzen Reise.
 
-    KT-1 hat ihn selbst beschrieben: *"Parkplatz .. dann handy ... dann laufen
+    der Autor hat ihn selbst beschrieben: *"Parkplatz .. dann handy ... dann laufen
     ... dann teil 1 ... dann teil 2 ... dann zurueck zum Parkplatz"*. Zwischen
     Teil 1 und Teil 2 liegt eine Pause, die groesser ist als die Sessionschwelle
     — und trotzdem ist es EIN Spot. Die Zeit allein kann das nicht sehen, die
@@ -165,7 +165,7 @@ def test_zwei_sessions_am_selben_ort_werden_ein_spot(tmp_path, monkeypatch):
 
     assert len(lauf.spots) == 1, (
         f"zwei Sessions am selben Ort blieben getrennt ({len(lauf.spots)} Spots) — "
-        "die Pause gehoert zum Ort, und KT-1 muesste denselben Ort zweimal beschriften"
+        "die Pause gehoert zum Ort, und der Autor muesste denselben Ort zweimal beschriften"
     )
     assert len(lauf.spots[0].aufnahmen) == 4
     assert len(lauf.orte) == 1, "der zusammengefasste Spot ist nicht verortet"
@@ -178,8 +178,7 @@ def test_zonenbehaftete_anker_werden_auf_kamerazeit_gebracht(tmp_path):
     Firsthand beim ersten echten Lauf ueber 283 Handybilder:
     `TypeError: can't compare offset-naive and offset-aware datetimes`.
     Der Test darueber hatte einen handgebauten NAIVEN Anker benutzt und konnte
-    den Fall deshalb nicht sehen — ein Beweis muss seinen Gegenstand enthalten
-    (LP-34).
+    den Fall deshalb nicht sehen — ein Beweis muss seinen Gegenstand enthalten.
     """
     datei = _gpx(tmp_path / "spur.gpx", [("2026-08-27T08:00:00Z", 47.500, 11.400)])
     # So, wie die Mediathek sie liefert: UTC mit Zone.
@@ -207,13 +206,13 @@ def test_zonenbehaftete_anker_werden_auf_kamerazeit_gebracht(tmp_path):
 
 
 def test_eine_menschliche_antwort_gilt_als_belegt(tmp_path, monkeypatch):
-    """KT-1s Antwort ist keine Schaetzung, sondern eine Aussage.
+    """Die Antwort des Autors ist keine Schaetzung, sondern eine Aussage.
 
     Die Abdeckungspruefung in `ort.fuer_spot` misst, wie gut die Anker eine
     Session einrahmen — bei EINEM Anker aus einer Notiz reicht das nie, und der
     Spot bliebe `vorschlag`. Firsthand: vier Spots trugen nach dem Einlesen der
     Notizen den richtigen Namen ("Lenggries", "Vomp", "Kochel am See") und
-    standen trotzdem wieder auf der Entscheidungsliste. KT-1 haette dieselbe
+    standen trotzdem wieder auf der Entscheidungsliste. Der Autor haette dieselbe
     Frage ein zweites Mal beantworten muessen.
 
     Die Geometrie wird dafuer NICHT angefasst: die menschliche Antwort ist eine
@@ -250,7 +249,7 @@ def test_eine_menschliche_antwort_gilt_als_belegt(tmp_path, monkeypatch):
     )
 
     assert len(lauf.orte) == 1, (
-        "die beantwortete Session gilt nicht als verortet — KT-1 muesste dieselbe "
+        "die beantwortete Session gilt nicht als verortet — der Autor muesste dieselbe "
         f"Frage noch einmal beantworten. offen: {lauf.offen}"
     )
     assert lauf.orte[id(lauf.spots[0])].name == "Lenggries"
@@ -258,7 +257,7 @@ def test_eine_menschliche_antwort_gilt_als_belegt(tmp_path, monkeypatch):
 
 
 def test_beantwortete_sessions_kommen_nicht_erneut_auf_die_liste(tmp_path, monkeypatch):
-    """KT-1 am 2026-08-30: "es gibt einen ordner foto-neu - da sind aber die drin,
+    """Der Autor am 2026-08-30: "es gibt einen ordner foto-neu - da sind aber die drin,
     die ich schon beantwortet habe".
 
     Er hatte recht: 11 von 12 vorgelegten Ordnern waren beantwortet. Mein
@@ -292,7 +291,7 @@ def test_beantwortete_sessions_kommen_nicht_erneut_auf_die_liste(tmp_path, monke
 
     offene_ordner = [f"{s.von:%Y-%m-%d_%H%M}-{s.bis:%H%M}" for s, _ in lauf.offen]
     assert "2026-08-24_2304-2304" not in offene_ordner, (
-        "eine beantwortete Session wird erneut vorgelegt — KT-1 bekaeme seine "
+        "eine beantwortete Session wird erneut vorgelegt — der Autor bekaeme seine "
         f"eigene Arbeit zurueck. Vorgelegt: {offene_ordner}"
     )
     assert offene_ordner == ["2026-08-25_1149-1149"], f"unerwartete Liste: {offene_ordner}"
@@ -366,7 +365,7 @@ def test_heuristik_kandidaten_bekommen_keinen_serien_namen(tmp_path, monkeypatch
     `pan01…`, obwohl kein Blick aufs Bild stattgefunden hatte. Die Spec misst fuer
     genau diese Kandidaten **ein Drittel** Trefferquote (§ 4): zwei von drei so
     benannten Dateien tragen einen falschen Namen, und der Name ist das, wonach
-    KT-1 spaeter sucht.
+    der Autor spaeter sucht.
 
     Bis Stufe 3 urteilt, heissen sie `std`. Sie sind damit nicht verloren — sie
     stehen als Kandidat im Protokoll.
@@ -378,7 +377,7 @@ def test_heuristik_kandidaten_bekommen_keinen_serien_namen(tmp_path, monkeypatch
     # das fuer ein Panorama. Kein AutoBracketing: Stufe 1 sagt also nichts.
     # VIER Bilder, nicht drei: `_KANDIDAT_MIN_LAENGE` ist 4, und mit dreien
     # entstand gar kein Kandidat -- der Test war gruen, ohne seinen Gegenstand
-    # zu enthalten (LP-34).
+    # zu enthalten.
     for i, sek in enumerate((0, 3, 6, 9)):
         (quelle / f"F{i:04d}.RAF").write_bytes(b"roh")
         felder.append(
@@ -434,11 +433,11 @@ def test_kamerasichere_serien_werden_weiterhin_benannt(tmp_path, monkeypatch):
 
 
 def test_bilder_einer_session_bekommen_verschiedene_koordinaten(tmp_path, monkeypatch):
-    """Der Kern von KT-1s Geotagging-Klage — und es war ein fehlender Aufruf.
+    """Der Kern der Geotagging-Klage des Autors — und es war ein fehlender Aufruf.
 
     `geotag.fuer_aufnahme` existierte samt Tests, aber die Pipeline rief es nie.
     Alle Bilder einer Session trugen die Sammelkoordinate ihres Spots: 141 Bilder
-    auf demselben Punkt. KT-1: *"sinnvolle gpx (gps) informationen, die man auf
+    auf demselben Punkt. Der Autor: *"sinnvolle gpx (gps) informationen, die man auf
     einer karte sieht"* — auf einer Karte ist das ein Punkt, keine Route.
     """
     quelle = tmp_path / "kamera"
@@ -520,13 +519,13 @@ def test_ohne_spur_bleibt_der_session_ort_der_rueckfall(tmp_path, monkeypatch):
 
 
 def test_eine_beantwortete_einzelaufnahme_kommt_nicht_wieder(tmp_path, monkeypatch):
-    """Der Fehler, der KT-1s Kritik nach dem V1-Lauf reproduzierte.
+    """Der Fehler, der die Kritik des Autors nach dem V1-Lauf reproduzierte.
 
     Ein Ordnername traegt MINUTEN (`2026-08-22_1841-1841`), ein Spot SEKUNDEN
     (18:41:23). Bei einer Einzelaufnahme sind von und bis identisch — und dann
     ueberlappen die beiden Fenster nicht: 18:41:23 liegt hinter 18:41:00.
 
-    Firsthand: fuenf Sessions, die KT-1 beantwortet hatte ("Loeschen - war im
+    Firsthand: fuenf Sessions, die der Autor beantwortet hatte ("Loeschen - war im
     Hotel", "ist schwarz - falsch belichtet"), standen nach dem Lauf wieder auf
     der Frageliste. Genau das, was er zwei Stunden zuvor beanstandet hatte.
     """
@@ -925,7 +924,7 @@ def test_die_frage_nennt_die_nachbarsessions(tmp_path) -> None:
 
 
 def test_auch_die_notiz_anfragen_werden_gemessen(tmp_path, monkeypatch) -> None:
-    """**Die Luecke, die KT-1s Kontostand aufgedeckt hat.**
+    """**Die Luecke, die der Kontostand des Autors aufgedeckt hat.**
 
     Am 2026-08-30 stimmte meine Lauf-Messung mit der Plattform auf 0,16 %
     ueberein — bis auf rund 74.000 Tokens. Ein Teil davon waren die
@@ -934,7 +933,7 @@ def test_auch_die_notiz_anfragen_werden_gemessen(tmp_path, monkeypatch) -> None:
 
     Das ist die schlechteste Art von Messluecke: sie faellt nicht auf, weil
     alles andere stimmt. Wer die Rechnung nur ueberschlaegt, findet sie nie —
-    KT-1 hat sie gefunden, indem er die Stundenwerte seiner Plattform neben
+    der Autor hat sie gefunden, indem er die Stundenwerte seiner Plattform neben
     meine Zahl gelegt hat.
     """
     import json as _json
@@ -1023,13 +1022,13 @@ def test_der_lauf_weist_die_notiz_kosten_mit_aus(tmp_path, monkeypatch) -> None:
 
 
 def test_eine_belichtungsreihe_verliert_ihre_serienfarbe_nicht(tmp_path, monkeypatch) -> None:
-    """**KT-1s Befund, 2026-08-30: 238 von 394 HDR-Bildern ohne Serienfarbe.**
+    """**Der Befund des Autors, 2026-08-30: 238 von 394 HDR-Bildern ohne Serienfarbe.**
 
     Woertlich: *"es sind viele bildserien (egal ob hdr oder eben als pano serie
     hinterlegt), die auch in fastviewraw keine kennzeichnung haben"*.
 
-    Zwei richtige Regeln ergaben eine falsche. *Violett schlaegt Blau* ist KT-1s
-    Entscheidung und richtig. *Fehlbelichtung kennzeichnen* ist sein Wunsch und
+    Zwei richtige Regeln ergaben eine falsche. *Violett schlaegt Blau* ist die
+    Entscheidung des Autors und richtig. *Fehlbelichtung kennzeichnen* ist sein Wunsch und
     ebenfalls richtig. Aber eine HDR-Belichtungsreihe BESTEHT aus absichtlich
     ueber- und unterbelichteten Bildern -- das ist ihr Zweck, kein Mangel. Das
     Modell meldete folgerichtig "unterbelichtet", Violett ueberschrieb Blau, und
@@ -1085,7 +1084,7 @@ def test_eine_belichtungsreihe_verliert_ihre_serienfarbe_nicht(tmp_path, monkeyp
         transport=transport,
     )
 
-    assert lauf.serien, "keine Serie erkannt - der Test prueft dann nichts (LP-36)"
+    assert lauf.serien, "keine Serie erkannt - der Test prueft dann nichts"
     import subprocess
 
     for pfad in sorted((tmp_path / "ziel").rglob("*.JPG")):
@@ -1126,7 +1125,7 @@ def test_das_urteil_wandert_beim_umbenennen_mit(tmp_path):
     # **Der Test ruft den PRODUKTIVCODE.** Eine erste Fassung baute die Wanderung
     # selbst nach und war damit hohl: die Mutation "Wanderung entfernen" liess
     # sie gruen. Ein Test, der die Logik nachbaut, die er pruefen soll, prueft
-    # sich selbst (LP-40).
+    # sich selbst.
     ergebnis.urteile[alt_a] = bildurteil.Serienurteil(
         sicher=True, serie="panorama", bilder=(1, 2), motive=("Kirche",)
     )
