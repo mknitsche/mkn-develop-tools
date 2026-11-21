@@ -1,6 +1,6 @@
 """Zusicherungen zur Deckungsmessung (Design § 2, § 3, § 5, § 8).
 
-Jede Zusicherung hier hat eine MUTATION, die sie rot macht (LP-40) -- die
+Jede Zusicherung hier hat eine MUTATION, die sie rot macht -- die
 Mutationen sind in den Docstrings genannt und wurden vor dem Schreiben dieser
 Tests am tragenden PoC (`scratchpad/poc/deckung3.py`) empirisch durchprobiert,
 nicht nur behauptet.
@@ -13,6 +13,7 @@ Pseudo-Rauschen ueber `random.Random(seed)`.
 
 from __future__ import annotations
 
+import os
 import random
 import shutil
 from pathlib import Path
@@ -34,17 +35,17 @@ def _deterministische_szene(breite: int, hoehe: int, *, sigma: float = 0.0, seed
     return roh.filter(ImageFilter.GaussianBlur(sigma)) if sigma else roh
 
 
-# --- Echte Bestaende (nur lesend, HC-4) --------------------------------
+# --- Echte Bestaende (nur lesend) --------------------------------
 # Wie test_vorschau.py: liegen ausserhalb des Repos, fehlen sie wird
-# uebersprungen statt falsch bestanden.
+# uebersprungen statt falsch bestanden. Den Wurzelordner nennt die Umgebungs-
+# variable MKN_FOTO_TESTBESTAND; darin muessen drei Unterordner liegen:
+# `serie-a` (Nikon-RAW D85_2560..2574.NEF), `serie-b` (Fuji-RAW, u. a.
+# DSCF3536.RAF) und `serie-c` (Fuji-JPEG DSCF3894..3896.JPG, ein Schwenk).
 
-_FOTORUNDE = Path("/Volumes/MN SSD 1TB /Foto-Sicherung-org/2026-08-30 Fotorunde Nuernberg")
-_MITTENWALD_D850 = Path(
-    "/Volumes/MN SSD 1TB /Foto-Sicherung-org/2026-08-24.29 FotoUrlaubMittenwald/2026-08-26/D850"
-)
-_MITTENWALD_XE5 = Path(
-    "/Volumes/MN SSD 1TB /Foto-Sicherung-org/2026-08-24.29 FotoUrlaubMittenwald/2026-08-27/X-E5"
-)
+_WURZEL = Path(os.environ.get("MKN_FOTO_TESTBESTAND") or "/nicht-gesetzt/MKN_FOTO_TESTBESTAND")
+_FOTORUNDE = _WURZEL / "serie-c"
+_MITTENWALD_D850 = _WURZEL / "serie-a"
+_MITTENWALD_XE5 = _WURZEL / "serie-b"
 
 
 def _skip_falls_fehlt(pfad: Path) -> None:
@@ -269,11 +270,11 @@ def test_zeilenwechsel_rueckgriff_ohne_feste_tiefe():
         assert verbindungen[i] == i - 1
 
 
-# --- Transpose am Stapel-Extrakt (LP-34) ----------------------------------
+# --- Transpose am Stapel-Extrakt ----------------------------------
 
 
 def test_transpose_wirkt_am_stapel_extrakt(tmp_path):
-    """LP-34: die Fixture ist eine ECHTE, per `-b -PreviewImage -w`
+    """Die Fixture ist eine ECHTE, per `-b -PreviewImage -w`
     extrahierte Vorschau einer Rotate-90-RAF -- kein gewoehnliches JPG,
     sonst prueft der Test einen Pfad, den es so nicht gibt.
 
@@ -341,7 +342,7 @@ def test_ohne_namenskollision_trennt_gleiche_staemme_in_getrennte_gruppen():
 def test_beleg_prueffall_schwenk_dann_wiederholung():
     """DSCF3894-3896 (Sebalduskirche): 3894->3895 muss als Schwenk gelten
     (Versatz ~35 %), 3895->3896 als Wiederholung (~2 %) -- die exakte
-    Aufteilung, die KT-1 am Kontaktbogen sah, bevor irgendjemand der Messung
+    Aufteilung, die der Autor am Kontaktbogen sah, bevor irgendjemand der Messung
     gesagt hat wonach sie sucht (Design § 1)."""
     dateien = [_FOTORUNDE / f"DSCF{n}.JPG" for n in (3894, 3895, 3896)]
     for d in dateien:

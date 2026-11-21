@@ -1,5 +1,5 @@
 #!/bin/bash
-# foto-karten-import — Kamerakarten nach Mac UND SSD sichern, in KT-1s Ordnerschema.
+# foto-karten-import — Kamerakarten nach Mac UND SSD sichern, im Ordnerschema des Autors.
 #
 # Erkennt eingelegte Karten am DCIM-Ordner (nicht am Volume-Namen — die Fuji-Karte
 # heisst "Untitled", das waere mit einem beliebigen USB-Stick verwechselbar).
@@ -16,7 +16,7 @@
 #
 # WOHNORT: mkn-develop-tools/tools/. Das ist ein WERKZEUG und gehoert nicht in das
 # persoenliche Wissenssystem — das Kriterium ist die Zugehoerigkeit, nicht die
-# Technik. In ~/.local/bin liegt nur ein Symlink darauf (Muster wie macb-launch):
+# Technik. In ~/.local/bin liegt nur ein Symlink darauf (Muster wie bei anderen Startskripten):
 # EINE Datei, keine zwei Kopien, die auseinanderdriften koennen.
 #
 # Historie: bis 2026-08-28 ungesichert und ungetrackt in ~/.local/bin, dann in

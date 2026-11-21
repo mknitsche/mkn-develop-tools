@@ -8,19 +8,19 @@ authors = [{ name = "Matthias Nitsche" }]
 readme = "README.md"
 # Pillow: Vorschauen verkleinern und Kontaktboegen bauen (Spec Paragraf 4a/10).
 # mkn-kern: die Modell-Anfrage (`motivlauf.py` importiert sie am Dateikopf, also
-#   schon beim Laden des Pakets). Diese Zeile fehlte bis macb-S316, und im Repo
+#   schon beim Laden des Pakets). Diese Zeile fehlte lange, und im Repo
 #   fiel es nie auf: `pythonpath` in der pytest-Konfiguration blendet beide
 #   Paketquellen ein, die Suite war gruen. Eine frische Installation brach dagegen
 #   sofort -- `mkn-foto --help` endete in
 #   `ModuleNotFoundError: No module named 'mkn_kern'`. Gefunden durch echtes
-#   Installieren in eine leere Umgebung, nicht durch einen Test (LP-18); seither
+#   Installieren in eine leere Umgebung, nicht durch einen Test; seither
 #   haelt `tests/test_paket_abhaengigkeiten.py` den Fall fest.
 # Sonst nichts: alles Weitere ist stdlib plus exiftool, das ohnehin auf dem
 # Rechner liegen muss.
 dependencies = ["Pillow>=10", "mkn-kern>=0.2"]
 
 # Ohne diesen Eintrag ergibt `pip install mkn-foto` eine Bibliothek und kein
-# Werkzeug -- jeder Lauf braeuchte weiter ein eigenes Skript (TODO-664).
+# Werkzeug -- jeder Lauf braeuchte weiter ein eigenes Skript.
 [project.scripts]
 mkn-foto = "mkn_foto.kommandozeile:haupt"
 

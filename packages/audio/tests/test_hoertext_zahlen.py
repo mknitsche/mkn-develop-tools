@@ -55,7 +55,7 @@ def test_dezimalzahlen_ziffernweise_nach_dem_komma(quelle, erwartet):
         ("3,50 €", "drei Euro fünfzig"),
         ("3,00 €", "drei Euro"),
         ("12,- €", "zwölf Euro"),
-        # Zusammengesetzt, weil der PII-Riegel des Repos (HC-3) jeden Betrag ab 1.000 mit
+        # Zusammengesetzt, weil der PII-Riegel des Repos jeden Betrag ab 1.000 mit
         # Waehrung in getrackten Dateien sperrt -- auch einen erfundenen Testwert.
         ("1.234,50" + " €", "tausendzweihundertvierunddreißig Euro fünfzig"),
         ("5 km", "fünf Kilometer"),

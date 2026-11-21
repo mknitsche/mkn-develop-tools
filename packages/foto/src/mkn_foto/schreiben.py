@@ -164,7 +164,7 @@ def _pruefe_platz(aufnahmen: Sequence[Aufnahme], ziel_wurzel: Path) -> None:
 def benenne_um(serien: Iterable[Serie]) -> int:
     """Vollzieht ein bestaetigtes Serien-Urteil im Baum: `std` wird `panNN-PPvGG`.
 
-    **Die Einheit ist die AUFNAHME, nicht die Datei** (KT-1s Direktive: *"die
+    **Die Einheit ist die AUFNAHME, nicht die Datei** (die Direktive des Autors: *"die
     gepaarten bilder sind als paar zu behandeln"*). Alle Dateien einer Aufnahme
     -- RAW, JPEG und der `.xmp`-Sidecar -- wandern unmittelbar nacheinander auf
     denselben neuen Stamm, ohne andere Arbeit dazwischen. Bliebe eine Haelfte

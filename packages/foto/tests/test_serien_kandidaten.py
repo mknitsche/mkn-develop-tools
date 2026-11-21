@@ -104,7 +104,7 @@ def test_drei_bilder_bilden_ein_fenster():
 
     Sie hiess frueher „drei Bilder sind noch kein Kandidat: darunter ist es keine
     Reihe, sondern eine Wiederholung". Das klingt vernuenftig und ist falsch:
-    KT-1s Panorama von der Sebalduskirche besteht aus DREI Aufnahmen, von denen
+    Das Panorama des Autors von der Sebalduskirche besteht aus DREI Aufnahmen, von denen
     zwei den Schwenk tragen. Es entstand als Gruppe voellig korrekt und fiel
     einzig an dieser Zahl durch — ueber 1.234 Kursbilder wurde null Panorama
     erkannt.
@@ -203,7 +203,7 @@ def _fenster_bild(
 
 
 def test_ein_dreier_fenster_entsteht() -> None:
-    """**KT-1s Panorama fiel einzig an der Mindestlaenge durch.**
+    """**Das Panorama des Autors fiel einzig an der Mindestlaenge durch.**
 
     Firsthand am Bestand gemessen (`DSCF3894`-`3896`, Sebalduskirche): Brennweite
     und Blende konstant, Luecken 5 s und 7 s, davor und dahinter trennen 442 s
@@ -213,7 +213,7 @@ def test_ein_dreier_fenster_entsteht() -> None:
     Die Mindestlaenge als ENTSCHEIDER faellt damit weg: Stufe 2 ist nur noch der
     Vorfilter, der Zeitfenster schneidet. Was durchkommt, misst die
     Deckungsstufe kostenlos, und erst was danach ans Modell geht, kostet etwas.
-    KT-1 woertlich: *"ggf. sind 2 bilder bereits der anfang des panoramas"*.
+    der Autor woertlich: *"ggf. sind 2 bilder bereits der anfang des panoramas"*.
     """
     aufnahmen = [
         _fenster_bild("DSCF3893", "15:46:47", brennweite=18, blende=5.0),

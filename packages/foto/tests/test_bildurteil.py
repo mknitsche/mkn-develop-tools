@@ -1,6 +1,6 @@
 """Das Urteil des Modells — und die Regel, die es zaehmt.
 
-Spec § 10a, Regel A (KT-1-Entscheid 2026-08-29): **nur was das Modell `sicher`
+Spec § 10a, Regel A (Entscheid des Autors 2026-08-29): **nur was das Modell `sicher`
 nennt, wird geschrieben.** Die Herleitung steht in § 4 Stufe 3 und ist gemessen:
 Sonnet lag bei 15/20 und war einmal falsch UND selbstsicher, Opus bei 17/20 mit
 14/14 Praezision auf seiner eigenen Sicherheitsangabe. Ein Modell, dessen
@@ -109,7 +109,7 @@ def test_der_prompt_verlangt_die_sicherheitsangabe():
 
 
 def test_die_belichtungsangabe_kommt_durch():
-    """KT-1 am 2026-08-30: "bilder die offensichtlich falsch belichtet sind ...
+    """Der Autor am 2026-08-30: "bilder die offensichtlich falsch belichtet sind ...
     oder ein llm sagt, das bild ist gruselig, dann gehoert es auch
     gekennzeichnet"."""
     schlecht = _antwort(
@@ -174,7 +174,7 @@ def test_geminis_antwortform_wird_gelesen() -> None:
     Googles `candidates`.
 
     Das sieht nach einer ehrlichen "unsicher"-Antwort aus und ist in Wahrheit
-    Blindheit. Genau das meinte KT-1 mit dem zweiten Anbieter: was nur bei EINEM
+    Blindheit. Genau das meinte der Autor mit dem zweiten Anbieter: was nur bei EINEM
     laeuft, hat die Schnittstelle nicht verstanden, sondern eine Eigenheit.
     """
     antwort = {
@@ -329,7 +329,7 @@ def test_eine_leere_serienantwort_gilt_als_unsicher():
     """Auf `.fehler` pruefen, nicht nur auf `.sicher`: eine leere Antwort ergibt
     `d.get("serie") == ""`, und der SPAETERE Vokabular-Test wuerde `sicher`
     ebenfalls auf `False` ziehen -- ohne den fehler-Text bliebe der fruehe
-    Kurzschluss fuer die leere Antwort ungeprueft (LP-40: eine Mutation, die
+    Kurzschluss fuer die leere Antwort ungeprueft (eine Mutation, die
     nichts aendert, ist selbst ein Befund)."""
     u = bildurteil.serie_aus_antwort({})
 

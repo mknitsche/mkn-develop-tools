@@ -1,6 +1,6 @@
 """Eine Stelle, an der der Anwender sagt, was er will.
 
-KT-1: *"es muss eine art datei / feld uebergabe geben / der anwender muss halt
+Der Autor: *"es muss eine art datei / feld uebergabe geben / der anwender muss halt
 festlegen koennen, was er braucht und will / und er muss ja auch die apis
 bekannt geben"*.
 
@@ -122,7 +122,7 @@ def test_ein_urheber_ohne_namen_ist_keiner(tmp_path: Path) -> None:
 
 
 def test_die_farbnamen_kommen_aus_der_konfiguration(tmp_path: Path) -> None:
-    """**Der weisse Kasten in KT-1s Lightroom.**
+    """**Der weisse Kasten im Lightroom des Autors.**
 
     Am 2026-08-30 meldete er: teils weisse Kaesten, aber weder Bildrahmen noch
     Kasten in der richtigen Farbe. Der Katalog enthielt die Werte nachweislich

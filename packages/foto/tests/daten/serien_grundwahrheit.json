@@ -6,10 +6,9 @@
     "mehrdeutig": "Nicht entscheidbar. Wird NICHT gewertet - ein mehrdeutiger Fall mit erfundener Wahrheit misst nichts."
   },
   "herkunft": {
-    "beurteilt_von": "macb-claude, am Kontaktbogen (5 Bilder je Gruppe nebeneinander)",
+    "beurteilt_von": "von Hand am Kontaktbogen (5 Bilder je Gruppe nebeneinander)",
     "datum": "2026-08-29",
-    "session": "macb-S314",
-    "archiv": "FotoUrlaubMittenwald 2026-08-22..28, 1233 RAW, 626 Gruppen",
+    "archiv": "Urlaubsarchiv 2026-08-22..28, 1233 RAW, 626 Gruppen",
     "warnung": "blind_beurteilt=false heisst: das Urteil entstand, NACHDEM Modellantworten zu dieser Gruppe vorlagen. Solche Eintraege duerfen einen Modellvergleich nicht entscheiden - genau dieser Fehler ist in der ersten PoC-Runde passiert."
   },
   "gruppen": [

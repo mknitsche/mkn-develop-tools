@@ -5,7 +5,7 @@ seinen Namen gibt.
 1.293 Aufnahmen und legte 2.520 Dateien in einem Ordner namens "03 Bilder
 angereichert" ab. Darin: 1.227 RAW-Dateien und 139 XMP-Sidecars — genau die 139,
 die schon vorher existierten. Kein einziger neuer. Die gesamte Ortsarbeit lag im
-Arbeitsspeicher und war mit dem Prozessende verloren. KT-1 hat es sofort gesehen:
+Arbeitsspeicher und war mit dem Prozessende verloren. Der Autor hat es sofort gesehen:
 *"bei den dateien auf 1tb fehlen systemisch die xmps"*.
 
 Eine Zahl wie "91 % verortet" ist wahr ueber die Rechnung und wertlos ueber das
@@ -60,7 +60,7 @@ Datei-Inhalte einbaut, sucht zuerst die zweite Stelle."""
 WERKZEUG = "mkn-foto"
 """Was in `xmp:CreatorTool` steht — zusammen mit der Version.
 
-**Warum das kein Schmuck ist.** KT-1 am 2026-08-30: *"nicht das alte staende
+**Warum das kein Schmuck ist.** Der Autor am 2026-08-30: *"nicht das alte staende
 der sw die duemmer waren als die aktuellen versionen die gesamte arbeit negativ
 beeinflussen"*. Eine Versionsnummer im Repository beantwortet das nicht -- sie
 sagt, was HEUTE gilt, nicht, welcher Stand die Datei vor drei Wochen angefasst
@@ -75,21 +75,21 @@ loeschen und neu zu rechnen. Ein Feld haette das erspart.
 
 FARBE = "Blue"
 """Die einzige Farbe, die das Werkzeug vergibt. Sie heisst "gehoert zu einer
-Serie". Rot, Gelb und Gruen sind KT-1s Bewertungsachse (Spec § 6)."""
+Serie". Rot, Gelb und Gruen sind die Bewertungsachse des Autors (Spec § 6)."""
 
 URGENCY = 3
 """Dieselbe Farbe in der aelteren Notation, die Capture One tatsaechlich liest.
-An KT-1s Capture One 16.8.5 abgelesen: 3 ist blau (1 rot, 2 gruen, 7 gelb)."""
+An Capture One 16.8.5 des Autors abgelesen: 3 ist blau (1 rot, 2 gruen, 7 gelb)."""
 
 FARBE_UNKLAR = "Purple"
 URGENCY_UNKLAR = 5
 """Violett — in der Spec die einzige bewusst unbelegte Farbe, seit dem
-2026-08-30 die Kennzeichnung von Unklarheit (KT-1: *"immer wenn etwas unklar
+2026-08-30 die Kennzeichnung von Unklarheit (der Autor: *"immer wenn etwas unklar
 oder fehlerhaft identifiziert ist, bekommt es ein stichwort und diese farbe —
 ein stichwort kann ich zwar filtern, aber die farbe zeigt es gleich"*).
 
 **Violett schlaegt Blau.** Ein Bild traegt nur EINE Farbe; eine unklare Aufnahme
-in einer Serie kann nicht beides sein. KT-1 hat den Konflikt selbst gefunden und
+in einer Serie kann nicht beides sein. Der Autor hat den Konflikt selbst gefunden und
 die Rangfolge gesetzt. Sie ist auch sachlich richtig: die Serienzugehoerigkeit
 steht DREIFACH in der Datei (Ordner, Dateiname, Stichwort) — dort ist die Farbe
 nur Sichthilfe. Die Unklarheit steht sonst nirgends sichtbar."""
@@ -116,7 +116,7 @@ def traeger(pfad: Path) -> tuple[Path, bool]:
     Marke blind neben JEDES Bild legte. Bei 65 JPEG ohne RAW im Bestand entstand
     so ein Sidecar neben einer Datei, in die unmittelbar danach eingebettet
     wurde -- dieselbe Aussage an zwei Stellen, was Spec Paragraf 10 ausdruecklich
-    verbietet, plus 71 ueberzaehlige Dateien in KT-1s Ordner.
+    verbietet, plus 71 ueberzaehlige Dateien im Ordner des Autors.
 
     Zwei Aufrufer mit derselben Frage und verschiedenen Antworten. Deshalb steht
     die Antwort jetzt hier und nicht dort.
@@ -132,8 +132,8 @@ def setze(feld: str, wert: str) -> list[str]:
     `-=` und `+=` zusammen: exiftool wendet die Loeschung vor der Neuanlage an,
     das Ergebnis traegt den Wert genau einmal, und ein `-=` raeumt dabei ALLE
     vorhandenen Vorkommen ab -- der Aufruf heilt einen bestehenden Doppelbestand
-    also mit. Fremde Werte im selben Feld bleiben unberuehrt; dort steht KT-1s
-    Handarbeit aus Capture One, und die darf kein Lauf loeschen.
+    also mit. Fremde Werte im selben Feld bleiben unberuehrt; dort steht die
+    Handarbeit des Autors aus Capture One, und die darf kein Lauf loeschen.
 
     **Die Argument-REIHENFOLGE ist dabei ohne Wirkung**, und das ist eine
     Korrektur: eine fruehere Fassung dieses Docstrings behauptete, exiftool
@@ -149,7 +149,7 @@ def setze(feld: str, wert: str) -> list[str]:
     vorhandenes `motiv|wald` und ein neues `Motiv|Wald` stehen danach
     nebeneinander.
 
-    Ohne das entstand die Verdopplung, die KT-1s Direktive verletzte (*"alle
+    Ohne das entstand die Verdopplung, die gegen die Direktive des Autors verstieß (*"alle
     inhalte muessen bei jpeg und raw gleich sein"*): `motivlauf._merke` legt die
     Motiv-Marke waehrend des Laufs an, hier wurde dieselbe danach ein zweites
     Mal angehaengt. Gemessen am Lauf ueber die 42 Nuernberger Aufnahmen: 29 von
@@ -161,7 +161,7 @@ def setze(feld: str, wert: str) -> list[str]:
     selbst -- also fremde Stichworte. Nachgeprueft trifft das nicht zu:
     exiftool nimmt alle drei woertlich, auch ein fuehrendes `-`; Platzhalter
     gelten dort fuer Tag-NAMEN, nicht fuer Werte. Der daraufhin gebaute
-    Schutzzweig war spekulativ und ist wieder entfernt (HC-7). Die Eigenschaft
+    Schutzzweig war spekulativ und ist wieder entfernt. Die Eigenschaft
     haengt aber an einer Fremdabhaengigkeit und wird deshalb von einem
     Charakterisierungstest festgehalten, damit eine kuenftige exiftool-Version
     sie nicht still aendert.
@@ -242,8 +242,8 @@ def schreibe(
             else:
                 # `-overwrite_original`: sonst legt exiftool neben JEDEN
                 # vorhandenen Sidecar eine `.xmp_original`. Nach einem Lauf ueber
-                # 1.234 Aufnahmen lagen 1.228 solcher Kopien in KT-1s
-                # Bilderordner -- klein (2,5 MB), aber genau das, was er
+                # 1.234 Aufnahmen lagen 1.228 solcher Kopien im
+                # Bilderordner des Autors -- klein (2,5 MB), aber genau das, was er
                 # verboten hatte, und wer den Ordner oeffnet, sieht doppelt so
                 # viele Dateien wie Bilder.
                 #
@@ -336,11 +336,11 @@ def _argumente(
     elif serienbild:
         # ZWEIMAL, und das ist keine Vorsicht: Capture One liest `xmp:Label`
         # nicht, sondern die aeltere Notation `photoshop:Urgency`. Dort ist 3
-        # die blaue -- an KT-1s Capture One 16.8.5 abgelesen. Wer nur `Label`
+        # die blaue -- an Capture One 16.8.5 des Autors abgelesen. Wer nur `Label`
         # setzt, zeigt in Lightroom Farben und in Capture One nichts.
         #
         # Blau gehoert dem Werkzeug und heisst "gehoert zu einer Serie". Rot,
-        # Gelb und Gruen sind KT-1s Bewertungsachse und werden nie angefasst.
+        # Gelb und Gruen sind die Bewertungsachse des Autors und werden nie angefasst.
         args += [f"-XMP:Label={farbe_serie}", f"-XMP-photoshop:Urgency={URGENCY}"]
         if eingebettet:
             args.append(f"-IPTC:Urgency={URGENCY}")
@@ -369,7 +369,7 @@ def ohne_wiederholung(args: list[str]) -> list[str]:
     ein Motiv `Einzelbild` ergeben beide `Einzelbild`, ganz ohne doppelte
     Eingabe.
 
-    Damit haette ausgerechnet der Fix, der KT-1s doppelte Stichworte beheben
+    Damit haette ausgerechnet der Fix, der doppelten Stichworte des Autors beheben
     soll, sie auf einem anderen Weg weiter erzeugt. Gefunden vom Critic.
 
     Die Reihenfolge bleibt erhalten (`dict.fromkeys`), damit Argumentlisten
@@ -392,7 +392,7 @@ EINZELN = "Technik|Einzelbild"
 Es sorgt dafuer, dass JEDE Aufnahme etwas zu schreiben hat und damit einen
 Sidecar bekommt. Ohne es blieben genau die Bilder ohne Sidecar, die weder Ort
 noch Serie haben -- nach dem Lauf vom 2026-08-30 waeren das rund 112 gewesen,
-und KT-1 haette zu Recht wieder "systemisch fehlen die xmps" gesagt.
+und der Autor haette zu Recht wieder "systemisch fehlen die xmps" gesagt.
 
 Die Angabe ist wahr, nicht bloss Fuellung: ein Bild, das zu keiner Reihe
 gehoert, IST ein Einzelbild, und das ist eine Technik-Aussage wie "Panorama"."""

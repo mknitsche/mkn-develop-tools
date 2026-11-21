@@ -58,13 +58,13 @@ class Konfig:
     englisches "Blue" und "Purple". Passt der Name nicht, zeigt Lightroom ein
     LEERES Feld an -- das Label ist da, die Farbe fehlt.
 
-    Genau so ist es KT-1 am 2026-08-30 ergangen: sein Katalog enthielt 433
+    Genau so ist es dem Autor am 2026-08-30 ergangen: sein Katalog enthielt 433
     Purple und 158 Blue, und er sah weisse Kaesten.
 
     **Und die Uebersetzung ist nicht die, die man vermutet.** Erraten laesst
-    sich der Wert nicht: KT-1s deutsches Lightroom Classic schreibt fuer die
+    sich der Wert nicht: das deutsche Lightroom Classic des Autors schreibt fuer die
     fuenfte Farbe **"Lila"**, nicht "Violett" -- obwohl die Oberflaeche sie
-    "Violett" nennt. Festgestellt wurde es, indem KT-1 sechs Bilder von Hand
+    "Violett" nennt. Festgestellt wurde es, indem der Autor sechs Bilder von Hand
     einfaerbte und der Katalog danach `Rot, Gelb, Gruen, Blau, Lila` enthielt.
 
     Merksatz: den Wert liefert das Programm, nicht die Vermutung. Wer ihn

@@ -1,6 +1,6 @@
 """Was ein Lauf hinterlaesst, damit man ihn hinterher auswerten kann.
 
-KT-1 vor dem ersten bezahlten Lauf: *"hast du eine umfangreiche, stabile
+Der Autor vor dem ersten bezahlten Lauf: *"hast du eine umfangreiche, stabile
 observibility ... nicht dass wir durchlaufen und uns dann messwerte token pro
 aktion, pro bild usw fehlen?"*
 

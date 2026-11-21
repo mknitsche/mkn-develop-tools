@@ -6,7 +6,7 @@ Die drei Zusicherungen, um die es hier wirklich geht:
    sondern gemessen: Pruefsumme und Zeitstempel vorher und nachher.
 2. **Ein Sidecar wird nie von seinem RAW getrennt.** `.xmp` steht nicht in
    `BILD_ENDUNGEN` und ist damit fuer das Inventar unsichtbar — wer nur die
-   inventarisierten Dateien kopiert, laesst KT-1s Capture-One-Arbeit zurueck.
+   inventarisierten Dateien kopiert, laesst die Capture-One-Arbeit des Autors zurueck.
 3. **Ein zweiter Lauf legt nichts doppelt an.** Sonst waechst der Baum bei jedem
    Versuch, und Experimentieren waere nicht mehr zulaessig.
 """
@@ -234,7 +234,7 @@ def _mit_dateien(tmp_path, stamm: str, endungen=(".RAF", ".JPG"), *, sidecar=Tru
 
 
 def test_alle_dateien_einer_aufnahme_tragen_denselben_neuen_stamm(tmp_path):
-    """**KT-1s Direktive: das Paar ist die Einheit.**
+    """**Die Direktive des Autors: das Paar ist die Einheit.**
 
     *"die gepaarten bilder sind als paar zu behandeln - so wie es jede
     bildbearbeitungssw macht"*. Beim Umbenennen heisst das: RAW, JPEG und
@@ -288,7 +288,7 @@ def test_ein_zweiter_lauf_benennt_nichts_doppelt(tmp_path):
     # danach also auch ohne die Ziel-Pruefung unveraendert. Die Mutation "Pruefung
     # entfernt" hat den Test in dieser Form ueberlebt -- verhaltensgleich bis auf
     # den Rueckgabewert, und der wuerde Bewegungen melden, die nie stattfanden.
-    # Eine Zahl, die im Laufbericht steht und luegt, ist kein Detail (LP-40).
+    # Eine Zahl, die im Laufbericht steht und luegt, ist kein Detail.
     assert not zweiter, f"der zweite Lauf hat {len(zweiter)} Dateien bewegt statt keiner"
 
 
@@ -307,7 +307,7 @@ def test_die_umbenennung_ist_umkehrbar(tmp_path):
 
 
 def test_eine_gruppe_wird_positionsweise_durchnummeriert(tmp_path):
-    """`PPvGG` sagt, das wievielte von wie vielen -- die Angabe, an der KT-1
+    """`PPvGG` sagt, das wievielte von wie vielen -- die Angabe, an der der Autor
     beim Zusammensetzen die Reihenfolge abliest."""
     gruppe = tuple(_mit_dateien(tmp_path, f"DSCF39{n:02d}") for n in (10, 11, 12))
     serie = Serie(typ="pan", nummer=5, aufnahmen=gruppe, quelle="bild", sicher=True)
