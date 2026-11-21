@@ -20,12 +20,14 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.14"
+      - name: No private paths or internal identifiers
+        run: scripts/check-private-markers.sh
       - run: uv tool run ruff@0.14.0 check .
       - run: uv tool run ruff@0.14.0 format --check .
       # exiftool ist keine Bequemlichkeit: die Haelfte der Foto-Tests schreibt
       # und liest damit echte Dateien. Ohne es ueberspringt pytest sie, und die
       # CI meldet gruen fuer eine Suite, die ihren Gegenstand nicht angefasst
-      # hat (LP-34: ein Beweis muss seinen Gegenstand enthalten).
+      # hat (ein Beweis muss seinen Gegenstand enthalten).
       - run: sudo apt-get update && sudo apt-get install -y libimage-exiftool-perl ffmpeg rubberband-cli
       # `uv sync` INSTALLIERT die Pakete des Workspace samt ihrer
       # Abhaengigkeiten. Der frueher hier stehende Aufruf `uv run --with pytest`

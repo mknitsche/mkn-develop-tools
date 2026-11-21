@@ -29,6 +29,10 @@ in the same way.
    handled. If the change grows beyond its original shape, say so and split it.
 7. **Found something else?** Report it, do not repair it in passing. A drive-by
    fix in an unrelated area makes a pull request unreviewable.
+8. **Nothing private in a public repository.** `scripts/check-private-markers.sh`
+   (pre-commit hook and CI step) fails on absolute home-directory paths, on
+   external-volume paths other than placeholders such as `YourDisk`, and on
+   internal session, ticket and rule identifiers.
 
 ## Developer Certificate of Origin
 
