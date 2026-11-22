@@ -1,6 +1,6 @@
 [project]
 name = "mkn-dokument"
-version = "0.2.0"
+version = "0.3.0"
 description = "Dokumente (PDF, Scan, Foto) lesen: Werte, Seitenkopf und Texte, Diagramme ablesen; zwei Modelle lesen jede Seite vom Bild, ein Abgleich uebernimmt nur, worin sie uebereinstimmen; EPUB ohne Modell lesen"
 requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"

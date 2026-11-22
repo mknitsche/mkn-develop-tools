@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/mknitsche/mkn-develop-tools/compare/dokument-v0.2.0...dokument-v0.3.0) (2026-11-22)
+
+
+### Features
+
+* **dokument:** read EPUB without a model - text, metadata, ISBN and chapters ([#54](https://github.com/mknitsche/mkn-develop-tools/issues/54)) ([6562c7b](https://github.com/mknitsche/mkn-develop-tools/commit/6562c7b898d6868964d3cbfde635918ae34ce903))
+
 ## [0.2.0](https://github.com/mknitsche/mkn-develop-tools/compare/dokument-v0.1.0...dokument-v0.2.0) (2026-11-20)
 
 

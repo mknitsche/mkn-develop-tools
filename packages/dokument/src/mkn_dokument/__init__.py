@@ -11,4 +11,4 @@ Drei Funktionen nach diesem Muster: ``lesen`` (gedruckte Angaben mit Wert),
 Dazu ohne Modell: ``epub`` (Text, Metadaten, ISBN und Kapitel eines EPUB; Kopierschutz wird abgewiesen).
 """
 
-__version__ = "0.2.0"  # x-release-please-version
+__version__ = "0.3.0"  # x-release-please-version
