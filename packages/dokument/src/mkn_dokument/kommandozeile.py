@@ -1,7 +1,8 @@
-"""Befehle ``mkn-dokument lesen | seiten | ablesen <datei> --aus <ordner>``.
+"""Befehle ``mkn-dokument lesen | seiten | ablesen <datei> --aus <ordner>`` und ``mkn-dokument epub <datei>``.
 
 ``lesen`` liest gedruckte Angaben mit Wert, ``seiten`` Kopf, Texte und Diagramm-Verzeichnis je Seite, ``ablesen``
-die Stellen eines Diagramms nach einem Ableseauftrag (``--auftrag <datei.json>``).
+die Stellen eines Diagramms nach einem Ableseauftrag (``--auftrag <datei.json>``). ``epub`` gibt Metadaten und
+Kapitelliste eines EPUB als JSON aus (ohne Modell, ohne Leser).
 
 Die zwei Leser waehlt der Anwender: ``--leser-a`` und ``--leser-b`` als
 ``anbieter:modell`` oder ueber ``MKN_DOKUMENT_LESER_A`` / ``MKN_DOKUMENT_LESER_B``.
@@ -18,7 +19,7 @@ from pathlib import Path
 
 from mkn_kern import anfrage, modelle
 
-from mkn_dokument import ablesen, lesen, seiten, seitenlesung
+from mkn_dokument import ablesen, epub, lesen, seiten, seitenlesung
 from mkn_dokument.auftrag import AntwortUngueltig
 from mkn_dokument.leser import KernLeser, LeserFehler
 
@@ -77,6 +78,27 @@ def _melde(args: argparse.Namespace, ergebnis: dict) -> None:
     print(f"{vorne}: {teile or 'keine Angaben'} -> {args.aus / datei}")
 
 
+def _epub(datei: Path) -> int:
+    """Metadaten und Kapitelliste (Titel, Zeichen) als JSON; ein geschuetztes Buch ohne Kapitel."""
+    try:
+        buch = epub.epub_buch(datei)
+    except (epub.EpubLesefehlerError, OSError) as exc:
+        print(f"mkn-dokument: {exc}", file=sys.stderr)
+        return 1
+    aus = {
+        "titel": buch.titel,
+        "autoren": list(buch.autoren),
+        "verlag": buch.verlag,
+        "sprache": buch.sprache,
+        "datum": buch.datum,
+        "isbns": list(buch.isbns),
+        "geschuetzt": buch.geschuetzt,
+        "kapitel": [{"titel": k.titel, "zeichen": len(k.text)} for k in buch.kapitel],
+    }
+    print(json.dumps(aus, ensure_ascii=False, indent=2))
+    return 0
+
+
 def haupt(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mkn-dokument", description=__doc__.splitlines()[0])
     befehle = parser.add_subparsers(dest="befehl", required=True)
@@ -90,7 +112,11 @@ def haupt(argv: list[str] | None = None) -> int:
     s.add_argument("--datum-hinweis", help="welches Datum massgeblich ist, als Satzteil")
     a = _befehl(befehle, "ablesen", "Stellen eines Diagramms nach Ableseauftrag ablesen und abgleichen")
     a.add_argument("--auftrag", type=Path, required=True, help="Ableseauftrag als JSON-Datei")
+    e = befehle.add_parser("epub", help="Metadaten und Kapitelliste eines EPUB als JSON")
+    e.add_argument("datei", type=Path)
     args = parser.parse_args(argv)
+    if args.befehl == "epub":
+        return _epub(args.datei)
     try:
         leser_a = _leser(args.leser_a, "MKN_DOKUMENT_LESER_A")
         leser_b = _leser(args.leser_b, "MKN_DOKUMENT_LESER_B")

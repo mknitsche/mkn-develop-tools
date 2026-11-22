@@ -9,6 +9,8 @@ gelesen haben. Drei Funktionen nach demselben Muster:
 | `seiten` | je Seite Kopf (Seitenart, Aussteller, Datum, Inhaltsart), Fließtexte, Verzeichnis der Diagramme | `seiten.json` |
 | `ablesen` | markierte Stellen eines Diagramms ohne gedruckte Zahlen, nach einem Ableseauftrag | `ablesung.json` |
 
+Dazu ohne Modell: `epub` liest ein EPUB (Text, Metadaten, ISBN, Kapitel) — Abschnitt „EPUB lesen“.
+
 ## Wozu
 
 Ein einzelnes Modell liest eine Seite fast immer richtig. „Fast“ reicht nicht, wenn die Werte in eine Datenbank gehen
@@ -161,3 +163,33 @@ Ausgänge je Stelle: `uebernommen` oder Klärliste mit `lage_uneins`, `achse_unk
 Reihe `anzahl_uneins` (die Leser nennen verschieden viele Stellen), `anzahl_passt_nicht` (nicht die erwartete Anzahl)
 oder `marke_uneins`. Ein technischer Fehler (Anbieter, ungültige Antwort, kaputter Auftrag) bricht den Lauf laut ab.
 Kosten: je Auftrag zwei Aufrufe mit dem ganzen Seitenbild; mehrere Diagramme einer Seite sind mehrere Aufträge.
+
+## EPUB lesen
+
+`mkn_dokument.epub` liest ein EPUB ohne Modell und ohne Netz: Lesereihenfolge nach dem Spine der Paketdatei, je
+nicht-leerem Dokument ein Kapitel mit Titel aus dem Inhaltsverzeichnis (nav, sonst NCX), Metadaten aus dem OPF und alle
+gültigen ISBN (als ISBN-13, Prüfziffer geprüft; aus dem Dateinamen nur streng). Die Steuerdateien laufen über
+`defusedxml`.
+
+```python
+from pathlib import Path
+
+from mkn_dokument import epub
+
+buch = epub.epub_buch(Path("buch.epub"))
+print(buch.titel, buch.autoren, buch.isbn)
+for kapitel in buch.kapitel:
+    print(kapitel.titel, len(kapitel.text))
+
+text = epub.epub_text(Path("buch.epub"))  # ganzer Text, Kapitel durch epub.KAPITELGRENZE getrennt
+```
+
+```bash
+mkn-dokument epub buch.epub   # Metadaten und Kapitelliste (Titel, Zeichen) als JSON
+```
+
+**Kopierschutz wird erkannt und abgewiesen, nie umgangen.** Ein geschütztes Buch (`META-INF/encryption.xml` mit einem
+Verfahren außer der Schrift-Verschleierung, oder ein verschlüsselter Eintrag) liefert bei `epub_buch` nur die
+Metadaten (`geschuetzt=True`, keine Kapitel; kein Kapitel-Dokument wird geöffnet); `epub_text` wirft `EpubRissError`
+mit `grund="geschuetzt"`. Ein kaputtes Archiv ist `EpubRissError` mit `grund="leser"` bzw. `EpubLesefehlerError`, nie
+ein leeres Buch; mehr als `max_entpackt` Bytes entpackt (Vorgabe `MAX_ENTPACKT_BYTES`, 50 MiB) ist `grund="groesse"`.

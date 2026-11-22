@@ -220,6 +220,7 @@ name = "mkn-dokument"
 version = "0.2.0"
 source = { editable = "packages/dokument" }
 dependencies = [
+    { name = "defusedxml" },
     { name = "mkn-kern" },
     { name = "pymupdf" },
 ]
@@ -233,6 +234,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "defusedxml", specifier = ">=0.7" },
     { name = "mkn-kern", editable = "packages/kern" },
     { name = "pillow", marker = "extra == 'dev'", specifier = ">=10" },
     { name = "pymupdf", specifier = ">=1.24" },
