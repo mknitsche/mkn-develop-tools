@@ -1,15 +1,17 @@
 [project]
 name = "mkn-dokument"
 version = "0.2.0"
-description = "Dokumente (PDF, Scan, Foto) lesen: Werte, Seitenkopf und Texte, Diagramme ablesen; zwei Modelle lesen jede Seite vom Bild, ein Abgleich uebernimmt nur, worin sie uebereinstimmen"
+description = "Dokumente (PDF, Scan, Foto) lesen: Werte, Seitenkopf und Texte, Diagramme ablesen; zwei Modelle lesen jede Seite vom Bild, ein Abgleich uebernimmt nur, worin sie uebereinstimmen; EPUB ohne Modell lesen"
 requires-python = ">=3.12"
 license = "AGPL-3.0-or-later"
 authors = [{ name = "Matthias Nitsche" }]
 readme = "README.md"
 # pymupdf: PDF und Bilddateien oeffnen, Seiten als Bild rendern, Bildgroesse fuer das Ablesen. mkn-kern: die Modell-Anfrage.
+# defusedxml: die Steuerdateien eines EPUB (container, OPF, encryption, NCX) ohne Entitaeten und externe Verweise.
 dependencies = [
     "pymupdf>=1.24",
     "mkn-kern>=0.3",
+    "defusedxml>=0.7",
 ]
 
 [project.optional-dependencies]
