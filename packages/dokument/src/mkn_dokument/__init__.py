@@ -12,4 +12,4 @@ Dazu ohne Modell: ``epub`` (Text, Metadaten, ISBN und Kapitel eines EPUB, verlin
 Fundstelle; Kopierschutz wird abgewiesen).
 """
 
-__version__ = "0.4.0"  # x-release-please-version
+__version__ = "0.5.0"  # x-release-please-version

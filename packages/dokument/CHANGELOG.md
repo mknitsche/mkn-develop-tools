@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/mknitsche/mkn-develop-tools/compare/dokument-v0.4.0...dokument-v0.5.0) (2026-11-24)
+
+
+### Features
+
+* **dokument:** cover sheet for a PDF - set, take off, read ([#60](https://github.com/mknitsche/mkn-develop-tools/issues/60)) ([f83d515](https://github.com/mknitsche/mkn-develop-tools/commit/f83d515bfbfde864fadcc1867bccf316c4fb6820))
+
 ## [0.4.0](https://github.com/mknitsche/mkn-develop-tools/compare/dokument-v0.3.0...dokument-v0.4.0) (2026-11-24)
 
 
