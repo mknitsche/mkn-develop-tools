@@ -10,7 +10,7 @@ gelesen haben. Drei Funktionen nach demselben Muster:
 | `ablesen` | markierte Stellen eines Diagramms ohne gedruckte Zahlen, nach einem Ableseauftrag | `ablesung.json` |
 
 Dazu ohne Modell: `epub` liest ein EPUB (Text, Metadaten, ISBN, Kapitel, verlinkte Anmerkungen an ihrer Fundstelle) —
-Abschnitt „EPUB lesen“.
+Abschnitt „EPUB lesen“; `deckblatt` setzt eine Seite vor ein PDF und nimmt sie wieder ab — Abschnitt „Deckblatt“.
 
 ## Wozu
 
@@ -216,3 +216,69 @@ Verfahren außer der Schrift-Verschleierung, oder ein verschlüsselter Eintrag) 
 Metadaten (`geschuetzt=True`, keine Kapitel; kein Kapitel-Dokument wird geöffnet); `epub_text` wirft `EpubRissError`
 mit `grund="geschuetzt"`. Ein kaputtes Archiv ist `EpubRissError` mit `grund="leser"` bzw. `EpubLesefehlerError`, nie
 ein leeres Buch; mehr als `max_entpackt` Bytes entpackt (Vorgabe `MAX_ENTPACKT_BYTES`, 50 MiB) ist `grund="groesse"`.
+
+## Deckblatt
+
+`mkn_dokument.deckblatt` setzt vor ein vorhandenes PDF eine Seite mit Titel, Datum, Herkunft (Quelle, Dateiname,
+SHA-256 gekürzt, Seitenzahl), weiteren Angaben, Schlagworten, Verweisen und Status — und nimmt sie auf Wunsch wieder
+ab. Ohne Modell, ohne Netz, ohne weitere Abhängigkeit als PyMuPDF; die Seite setzt `pymupdf.Story` auf A4 mit den
+eingebauten Schriften.
+
+```bash
+mkn-dokument deckblatt setzen bericht.pdf --aus bericht-mit-deckblatt.pdf --titel "Prüfbericht" --datum 2026-11 \
+    --quelle "Scan" --tag messung --link "Vorgang=https://example.org/v" --status "Original=Papier" \
+    [--angabe "Beschriftung=Wert"]… [--marke "Zeile über dem Titel"] [--css eigen.css] [--schriften schriften/]
+mkn-dokument deckblatt lesen bericht-mit-deckblatt.pdf      # Kennung als JSON
+mkn-dokument deckblatt abnehmen bericht-mit-deckblatt.pdf --aus bericht-ohne.pdf
+```
+
+```python
+from pathlib import Path
+
+from mkn_dokument import deckblatt
+
+angaben = deckblatt.Angaben(titel="Prüfbericht", datum="2026-11", quelle="Scan", tags=("messung",))
+deckblatt.setzen(Path("bericht.pdf"), Path("mit.pdf"), angaben)  # kopfseite=…, stil=deckblatt.Stil(css=…)
+deckblatt.lesen(Path("mit.pdf"))  # die Kennung als dict
+deckblatt.abnehmen(Path("mit.pdf"), Path("ohne.pdf"))
+```
+
+**Einfügen statt Neuaufbau.** Die Quelle wird geöffnet und die Seite an Position 0 eingefügt; Lesezeichen, interne und
+externe Verweise, Formularfelder, Anhänge und alle Seiten bleiben so erhalten. Datum: `JJJJ`, `JJJJ-MM` oder
+`JJJJ-MM-TT` mit echtem Monat und Tag. Paare (`--link`, `--status`, `--angabe`) werden am ersten `=` geteilt. Werte, die
+mit `http://` oder `https://` beginnen, werden als Verweis gesetzt; alle Angaben werden vor dem Satz maskiert. Eine
+eigene Gestaltung kommt über `--css` und `--schriften` (Ordner mit Schriftdateien für `@font-face`) oder, in der
+Bibliothek, über `kopfseite=` — eine Funktion `(angaben, ziel_pdf)`, die die eine Seite selbst schreibt; Einfügen,
+Kennung, Schutzregeln und Selbstprüfung bleiben dann die des Pakets.
+
+**Kennung.** Im PDF liegt eine eingebettete Datei `mkn-deckblatt.json` (Schema 1): die Angaben, Dateiname, SHA-256 und
+Seitenzahl der Quelle, ihre vorherigen Infofelder und der SHA-256 der Wortfolge der Deckblattseite. Die Infofelder Titel
+und Schlagworte werden auf die Angaben gesetzt.
+
+**Schutzregeln.** Jede bricht ab (Kommandozeile: Exit 1, ein Satz auf stderr), und es entsteht kein Ziel:
+
+- das Ziel existiert schon (es wird nie überschrieben) oder sein Ordner fehlt;
+- die Quelle ist kein lesbares PDF, hat keine Seite oder ist verschlüsselt;
+- die Quelle trägt eine digitale Signatur (Signatur-Kennzeichen, Signaturfeld oder Signatur-Bytebereich) — eine
+  eingefügte oder entfernte Seite entwertete sie;
+- die Quelle trägt schon ein Deckblatt, oder unter `mkn-deckblatt.json` liegt eine fremde Datei;
+- die Seite bräuchte mehr als ein Blatt (Angaben kürzen), oder eine eigene `kopfseite` liefert nicht genau eine Seite
+  mit Text.
+
+**Schreiben und Selbstprüfung.** Das Ergebnis entsteht in einem Zwischenordner im Zielordner und wird dort geprüft:
+genau eine Seite mehr bzw. weniger, Seitentexte, Lesezeichen, Verweise, Anhänge und Formularfelder wie vorher (Seiten
+um eins verschoben), die Kennung liest sich aus der gespeicherten Datei zurück und passt zu Seite 1. Erst dann wird das
+Ziel ohne Überschreiben veröffentlicht (harter Verweis, sonst exklusives Anlegen und Kopieren); der Zwischenordner geht
+in jedem Fall weg.
+
+**Abnehmen nur, was sicher ein Deckblatt ist.** `abnehmen` verlangt die Kennung (gültiges JSON, Schema 1, höchstens
+1 MiB), dass der SHA-256 des Texts von Seite 1 dem in der Kennung gleicht, und mindestens eine Seite dahinter. Sonst
+bricht es ab — nie wird auf Verdacht eine Seite entfernt; Titelseiten anderer Herkunft bleiben, wo sie sind. Ein
+Dokument darf nach dem Setzen weiterbearbeitet worden sein (Notizen, Felder, weitere Seiten): entfernt werden Seite 1
+und die Kennung; ein Infofeld geht nur dann auf den vorherigen Wert zurück, wenn es noch den Wert trägt, den `setzen`
+geschrieben hat. Stimmt die Seitenzahl nicht mehr, melden `lesen` und `abnehmen` einen Hinweis auf stderr.
+
+**Grenzen.** Das Ergebnis von `abnehmen` ist inhaltsgleich mit dem, was hinter dem Deckblatt lag, aber **nicht
+bytegleich** mit der ursprünglichen Quelle; wer das Original bytegenau braucht, hebt es auf (die Kennung nennt seinen
+SHA-256). Eine zugesicherte **PDF/A-Konformität** der Quelle bleibt nicht erhalten. Eine Quelle, deren Anhang-Verzeichnis über Unterknoten (`/Kids`) verzweigt ist, wird abgewiesen. Die Kennung schützt vor Versehen,
+nicht vor Absicht: wer die Datei präparieren kann, kann die Seite auch selbst entfernen.

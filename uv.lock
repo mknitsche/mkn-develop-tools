@@ -166,7 +166,7 @@ wheels = [
 
 [[package]]
 name = "mkn-audio"
-version = "0.3.1"
+version = "0.3.2"
 source = { editable = "packages/audio" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -217,7 +217,7 @@ dev = [
 
 [[package]]
 name = "mkn-dokument"
-version = "0.3.0"
+version = "0.4.0"
 source = { editable = "packages/dokument" }
 dependencies = [
     { name = "defusedxml" },
