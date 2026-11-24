@@ -27,6 +27,7 @@ import posixpath
 import re
 import zipfile
 import zlib
+from collections import Counter
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
@@ -411,9 +412,12 @@ def _absaetze_mit_marken(text: str, ereignisse: list[_Ereignis]) -> list[str]:
         for n in offen:
             ereignisse[n].absatz, ereignisse[n].am_anfang = len(absaetze), True
         offen = []
+        text_davor, ende = False, 0  # laufend gefuehrt: je Marke nur das Stueck seit der letzten ansehen
         for m in _MARKE.finditer(stueck):
+            text_davor = text_davor or bool(stueck[ende : m.start()].strip())
+            ende = m.end()
             e = ereignisse[int(m.group(1))]
-            e.absatz, e.am_anfang = len(absaetze), not _ohne_marken(stueck[: m.start()]).strip()
+            e.absatz, e.am_anfang = len(absaetze), not text_davor
     return absaetze
 
 
@@ -470,7 +474,7 @@ def epub_verweise(datei: BinaryIO | Path, *, max_entpackt: int = MAX_ENTPACKT_BY
         raise EpubRissError("leser") from ex
 
     pfade = [pfad for pfad, _ in roh.kapitel]
-    doppelt = {pfad for pfad in pfade if pfade.count(pfad) > 1}  # ein Dokument zweimal im Spine: ids mehrdeutig
+    doppelt = {pfad for pfad, n in Counter(pfade).items() if n > 1}  # ein Dokument zweimal im Spine: ids mehrdeutig
     amtlich: list[list[str]] = []
     abweichend: set[int] = set()
     ids: dict[tuple[str, str], tuple[int, int, bool] | None] = {}  # (Pfad, id) -> (k, Absatz, Semantik); None: doppelt
