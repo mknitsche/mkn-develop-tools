@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/mknitsche/mkn-develop-tools/compare/dokument-v0.3.0...dokument-v0.4.0) (2026-11-24)
+
+
+### Features
+
+* **dokument:** linked notes of an EPUB at the paragraph that cites them ([#56](https://github.com/mknitsche/mkn-develop-tools/issues/56)) ([11ea613](https://github.com/mknitsche/mkn-develop-tools/commit/11ea61319e33510957da64223fcb6da416184702))
+
 ## [0.3.0](https://github.com/mknitsche/mkn-develop-tools/compare/dokument-v0.2.0...dokument-v0.3.0) (2026-11-22)
 
 

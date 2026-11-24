@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/mknitsche/mkn-develop-tools/compare/audio-v0.3.1...audio-v0.3.2) (2026-11-24)
+
+
+### Bug Fixes
+
+* **audio:** a blocked smallest part is spoken again before the run aborts ([#57](https://github.com/mknitsche/mkn-develop-tools/issues/57)) ([d4b6a73](https://github.com/mknitsche/mkn-develop-tools/commit/d4b6a73aad85bb7dd3d585537e1915af7b4fc7fc))
+
 ## [0.3.1](https://github.com/mknitsche/mkn-develop-tools/compare/audio-v0.3.0...audio-v0.3.1) (2026-10-31)
 
 
