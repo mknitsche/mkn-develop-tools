@@ -42,10 +42,14 @@ shared apparatus (linting, tests, CI, release) exists once for all of them.
 
 | Package | Purpose | Status |
 |---|---|---|
-| `packages/kern` | shared foundation used by the other packages | scaffolding |
-| `packages/foto` | photo workflow tools (import, enrichment) | planned |
-| `packages/audio` | audio tools — make documents listenable; first tool: MP4 conversion (`mkn-mp4`: EPUB, PDF, text, photo → M4B with chapters) | 0.1.0 |
-| `packages/dokument` | document reading — PDF, scan or photo read from the page image by two models of different providers; only what both read alike is taken over, the rest goes to a review list with a reason (`mkn-dokument lesen`, `seiten`, `ablesen`) | 0.2.0 |
+| `packages/kern` | shared foundation used by the other packages | released |
+| `packages/foto` | photo workflow tools — enrich RAW and JPEG with place, series and keywords (`mkn-foto`) | released |
+| `packages/audio` | audio tools — make documents listenable: EPUB, PDF, text or photo → M4B with chapters (`mkn-mp4-local`, `mkn-mp4-gemini`) | released |
+| `packages/dokument` | document reading — PDF, scan or photo read from the page image by two models of different providers; only what both read alike is taken over, the rest goes to a review list with a reason (`mkn-dokument lesen`, `seiten`, `ablesen`); EPUB without a model (`epub`) | released |
+
+What each tool is for, how to call it and where it stands:
+**[docs/TOOLS.md](docs/TOOLS.md)**. Versions are on the
+[releases page](https://github.com/mknitsche/mkn-develop-tools/releases).
 
 ## Licence and intellectual property
 

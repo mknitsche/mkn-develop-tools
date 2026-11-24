@@ -34,16 +34,30 @@ jobs:
       # holte nur pytest; `Pillow` fehlte, und jeder Lauf seit dem ersten Commit
       # brach beim Import ab.
       - run: uv sync --all-packages --dev
-      - run: uv run pytest -q
       # Und der Riegel gegen das naechste stille Gruen: uebersprungene Tests
       # sind kein Erfolg. Waere er von Anfang an dagewesen, haette die CI
       # gesagt, dass sie die halbe Suite nicht anfasst.
-      - name: Kein Test wurde stillschweigend uebersprungen
+      - name: Tests laufen, und keiner wurde stillschweigend uebersprungen
         run: |
           set -euo pipefail
-          ausgabe=$(uv run pytest -q -rs 2>&1 | tail -40)
-          echo "$ausgabe"
-          if echo "$ausgabe" | grep -qE '[0-9]+ skipped'; then
+          # Ein Lauf fuer beides: scheitert ein Test, bricht `set -e` hier ab. Gesucht
+          # wird die Zeile, die `-rs` je uebersprungenem Test schreibt - die Summenzeile
+          # ("1 skipped") gibt es nicht, weil die Projekt-Einstellung schon `-q` setzt
+          # und ein zweites `-q` sie unterdrueckt; daran griff diese Pruefung nie.
+          ausgabe=$(uv run pytest -rs 2>&1) || { echo "$ausgabe" | tail -60; exit 1; }
+          echo "$ausgabe" | tail -40
+          # Eine benannte Ausnahme: Foto-Tests, die echte Kamera-Rohdateien brauchen. Die
+          # liegen nur beim Autor (Groesse, Bildrechte) und koennen hier nicht laufen. Sie
+          # werden gezaehlt und gezeigt, nie verschwiegen; jeder andere uebersprungene Test
+          # bricht ab.
+          uebersprungen=$(echo "$ausgabe" | grep -E '^SKIPPED \[' || true)
+          bestand=$(echo "$uebersprungen" | grep -E ': (Testbestand|Testbild) fehlt: ' || true)
+          sonst=$(echo "$uebersprungen" | grep -vE ': (Testbestand|Testbild) fehlt: ' || true)
+          if [ -n "$bestand" ]; then
+            echo "::notice::$(echo "$bestand" | wc -l) Zeilen Foto-Tests brauchen den lokalen Bildbestand und liefen hier nicht"
+          fi
+          if [ -n "$sonst" ]; then
+            echo "$sonst"
             echo "::error::Tests wurden uebersprungen - gruen bedeutet hier nicht geprueft"
             exit 1
           fi
