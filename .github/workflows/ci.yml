@@ -46,7 +46,18 @@ jobs:
           # und ein zweites `-q` sie unterdrueckt; daran griff diese Pruefung nie.
           ausgabe=$(uv run pytest -rs 2>&1) || { echo "$ausgabe" | tail -60; exit 1; }
           echo "$ausgabe" | tail -40
-          if echo "$ausgabe" | grep -qE '^SKIPPED \['; then
+          # Eine benannte Ausnahme: Foto-Tests, die echte Kamera-Rohdateien brauchen. Die
+          # liegen nur beim Autor (Groesse, Bildrechte) und koennen hier nicht laufen. Sie
+          # werden gezaehlt und gezeigt, nie verschwiegen; jeder andere uebersprungene Test
+          # bricht ab.
+          uebersprungen=$(echo "$ausgabe" | grep -E '^SKIPPED \[' || true)
+          bestand=$(echo "$uebersprungen" | grep -E ': (Testbestand|Testbild) fehlt: ' || true)
+          sonst=$(echo "$uebersprungen" | grep -vE ': (Testbestand|Testbild) fehlt: ' || true)
+          if [ -n "$bestand" ]; then
+            echo "::notice::$(echo "$bestand" | wc -l) Zeilen Foto-Tests brauchen den lokalen Bildbestand und liefen hier nicht"
+          fi
+          if [ -n "$sonst" ]; then
+            echo "$sonst"
             echo "::error::Tests wurden uebersprungen - gruen bedeutet hier nicht geprueft"
             exit 1
           fi
