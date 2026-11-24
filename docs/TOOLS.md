@@ -20,7 +20,7 @@ uv run mkn-dokument --help
 
 | Package | Purpose | Commands | State |
 |---|---|---|---|
-| [`mkn-dokument`](../packages/dokument/README.md) | Read documents you cannot afford to misread | `mkn-dokument lesen`, `seiten`, `ablesen`, `epub` | released, in daily use |
+| [`mkn-dokument`](../packages/dokument/README.md) | Read documents you cannot afford to misread | `mkn-dokument lesen`, `seiten`, `ablesen`, `epub`, `deckblatt` | released, in daily use |
 | [`mkn-audio`](../packages/audio/README.md) | Turn a document into an audio file with chapters | `mkn-mp4-local`, `mkn-mp4-gemini` | released, in use |
 | [`mkn-foto`](../packages/foto/README.md) | Enrich photos with place, series and keywords | `mkn-foto` | released, in use |
 | [`mkn-kern`](../packages/kern/README.md) | Shared foundation of the packages above | library only | released |
@@ -40,12 +40,17 @@ read alike is taken over, everything else goes to a review list with a reason.
 | `mkn-dokument seiten` | per page: kind, issuer, date, running text, list of charts | `seiten.json` |
 | `mkn-dokument ablesen` | marked points of a chart that prints no numbers | `ablesung.json` |
 | `mkn-dokument epub` | an EPUB without any model: metadata, ISBN, chapters | JSON on stdout |
+| `mkn-dokument deckblatt` | no model: `setzen` puts a cover sheet in front of a PDF, `abnehmen` takes it off again, `lesen` returns what it states | a new PDF, or JSON on stdout |
 
 As a library, `mkn_dokument.epub` additionally returns the full text in reading
 order and the linked notes of a book, each at the paragraph that cites it. Copy
 protection is detected and refused, never circumvented.
 
-**Needs:** keys for two model providers of your choice (not for `epub`).
+The cover sheet is one inserted first page; bookmarks, links and attachments of
+the source stay as they are, an existing target is never overwritten, and signed
+PDFs are refused. Taking it off works only on a sheet this tool has set.
+
+**Needs:** keys for two model providers of your choice (not for `epub` and `deckblatt`).
 
 ## mkn-audio — make documents listenable
 
