@@ -9,7 +9,8 @@ gelesen haben. Drei Funktionen nach demselben Muster:
 | `seiten` | je Seite Kopf (Seitenart, Aussteller, Datum, Inhaltsart), Fließtexte, Verzeichnis der Diagramme | `seiten.json` |
 | `ablesen` | markierte Stellen eines Diagramms ohne gedruckte Zahlen, nach einem Ableseauftrag | `ablesung.json` |
 
-Dazu ohne Modell: `epub` liest ein EPUB (Text, Metadaten, ISBN, Kapitel) — Abschnitt „EPUB lesen“.
+Dazu ohne Modell: `epub` liest ein EPUB (Text, Metadaten, ISBN, Kapitel, verlinkte Anmerkungen an ihrer Fundstelle) —
+Abschnitt „EPUB lesen“.
 
 ## Wozu
 
@@ -182,7 +183,29 @@ for kapitel in buch.kapitel:
     print(kapitel.titel, len(kapitel.text))
 
 text = epub.epub_text(Path("buch.epub"))  # ganzer Text, Kapitel durch epub.KAPITELGRENZE getrennt
+
+anmerkungen = epub.epub_verweise(Path("buch.epub"))
+print(anmerkungen.meldung)  # z. B. "12 verlinkt (Rücklink 12, erklärt 0) zu 12 Anmerkungen"
+for v in anmerkungen.verweise:
+    print(v.fundstelle, v.zeichen, "->", v.anmerkung, v.text)
 ```
+
+**Anmerkungen an ihrer Fundstelle.** `epub_verweise` ordnet jede verlinkte Anmerkung dem Absatz zu, in dem ihr
+Verweis steht; Fundstelle und Anmerkung tragen die Marke `K<Kapitel>.<Absatz>` in derselben Zählung wie die Kapitel
+von `epub_buch` (Absätze durch Leerzeile, leere verworfen). Ein Verweis ist ein interner Link mit Kurzmarke (`3`,
+`[3]`, `(3)`, `*`, `†`, `‡`, `§`), dessen Ziel in einem Absatz liegt, und der entweder
+
+- **zurückverlinkt wird:** der Zielabsatz verlinkt in das Dokument des Verweises zurück, und der Link steht nicht am
+  Absatzanfang (die Marke am Anfang einer Anmerkung ist ihr Rücklink, kein Verweis) — so die Form aus InDesign und die
+  der Endnoten-Kapitel; oder
+- **erklärt ist:** `epub:type="noteref"` oder `role="doc-noteref"` am Link, `epub:type` footnote, endnote oder
+  rearnote bzw. `role` doc-footnote oder doc-endnote am Ziel (etwa `aside`).
+
+Klassennamen zählen nicht. Je Kapitel prüft eine Gegenprobe, dass die Absätze Wort für Wort die von `epub_buch` sind;
+weicht ein Kapitel ab, bekommt keiner seiner Verweise eine Zuordnung (`kapitel_abweichend`, `ohne_zuordnung`) — nie
+wird verschoben oder geraten. Unverlinkte, nur nummerierte Anmerkungen und die Autor-Jahr-Zitierweise erkennt die
+Funktion nicht; ein Buch ohne verlinkte Anmerkungen ergibt eine leere Liste und die Meldung „keine verlinkten
+Anmerkungen erkannt“.
 
 ```bash
 mkn-dokument epub buch.epub   # Metadaten und Kapitelliste (Titel, Zeichen) als JSON
