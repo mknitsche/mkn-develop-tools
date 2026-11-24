@@ -5,7 +5,7 @@ OPF, ``encryption.xml``, NCX) laufen ueber ``defusedxml`` - Entitaeten und exter
 aufgeloest. Paketdatei ueber ``META-INF/container.xml``, Lesereihenfolge nach dem Spine der OPF-Datei (nie nach
 Dateinamen), je nicht-leerem Spine-Dokument ein Kapitel.
 
-Zwei Wege ueber dieselbe Kapitelfolge:
+Drei Wege ueber dieselbe Kapitelfolge:
 
 - ``epub_text``: der ganze Text, Kapitel durch ``KAPITELGRENZE`` getrennt (Seitenvorschub auf eigener Zeile - fuer
   einen Zerteiler nach Absaetzen immer auch eine Absatzgrenze). Ein Riss ist ``EpubRissError`` mit ``grund``:
@@ -14,6 +14,8 @@ Zwei Wege ueber dieselbe Kapitelfolge:
 - ``epub_buch``: Metadaten aus dem OPF, alle ISBN (``isbns``), die Kapitel mit Titel aus dem Verzeichnis (nav,
   sonst NCX). Ein geschuetztes Buch liefert nur die Metadaten und oeffnet kein Kapitel-Dokument; ein Lesefehler ist
   ``EpubLesefehlerError``, nie ein leeres Buch.
+- ``epub_verweise``: die verlinkten Anmerkungen, jede an dem Absatz ``K<Kapitel>.<Absatz>`` ihres Verweises - dieselbe
+  Zaehlung wie die Kapitel von ``epub_buch``, je Kapitel gegengeprueft; im Zweifel keine Zuordnung, gezaehlt.
 
 Kopierschutz wird erkannt und abgewiesen, nie umgangen: ``META-INF/encryption.xml`` mit einem Verfahren ausser der
 Schrift-Verschleierung, ein Schluessel ohne Daten, oder ein verschluesselter Zip-Eintrag.
@@ -266,6 +268,260 @@ def epub_text(datei: BinaryIO | Path, *, max_entpackt: int = MAX_ENTPACKT_BYTES)
     except _LESEFEHLER as ex:
         raise EpubRissError("leser") from ex
     return KAPITELGRENZE.join(text for _, text in roh.kapitel)
+
+
+# --- Anmerkungen: Verweis, Anmerkung und Fundstelle -----------------------------------------------
+
+#: Kurzmarke eines Verweises: ``3``, ``[3]``, ``(3)``, ``*``, ``†``, ``‡``, ``§``.
+_KURZMARKE = re.compile(r"\d{1,4}|\[\d{1,4}\]|\(\d{1,4}\)|[*†‡§]")
+#: Markenzeichen im Textstrom: ``U+E000`` Nummer ``U+E001`` (privater Unicode-Bereich).
+_MARKE = re.compile("(\\d+)")
+_NOTEREF = frozenset({"noteref"})
+_NOTE = frozenset({"footnote", "endnote", "rearnote"})
+_ROLLE_NOTEREF = frozenset({"doc-noteref"})
+_ROLLE_NOTE = frozenset({"doc-footnote", "doc-endnote"})
+
+
+@dataclass(frozen=True)
+class Verweis:
+    """Eine Anmerkung an ihrer Fundstelle: ``fundstelle`` ist der Absatz mit dem Verweis, ``anmerkung`` der Absatz
+    der Anmerkung (beide ``K<Kapitel>.<Absatz>`` wie die Buch-Kette), ``zeichen`` die Kurzmarke, ``text`` der
+    Anmerkungsabsatz wie in ``epub_buch``, ``form`` die Erkennung (``ruecklink`` oder ``semantik``)."""
+
+    fundstelle: str
+    anmerkung: str
+    zeichen: str
+    text: str
+    form: Literal["ruecklink", "semantik"]
+
+
+@dataclass(frozen=True)
+class Anmerkungen:
+    """Ergebnis von ``epub_verweise``: die zugeordneten ``verweise`` in Lesereihenfolge, die Kapitel mit
+    abweichender Gegenprobe (Nummern wie ``K<k>``) und die Verweise, die deshalb ohne Zuordnung blieben."""
+
+    verweise: list[Verweis]
+    kapitel_abweichend: tuple[int, ...]
+    ohne_zuordnung: int
+
+    @property
+    def anmerkungen(self) -> int:
+        """Zahl der verschiedenen Anmerkungsabsaetze (mehrere Verweise koennen auf eine Anmerkung zeigen)."""
+        return len({v.anmerkung for v in self.verweise})
+
+    @property
+    def meldung(self) -> str:
+        """Die erkannte Form fuer die Betriebsmeldung (``105 verlinkt …`` oder ``keine verlinkten Anmerkungen
+        erkannt``), mit abweichenden Kapiteln und Verweisen ohne Zuordnung."""
+        if not self.verweise and not self.ohne_zuordnung:
+            satz = "keine verlinkten Anmerkungen erkannt"
+        else:
+            rueck = sum(v.form == "ruecklink" for v in self.verweise)
+            satz = (
+                f"{len(self.verweise)} verlinkt (Rücklink {rueck}, erklärt {len(self.verweise) - rueck}) "
+                f"zu {self.anmerkungen} Anmerkungen"
+            )
+        if self.kapitel_abweichend:
+            liste = ", ".join(str(k) for k in self.kapitel_abweichend)
+            satz += f"; Gegenprobe weicht ab in Kapitel {liste}, {self.ohne_zuordnung} ohne Zuordnung"
+        return satz
+
+
+@dataclass
+class _Ereignis:
+    """Ein Markenzeichen im Textstrom: ein Link (``href``, Kurzmarke aus ``zeichen``) oder ein ``id``."""
+
+    art: Literal["link", "id"]
+    wert: str
+    semantik: bool
+    zeichen: str = ""
+    absatz: int | None = None  # Absatz (ab 1, eigene Zaehlung) nach dem Teilen
+    am_anfang: bool = False  # Link: vor ihm steht im Absatz nur Leerraum oder Marken
+
+
+def _woerter(attrs: list[tuple[str, str | None]], name: str) -> frozenset[str]:
+    return frozenset((dict(attrs).get(name) or "").split())
+
+
+class _EpubMarken(_EpubText):
+    """Text wie ``_EpubText``, dazu an jedem Link und jedem ``id`` ein Markenzeichen (nach der Blockgrenze des
+    Elements, also im Absatz des Elements); ``ereignisse`` haelt Link und ``id`` je Nummer."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.ereignisse: list[_Ereignis] = []
+        self._link: _Ereignis | None = None
+        self._link_text: list[str] = []
+
+    def _marke(self, ereignis: _Ereignis) -> None:
+        self.teile.append(f"{len(self.ereignisse)}")
+        self.ereignisse.append(ereignis)
+
+    def _marken(self, tag: str, attrs: list[tuple[str, str | None]], *, leer: bool) -> None:
+        if self._tief:
+            return
+        a = dict(attrs)
+        if tag == "a" and a.get("href"):
+            semantik = bool(_woerter(attrs, "epub:type") & _NOTEREF or _woerter(attrs, "role") & _ROLLE_NOTEREF)
+            link = _Ereignis("link", a["href"] or "", semantik)
+            self._marke(link)
+            if not leer:
+                self._link, self._link_text = link, []
+        if a.get("id"):
+            semantik = bool(_woerter(attrs, "epub:type") & _NOTE or _woerter(attrs, "role") & _ROLLE_NOTE)
+            self._marke(_Ereignis("id", a["id"] or "", semantik))
+
+    def handle_starttag(self, tag, attrs):
+        super().handle_starttag(tag, attrs)
+        self._marken(tag, attrs, leer=False)
+
+    def handle_startendtag(self, tag, attrs):
+        super().handle_startendtag(tag, attrs)
+        self._marken(tag, attrs, leer=True)
+
+    def handle_endtag(self, tag):
+        super().handle_endtag(tag)
+        if tag == "a" and self._link is not None:
+            self._link.zeichen = re.sub(r"\s+", "", "".join(self._link_text))
+            self._link = None
+
+    def handle_data(self, data):
+        super().handle_data(data)
+        if self._link is not None and not self._tief:
+            self._link_text.append(data)
+
+
+def _ohne_marken(text: str) -> str:
+    return _MARKE.sub("", text)
+
+
+def _absaetze_mit_marken(text: str, ereignisse: list[_Ereignis]) -> list[str]:
+    """Teilt den markierten Text wie die Buch-Kette (``\\n\\n``, leere verworfen) und traegt den Absatz jeder Marke
+    in ihr Ereignis ein. Ein Absatz nur aus Marken gibt sie an den naechsten Absatz weiter; am Kapitelende bleiben
+    sie ohne Absatz. Rueckgabe: die Absaetze ohne Marken (fuer die Gegenprobe)."""
+    absaetze: list[str] = []
+    offen: list[int] = []  # Marken aus Absaetzen nur aus Marken
+    for stueck in text.split("\n\n"):
+        nummern = [int(m.group(1)) for m in _MARKE.finditer(stueck)]
+        rein = _ohne_marken(stueck)
+        if not rein.strip():
+            offen.extend(nummern)
+            continue
+        absaetze.append(rein)
+        for n in offen:
+            ereignisse[n].absatz, ereignisse[n].am_anfang = len(absaetze), True
+        offen = []
+        for m in _MARKE.finditer(stueck):
+            e = ereignisse[int(m.group(1))]
+            e.absatz, e.am_anfang = len(absaetze), not _ohne_marken(stueck[: m.start()]).strip()
+    return absaetze
+
+
+def _ziel(dokument: str, href: str) -> tuple[str, str] | None:
+    """Ein interner ``href`` als (Pfad im Archiv, ``id``); ein externer oder einer ohne Fragment ist None."""
+    if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", href):
+        return None
+    pfad, fragment = urldefrag(href)
+    if not fragment:
+        return None
+    return (_zip_pfad(posixpath.dirname(dokument), pfad) if pfad else dokument), unquote(fragment)
+
+
+def _dokument(href: str, dokument: str) -> str | None:
+    """Das Dokument, in das ein interner ``href`` zeigt (mit oder ohne Fragment); extern ist None."""
+    if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", href):
+        return None
+    pfad = urldefrag(href)[0]
+    return _zip_pfad(posixpath.dirname(dokument), pfad) if pfad else dokument
+
+
+def epub_verweise(datei: BinaryIO | Path, *, max_entpackt: int = MAX_ENTPACKT_BYTES) -> Anmerkungen:
+    """Die verlinkten Anmerkungen eines EPUB, jede an dem Absatz, in dem ihr Verweis steht (ohne Modell).
+
+    Kapitel und Absaetze zaehlen wie ``epub_buch`` und die Buch-Kette (nicht-leere Spine-Dokumente, Absaetze durch
+    Leerzeile, leere verworfen): ``K<k>.<a>`` von Fundstelle und Anmerkung sind dieselben Marken. Ein Verweis ist ein
+    interner Link mit Kurzmarke (``_KURZMARKE``), dessen Ziel-``id`` in einem Absatz liegt, und der
+
+    1. **Ruecklink**: der Zielabsatz verlinkt zurueck in das Dokument des Verweises, und der Link steht nicht am
+       Absatzanfang (Richtungsregel: eine Anmerkung beginnt mit ihrer Marke, die selbst kein Verweis ist), oder
+    2. **erklaerte Semantik**: ``epub:type="noteref"`` / ``role="doc-noteref"`` am Link, oder am Ziel ``epub:type``
+       aus footnote, endnote, rearnote / ``role`` aus doc-footnote, doc-endnote.
+
+    Klassennamen zaehlen nicht. **Gegenprobe je Kapitel:** die Absaetze ohne Marken muessen Wort fuer Wort die des
+    Kapitels sein; sonst bekommt kein Verweis mit Fundstelle oder Anmerkung in diesem Kapitel eine Zuordnung
+    (``kapitel_abweichend``, ``ohne_zuordnung``), nie verschoben. Ein Buch ohne verlinkte Anmerkungen ergibt eine
+    leere Liste. Raises ``EpubRissError`` wie ``epub_text``; ``OSError`` eines Pfads geht durch.
+    """
+    try:
+        with zipfile.ZipFile(datei) as z:
+            if _epub_geschuetzt(z, max_entpackt):
+                raise EpubRissError("geschuetzt")
+            roh = _epub_roh(z, kapitel_lesen=True, grenze=max_entpackt)
+            gelesen = 0
+            markiert: list[tuple[str, _EpubMarken]] = []
+            for pfad, _ in roh.kapitel:
+                daten = _epub_eintrag(z, pfad, gelesen, max_entpackt)
+                gelesen += len(daten)
+                p = _EpubMarken()
+                p.feed(_dekodieren(daten))
+                p.close()
+                markiert.append((pfad, p))
+    except _LESEFEHLER as ex:
+        raise EpubRissError("leser") from ex
+
+    pfade = [pfad for pfad, _ in roh.kapitel]
+    doppelt = {pfad for pfad in pfade if pfade.count(pfad) > 1}  # ein Dokument zweimal im Spine: ids mehrdeutig
+    amtlich: list[list[str]] = []
+    abweichend: set[int] = set()
+    ids: dict[tuple[str, str], tuple[int, int, bool] | None] = {}  # (Pfad, id) -> (k, Absatz, Semantik); None: doppelt
+    links: dict[int, list[tuple[int, _Ereignis]]] = {}  # Kapitel -> (Absatz, Link)
+    verlinkt: dict[tuple[int, int], set[str]] = {}  # (k, Absatz) -> Dokumente, in die der Absatz verlinkt
+    for k, ((pfad, text), (_, p)) in enumerate(zip(roh.kapitel, markiert, strict=True), start=1):
+        offiziell = [a for a in text.split("\n\n") if a.strip()]
+        amtlich.append(offiziell)
+        mit_marken = _absaetze_mit_marken(p.text(), p.ereignisse)
+        if pfad in doppelt or [a.split() for a in mit_marken] != [a.split() for a in offiziell]:
+            abweichend.add(k)
+        links[k] = []
+        for e in p.ereignisse:
+            if e.absatz is None:  # Marken am Kapitelende ohne folgenden Absatz: kein Ort, kein Ziel
+                continue
+            if e.art == "id":
+                schluessel = (pfad, e.wert)
+                ids[schluessel] = None if schluessel in ids else (k, e.absatz, e.semantik)
+            else:
+                links[k].append((e.absatz, e))
+                if (dok := _dokument(e.wert, pfad)) is not None:
+                    verlinkt.setdefault((k, e.absatz), set()).add(dok)
+
+    verweise: list[Verweis] = []
+    ohne = 0
+    for k, pfad in enumerate(pfade, start=1):
+        for absatz, link in links[k]:
+            if not _KURZMARKE.fullmatch(link.zeichen) or (ziel := _ziel(pfad, link.wert)) is None:
+                continue
+            if (treffer := ids.get(ziel)) is None:
+                continue  # Ziel fehlt, liegt in keinem Absatz oder ist mehrdeutig
+            k_ziel, a_ziel, ziel_semantik = treffer
+            if link.semantik or ziel_semantik:
+                form: Literal["ruecklink", "semantik"] = "semantik"
+            elif not link.am_anfang and pfad in verlinkt.get((k_ziel, a_ziel), set()):
+                form = "ruecklink"
+            else:
+                continue
+            if k in abweichend or k_ziel in abweichend:
+                ohne += 1
+                continue
+            verweise.append(
+                Verweis(
+                    fundstelle=f"K{k}.{absatz}",
+                    anmerkung=f"K{k_ziel}.{a_ziel}",
+                    zeichen=link.zeichen,
+                    text=amtlich[k_ziel - 1][a_ziel - 1],
+                    form=form,
+                )
+            )
+    return Anmerkungen(verweise, tuple(sorted(abweichend)), ohne)
 
 
 # --- Das Buch: ISBN, Verzeichnis, Metadaten --------------------------------------------------------

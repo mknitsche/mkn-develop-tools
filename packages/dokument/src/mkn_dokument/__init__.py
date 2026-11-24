@@ -8,7 +8,8 @@ Drei Funktionen nach diesem Muster: ``lesen`` (gedruckte Angaben mit Wert),
 ``seitenlesung`` (Seitenkopf, Fliesstexte, Diagramm-Verzeichnis) und ``ablesen``
 (markierte Stellen eines Diagramms nach einem Ableseauftrag).
 
-Dazu ohne Modell: ``epub`` (Text, Metadaten, ISBN und Kapitel eines EPUB; Kopierschutz wird abgewiesen).
+Dazu ohne Modell: ``epub`` (Text, Metadaten, ISBN und Kapitel eines EPUB, verlinkte Anmerkungen an ihrer
+Fundstelle; Kopierschutz wird abgewiesen).
 """
 
-__version__ = "0.3.0"  # x-release-please-version
+__version__ = "0.4.0"  # x-release-please-version
