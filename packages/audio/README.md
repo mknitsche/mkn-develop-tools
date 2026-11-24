@@ -181,7 +181,7 @@ Stimmen sind Zeilen der Tabelle mit `weg = "gemini"` und dem Google-Namen in `st
   "Trotzdem an Google senden? [j/N]", sonst bricht er mit Exit 3 ab, bevor etwas gesendet wird.
   `--cloud-ok` gibt vorab frei (fuer Skripte). Der Bericht nennt die Hinweise.
 - **Fehler:** eine Sperre durch Google wird einmal wiederholt, dann an Satzgrenzen in 2 und 4
-  Teile geteilt (immer dasselbe Modell); bleibt auch ein Einzelsatz gesperrt, bricht der Lauf
+  Teile geteilt (immer dasselbe Modell), das kleinste Teil bis zu dreimal gesprochen; bleibt es gesperrt, bricht der Lauf
   laut mit Kapitel, Block und den ersten Woertern ab. Ein erschoepftes Limit (429) heisst
   warten (15, 45, 120, 240, 300 s), ohne neue Anfragen; nach drei 429 laufen nur noch halb so
   viele Anfragen gleichzeitig. Eine Fehlerantwort wird bis zu viermal wiederholt, dann steht an

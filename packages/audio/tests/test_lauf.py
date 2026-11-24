@@ -1473,6 +1473,54 @@ def test_sperre_teilt_in_zwei_dann_vier(umgebung_gemini, tmp_path):
     assert "Sperren: 1 (durch Teilen gelöst)" in bericht
 
 
+def test_sperre_am_kleinsten_teil_wird_wiederholt(umgebung_gemini, tmp_path):
+    """Die Sperre ist auch am kleinsten Teil nicht deterministisch (derselbe Text scheiterte in zwei
+    Laeufen an verschiedenen Bloecken): ein gesperrtes Viertel wird erneut
+    gesprochen, bevor der Lauf abbricht -- sonst fehlt wegen eines Zufalls das ganze Hoerstueck."""
+    from schein_google import ScheinGoogle, sperre, text_von
+
+    einzeln = []
+
+    def regel(n, rumpf):
+        text = text_von(rumpf)
+        if _saetze_in(text) >= 2:
+            return sperre()
+        if text.strip() == SAETZE[0]:
+            einzeln.append(n)
+            if len(einzeln) <= 2:
+                return sperre()
+        return None
+
+    schein = ScheinGoogle(regel=regel)
+    ergebnis, _, _ = lauf_gemini(umgebung_gemini, md_quelle(tmp_path, " ".join(SAETZE)), schein)
+
+    assert len(einzeln) == 3  # zweimal gesperrt, beim dritten Mal gesprochen
+    assert ergebnis.dateien[0].exists()
+    assert "Sperren: 1 (durch Teilen gelöst)" in ergebnis.bericht.read_text(encoding="utf-8")
+
+
+def test_sperre_an_unteilbarem_block_wird_wiederholt(umgebung_gemini, tmp_path):
+    """Ein Block aus einem einzigen Satz laesst sich nicht teilen (ein Ein-Wort-Block brach den Lauf
+    dreimal ab): auch er bekommt die Versuche des kleinsten Teils."""
+    from schein_google import ScheinGoogle, sperre, text_von
+
+    versuche = []
+
+    def regel(n, rumpf):
+        if SAETZE[0] in text_von(rumpf):
+            versuche.append(n)
+            if len(versuche) <= 3:
+                return sperre()
+        return None
+
+    schein = ScheinGoogle(regel=regel)
+    ergebnis, _, _ = lauf_gemini(umgebung_gemini, md_quelle(tmp_path, SAETZE[0]), schein)
+
+    assert len(versuche) == 4
+    assert ergebnis.dateien[0].exists()
+    assert "Sperren: 1 (durch Wiederholung gelöst)" in ergebnis.bericht.read_text(encoding="utf-8")
+
+
 def test_sperre_bleibt_nach_vier_teilen_bricht_laut_mit_stelle(umgebung_gemini, tmp_path):
     """Review Focus 1: ein Block, den Google sperrt und der auch geteilt gesperrt bleibt -- der
     Lauf bricht laut ab und nennt Kapitel, Block und erste Woerter; niemals Stille, niemals

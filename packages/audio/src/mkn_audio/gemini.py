@@ -74,6 +74,9 @@ WARTEN_SERVER_S = 20
 WARTEN_NETZ_S = 10
 WARTEN_OHNE_AUDIO_S = 5
 VERSUCHE_FEHLERANTWORT = 4
+# Ein Teil, der sich nicht weiter teilen laesst, wird bei einer Sperre so oft gesprochen: die
+# Sperre ist nicht deterministisch (zwei Laeufe, zwei verschiedene Bloecke).
+VERSUCHE_SPERRE_KLEINSTES_TEIL = 3
 """Fehlerantworten (500/503, Netz, Zeitueberschreitung, Antwort ohne Audio): Wartezeit je
 Ursache, je Block hoechstens so viele Versuche (Spec 8.3)."""
 
@@ -624,8 +627,9 @@ class SprecherGemini:
         """Spricht `block` nach `ziel` (WAV 24 kHz mono PCM16, atomar).
 
         Eine Sperre (nicht deterministisch) wird einmal wiederholt, dann an Satzgrenzen in 2,
-        schliesslich in 4 Teile geteilt (immer das selbe Modell); bleibt auch ein Einzelsatz
-        gesperrt, ist das ein `SprecherFehler` der Klasse `Sperre` mit der Stelle.
+        schliesslich in 4 Teile geteilt (immer das selbe Modell); das kleinste Teil wird bis zu
+        dreimal gesprochen; bleibt es gesperrt, ist das ein `SprecherFehler` der Klasse `Sperre`
+        mit der Stelle.
         """
         return self._sprich(block, stimme, ziel, self._nie)
 
@@ -658,14 +662,32 @@ class SprecherGemini:
         eines anderen Blocks gleichen Textes treffen.
         """
         haelften = teile_block(block, 2)
-        if len(haelften) < 2:
-            raise self._sperre_fehler(block, block)
+        if len(haelften) < 2:  # ein Satz: der Block selbst ist das kleinste Teil
+            for versuch in range(1, VERSUCHE_SPERRE_KLEINSTES_TEIL + 1):
+                try:
+                    messwerte = self._hole_ton(block, stimme, ziel, abbruch)
+                except SprecherFehler as fehler:
+                    if fehler.klasse != "Sperre":
+                        raise
+                    if versuch == VERSUCHE_SPERRE_KLEINSTES_TEIL:
+                        raise self._sperre_fehler(block, block) from fehler
+                else:
+                    with self._sperre:
+                        self._sperren_wiederholung += 1
+                    return messwerte
         gesprochen: list[tuple[Path, Messwerte]] = []
         with temp_ordner(ziel.parent) as arbeit:
 
-            def teil_ton(teil: Block) -> Messwerte:
+            def teil_ton(teil: Block, versuche: int = 1) -> Messwerte:
                 wav = Path(arbeit) / f"{self.ton_schluessel(teil, stimme)}.wav"
-                messwerte = self._hole_ton(teil, stimme, wav, abbruch)
+                for versuch in range(1, versuche + 1):
+                    try:
+                        messwerte = self._hole_ton(teil, stimme, wav, abbruch)
+                    except SprecherFehler as fehler:
+                        if fehler.klasse != "Sperre" or versuch == versuche:
+                            raise
+                    else:
+                        break
                 gesprochen.append((wav, messwerte))
                 return messwerte
 
@@ -677,10 +699,16 @@ class SprecherGemini:
                         raise
                     viertel = teile_block(haelfte, 2)
                     if len(viertel) < 2:
-                        raise self._sperre_fehler(block, haelfte) from fehler
+                        try:  # ein Satz: ein Versuch ist verbraucht, der Rest folgt hier
+                            teil_ton(haelfte, VERSUCHE_SPERRE_KLEINSTES_TEIL - 1)
+                        except SprecherFehler as tief:
+                            if tief.klasse != "Sperre":
+                                raise
+                            raise self._sperre_fehler(block, haelfte) from tief
+                        continue
                     for stueck in viertel:
                         try:
-                            teil_ton(stueck)
+                            teil_ton(stueck, VERSUCHE_SPERRE_KLEINSTES_TEIL)
                         except SprecherFehler as tief:
                             if tief.klasse != "Sperre":
                                 raise
